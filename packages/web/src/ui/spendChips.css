@@ -1,0 +1,38 @@
+/* ---------- Gasto por agente e por tarefa: chips discretos ---------- */
+.spend-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.spend-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill, 999px);
+}
+
+.spend-chip__label {
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.spend-chip__value--cost {
+  color: var(--ui-text);
+}
+
+.spend-chip--task {
+  align-self: flex-start;
+  margin-top: 6px;
+}

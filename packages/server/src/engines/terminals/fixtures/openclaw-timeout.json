@@ -1,0 +1,21 @@
+{
+  "ok": false,
+  "status": "timeout",
+  "final": "",
+  "payloads": [
+    {
+      "text": "Request timed out before a response was generated. Please try again, or increase `agents.defaults.timeoutSeconds` in your config.",
+      "mediaUrl": null,
+      "isError": true
+    }
+  ],
+  "codeModeEngaged": false,
+  "assistantTurns": 1,
+  "model": "fake/model",
+  "provider": "fakeai",
+  "sessionId": "3900f547-322a-4800-a1a7-628c69f3f08c",
+  "error": {
+    "message": "Request timed out before a response was generated. Please try again, or increase `agents.defaults.timeoutSeconds` in your config.",
+    "kind": "timeout"
+  }
+}

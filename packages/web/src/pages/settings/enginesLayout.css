@@ -1,0 +1,432 @@
+/* ---------- Motores: resumo em lista (clicar abre o detalhe) ---------- */
+/* Celular e janelas médias: cada motor é uma linha; o detalhe abre logo abaixo dela.
+   Tela larga (data-split no .settings): a lista fica numa coluna e o detalhe abre AO LADO, sem rolar. */
+.engine-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.engine-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.engine-item__detail {
+  min-width: 0;
+}
+
+.engine-item__detail > .engine-card {
+  margin: 0;
+}
+
+.engine-row {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  font: inherit;
+  text-align: left;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-left-width: 3px;
+  border-radius: var(--ui-radius-panel);
+  cursor: pointer;
+  transition:
+    background-color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.engine-row:hover {
+  background: var(--ui-surface-2);
+}
+
+.engine-row:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.engine-row--success {
+  border-left-color: var(--ui-ok);
+}
+
+.engine-row--attention {
+  border-left-color: var(--ui-warn);
+}
+
+.engine-row--danger {
+  border-left-color: var(--ui-danger);
+}
+
+.engine-row--neutral {
+  border-left-color: var(--ui-border-strong, var(--ui-border));
+}
+
+.engine-row[aria-expanded="true"] {
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, var(--ui-border));
+  border-left-color: var(--ui-accent);
+}
+
+.engine-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.engine-row__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 50%;
+  background: var(--ui-surface-3);
+  color: var(--ui-text-2);
+}
+
+.engine-row--success .engine-row__icon {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+}
+
+.engine-row--attention .engine-row__icon {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.engine-row--danger .engine-row__icon {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.engine-row__name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine-row__state {
+  margin-left: auto;
+}
+
+.engine-row__chevron {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 2px 2px;
+  border-right: 2px solid var(--ui-text-3);
+  border-bottom: 2px solid var(--ui-text-3);
+  transform: rotate(45deg);
+  transition: transform var(--ui-fast);
+}
+
+.engine-row[aria-expanded="true"] .engine-row__chevron {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+
+.engine-row__facts {
+  display: grid;
+  gap: 3px 16px;
+  padding-left: 32px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-text-2);
+}
+
+.engine-row__fact {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.engine-row__fact--extra {
+  color: var(--ui-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-row__key {
+  display: inline-block;
+  min-width: 52px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+/* Janelas médias: os fatos do motor em duas colunas dentro da linha. */
+@media (min-width: 768px) {
+  .engine-row__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Tela larga: lista (coluna da esquerda) + detalhe do motor aberto (coluna da direita). */
+@media (min-width: 1280px) {
+  .engine-list {
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 16px;
+  }
+
+  .engine-item {
+    display: contents;
+  }
+
+  .engine-item > .engine-row {
+    grid-column: 1;
+  }
+
+  .engine-item__detail {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    position: sticky;
+    top: 0;
+  }
+
+  .engine-row__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- O detalhe do motor (EngineCard) ---------- */
+.engine-card {
+  gap: 10px;
+}
+
+.engine-card__head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.engine-card__head .settings__card-title {
+  font-size: 17px;
+}
+
+.engine-card__blurb {
+  max-width: 68ch;
+}
+
+.engine-card__actions {
+  padding-top: 2px;
+}
+
+.engine-card__default-row {
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+
+/* ---------- Passo a passo compacto ---------- */
+.oneshot__steps {
+  gap: 6px;
+}
+
+.oneshot__step {
+  padding: 0;
+  overflow: hidden;
+}
+
+.oneshot__step-head {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.oneshot__step-toggle {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ui-text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.oneshot__step-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.oneshot__step-toggle:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+
+.oneshot__step-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px 40px;
+}
+
+.oneshot__step-body[hidden] {
+  display: none;
+}
+
+.oneshot__summary {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oneshot__step--dim {
+  opacity: 0.55;
+}
+
+.oneshot__step--folded {
+  background: transparent;
+}
+
+.oneshot__step--done .oneshot__state {
+  color: var(--ui-ok);
+}
+
+.oneshot__chevron {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--ui-text-3);
+  border-bottom: 2px solid var(--ui-text-3);
+  transform: rotate(45deg);
+}
+
+.oneshot__step-toggle[aria-expanded="true"] .oneshot__chevron {
+  transform: rotate(-135deg);
+}
+
+.oneshot__more {
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+}
+
+.oneshot__more > summary {
+  min-height: 32px;
+  padding: 6px 0;
+  cursor: pointer;
+  color: var(--ui-text-2);
+}
+
+.oneshot__more > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.oneshot__copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.oneshot__copy .oneshot__code {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Verificar: o que falhou em destaque, com o "o que fazer" logo abaixo; o que passou recolhido. */
+.oneshot__checks--attention {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oneshot__check {
+  display: grid;
+  gap: 4px;
+}
+
+.oneshot__check-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.oneshot__check-glyph {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.oneshot__checks--attention .oneshot__check--bad {
+  padding: 9px 12px;
+  background: var(--ui-danger-bg);
+  border-left: 3px solid var(--ui-danger);
+  border-radius: var(--ui-radius-sm);
+}
+
+.oneshot__checks--attention .oneshot__check--skip {
+  padding-left: 12px;
+  color: var(--ui-text-3);
+}
+
+.oneshot__checks--attention .oneshot__check--bad .oneshot__check-glyph {
+  color: var(--ui-danger);
+}
+
+.oneshot__fix {
+  display: block;
+  padding-left: 24px;
+  font-size: 12.5px;
+  color: var(--ui-text);
+}
+
+/* Freebuff: as horas do dia vêm logo depois da escolha, antes dos controles. */
+.freebuff {
+  gap: 10px;
+}
+
+.freebuff > .freebuff__line:first-child {
+  order: -2;
+}
+
+.freebuff > .freebuff__hours {
+  order: -1;
+  padding: 8px 10px;
+  background: var(--ui-surface-3);
+  border-radius: var(--ui-radius-sm);
+}
+
+@media (max-width: 767px) {
+  .engine-row {
+    min-height: 64px;
+  }
+
+  .oneshot__step-body {
+    padding-left: 12px;
+  }
+
+  .oneshot__step-head {
+    min-height: 44px;
+  }
+
+  .oneshot__summary {
+    display: none;
+  }
+}
+
+/* O resultado do Verificar já está dentro da etapa: sem segunda caixa. */
+.oneshot__step .oneshot__verify {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.oneshot__check--bad .oneshot__hint {
+  color: var(--ui-text);
+}

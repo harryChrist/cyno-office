@@ -1,0 +1,55 @@
+/* A cena de demonstração (?cena=demo): o canvas ocupa a tela toda; o aviso fica no canto de baixo. */
+.cena-demo {
+  position: fixed;
+  inset: 0;
+  background: var(--ui-bg, #0b0d1a);
+  overflow: hidden;
+}
+
+.cena-demo__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* O motor desenha em pixel art: nada de suavização do navegador ao escalar. */
+  image-rendering: pixelated;
+  outline: none;
+}
+
+.cena-demo__aviso {
+  position: absolute;
+  left: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  max-width: calc(100vw - 24px);
+  padding: 6px 12px;
+  border: 1px solid var(--ui-border-strong, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  background: var(--ui-surface-solid, #15182e);
+  color: var(--ui-text-2, #aeb4d6);
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.cena-demo__aviso a {
+  color: var(--ui-text, #eef0ff);
+  text-decoration: underline;
+}
+
+/* O escritório real na cena nova (padrão): ocupa a tela toda (a classe `office-canvas` dá posição e o
+   esconde atrás das outras páginas); o canvas do motor preenche tudo, em pixel. */
+.cena-escritorio {
+  cursor: default;
+  background: var(--ui-bg, #0b0d1a);
+}
+
+.cena-escritorio__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  outline: none;
+}

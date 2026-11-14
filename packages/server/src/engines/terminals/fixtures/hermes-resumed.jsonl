@@ -1,0 +1,16 @@
+{"type": "system", "subtype": "init", "model": "", "session_id": "", "timestamp": 1794527115875}
+{"type": "text", "text": "ECO:", "timestamp": 1794527115985}
+{"type": "text", "text": " ", "timestamp": 1794527115986}
+{"type": "text", "text": "segunda", "timestamp": 1794527115986}
+{"type": "text", "text": " ", "timestamp": 1794527115986}
+{"type": "text", "text": "pergunta", "timestamp": 1794527115986}
+{"type": "text", "text": "TAMANHO:", "timestamp": 1794527115986}
+{"type": "text", "text": " ", "timestamp": 1794527115986}
+{"type": "text", "text": "16", "timestamp": 1794527115987}
+{"type": "text", "text": "HISTORICO:", "timestamp": 1794527115987}
+{"type": "text", "text": " ", "timestamp": 1794527115987}
+{"type": "text", "text": "2", "timestamp": 1794527115989}
+{"type": "text", "text": "FERRAMENTAS:", "timestamp": 1794527115989}
+{"type": "text", "text": " ", "timestamp": 1794527115989}
+{"type": "text", "text": "4", "timestamp": 1794527115989}
+{"type": "result", "session_id": "local-d3dca242a41580c12f9ec3b345f296f7abbebb699a4a39197c6ff5335b80fa42", "exit_code": 0, "text": "ECO: segunda pergunta\nTAMANHO: 16\nHISTORICO: 2\nFERRAMENTAS: 4", "tokens": {"input": 315, "output": 34, "total": 349, "cache_read": 0, "cache_write": 0}, "duration_ms": 136, "timestamp": 1794527116012}

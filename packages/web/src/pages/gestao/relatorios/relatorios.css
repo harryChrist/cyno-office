@@ -1,0 +1,275 @@
+/* Aba Relatórios da Gestão: a lista (Dia, Semana, Mês) e a página do relatório. Tema escuro do Cyno (tokens --ui-*). */
+
+.rel.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 1040px;
+  margin-inline: auto;
+  min-width: 0;
+}
+
+.rel__head > div:first-child {
+  flex: 1 1 360px;
+}
+
+.rel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.rel__kinds {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+}
+
+.rel__kind {
+  min-height: 34px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--ui-fast), color var(--ui-fast);
+}
+
+.rel__kind:hover {
+  color: var(--ui-text);
+}
+
+.rel__kind.is-on {
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 45%, transparent);
+}
+
+.rel__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Celular: a faixa de períodos vira um seletor. */
+.rel__select {
+  display: none;
+}
+
+/* Faixa de períodos guardados: uma linha, rola de lado quando há muitos (o dia guarda 90). */
+.rel__list {
+  display: flex;
+  flex: 1 1 0;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.rel__item {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 12px;
+  font: inherit;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+}
+
+.rel__item:hover {
+  background: var(--ui-hover);
+}
+
+.rel__item.is-on {
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 40%, transparent);
+}
+
+.rel__item:not(.is-on) .rel__item-sub {
+  display: none;
+}
+
+.rel__item-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rel__item-sub {
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+}
+
+.rel__main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rel__bar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  box-shadow: 0 6px 16px -10px rgb(0 0 0 / 0.7);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  padding: 6px 8px;
+  background: #13162a;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+}
+
+.rel__bar-text {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.rel__bar-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rel__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.rel__note {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: var(--ui-radius-sm);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-2);
+}
+
+.rel__note--ok {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+  border-color: color-mix(in srgb, var(--ui-ok) 30%, transparent);
+}
+
+.rel__note--warn {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-color: color-mix(in srgb, var(--ui-warn) 30%, transparent);
+}
+
+.rel__note--error {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-color: color-mix(in srgb, var(--ui-danger) 30%, transparent);
+}
+
+.rel__note a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.rel__frame {
+  display: block;
+  width: 100%;
+  min-height: 480px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  background: #0b0d1a;
+}
+
+.rel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  background: var(--ui-surface);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+}
+
+.rel__empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.rel__empty-line {
+  max-width: 480px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+@media (max-width: 760px) {
+  .rel__list {
+    display: none;
+  }
+
+  .rel__select {
+    display: grid;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--ui-text-3);
+  }
+
+  .rel__select select {
+    min-height: 42px;
+    min-width: 0;
+    text-overflow: ellipsis;
+    padding: 0 10px;
+    width: 100%;
+    font: inherit;
+    font-size: 14px;
+    color: var(--ui-text);
+    background: var(--ui-field);
+    border: 1px solid var(--ui-border-strong);
+    border-radius: var(--ui-radius-button);
+  }
+
+  .rel__kinds {
+    width: 100%;
+  }
+
+  .rel__kind {
+    flex: 1;
+  }
+
+  .rel__bar {
+    flex-wrap: wrap;
+    position: static;
+    box-shadow: none;
+  }
+
+  .rel__bar-actions {
+    width: 100%;
+  }
+
+  .rel__bar-actions .ui-button {
+    flex: 1 1 calc(50% - 6px);
+  }
+}

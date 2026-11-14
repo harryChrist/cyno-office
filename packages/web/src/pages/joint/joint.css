@@ -1,0 +1,291 @@
+/*
+ * Projeto conjunto: o cartão ao vivo no chat do Cyno (uma parte em cada workspace, em sequência) e o
+ * bloco "Parte de um projeto conjunto" na tela Trabalho. O âmbar do Cyno marca a identidade; o estado
+ * de cada parte usa as cores de estado de sempre.
+ */
+.jcard {
+  --jcard-accent: var(--cyno);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--jcard-accent);
+  border-radius: 14px;
+}
+
+.jcard--ok {
+  --jcard-accent: var(--ui-ok);
+}
+
+.jcard--bad {
+  --jcard-accent: var(--ui-danger);
+}
+
+.jcard--idle {
+  --jcard-accent: var(--ui-text-3);
+}
+
+.jcard--gone {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+.jcard__head {
+  display: grid;
+  gap: 2px;
+}
+
+.jcard__eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--jcard-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.jcard__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ui-text);
+}
+
+.jcard__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.jcard__status {
+  font-weight: 650;
+  color: var(--ui-text-2);
+}
+
+.jcard__status--bad {
+  color: var(--ui-danger);
+}
+
+.jcard__status--ok {
+  color: var(--ui-ok);
+}
+
+.jcard__parts {
+  display: grid;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.jpart {
+  --jpart-accent: var(--ui-text-3);
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 0 0 12px;
+}
+
+/* A linha que liga uma parte à próxima (a sequência). */
+.jpart::before {
+  position: absolute;
+  top: 26px;
+  bottom: 0;
+  left: 12px;
+  width: 2px;
+  content: "";
+  background: var(--ui-border);
+}
+
+.jpart--last {
+  padding-bottom: 0;
+}
+
+.jpart--last::before {
+  display: none;
+}
+
+.jpart--info {
+  --jpart-accent: var(--cyno);
+}
+
+.jpart--ok {
+  --jpart-accent: var(--ui-ok);
+}
+
+.jpart--wait {
+  --jpart-accent: var(--ui-warn);
+}
+
+.jpart--bad {
+  --jpart-accent: var(--ui-danger);
+}
+
+.jpart__dot {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--jpart-accent);
+  background: color-mix(in srgb, var(--jpart-accent) 14%, var(--ui-surface-2));
+  border: 1.5px solid var(--jpart-accent);
+  border-radius: 999px;
+}
+
+.jpart__body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.jpart__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.jpart__ws {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.jpart__title {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.jpart__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.jpart__state {
+  padding: 0 8px;
+  font-weight: 650;
+  color: var(--jpart-accent);
+  background: color-mix(in srgb, var(--jpart-accent) 12%, transparent);
+  border-radius: 999px;
+}
+
+.jpart__wait {
+  font-style: italic;
+}
+
+.jpart__received,
+.jpart__reason {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.jpart__reason {
+  color: var(--ui-danger);
+}
+
+.jpart__retry {
+  justify-self: start;
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+
+.jpart__open {
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyno);
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--cyno-border);
+  border-radius: 8px;
+}
+
+.jpart__open:hover {
+  background: var(--cyno-bg);
+}
+
+.jcard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.jcard__ask {
+  margin-right: auto;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.jcard--compact {
+  padding: 10px 12px;
+}
+
+.cyno-joint-item {
+  list-style: none;
+}
+
+/* ---------- Tela Trabalho ---------- */
+.w-joint {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--cyno) 7%, var(--ui-surface-2));
+  border: 1px solid var(--cyno-border);
+  border-radius: var(--ui-radius);
+}
+
+.w-joint__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--cyno);
+}
+
+.w-joint__text,
+.w-joint__received {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.w-joint__received {
+  padding: 6px 10px;
+  background: var(--ui-surface);
+  border-left: 3px solid var(--ui-ok);
+  border-radius: 8px;
+}
+
+@media (max-width: 760px) {
+  .jpart {
+    grid-template-columns: 26px minmax(0, 1fr);
+  }
+
+  .jpart__open {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

@@ -1,0 +1,163 @@
+/* Cartão "regra" do Para você (a retrospectiva da Gestão): evidência, texto editável, escopo e trechos antes/depois. */
+.fy-rule__lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.fy-rule__source {
+  margin-left: 4px;
+  padding: 1px 8px;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  white-space: nowrap;
+}
+
+.fy-rule__edit {
+  display: grid;
+  gap: 8px;
+}
+
+.fy-rule__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  padding: 0;
+}
+
+.fy-rule__text {
+  font-size: 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.fy-rule__scope {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.fy-rule__radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  cursor: pointer;
+}
+
+.fy-rule__radio:has(input:checked) {
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  background: var(--ui-accent-bg);
+}
+
+.fy-rule__radio input {
+  margin-top: 3px;
+  accent-color: var(--ui-accent);
+}
+
+.fy-rule__radio small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.fy-rule__done {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-rule__text-final {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ui-text);
+}
+
+.fy-rule__meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.fy-rule__evidence {
+  display: grid;
+  gap: 8px;
+}
+
+.fy-rule__excerpts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-rule__excerpts li {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-rule__tag {
+  justify-self: start;
+  font-size: 11px;
+  color: var(--ui-text-3);
+}
+
+.fy-rule__before,
+.fy-rule__after {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fy-rule__before {
+  color: var(--ui-text-2);
+}
+
+.fy-rule__before::before {
+  content: "Antes  ";
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.fy-rule__after {
+  color: var(--ui-text);
+}
+
+.fy-rule__after::before {
+  content: "Depois  ";
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+
+.fy-rule__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+}
+
+.fy-rule__nowrap {
+  white-space: nowrap;
+}

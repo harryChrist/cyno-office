@@ -1,0 +1,284 @@
+/* O "Rever o dia": o player no lugar da caixa de mensagem, o selo de REPLAY e a vinheta da cena. */
+.replay {
+  position: fixed;
+  bottom: var(--gap);
+  left: calc(var(--controls-w) + 2 * var(--gap));
+  right: calc(var(--controls-w) + 2 * var(--gap));
+  z-index: 17;
+  display: grid;
+  gap: 8px;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 10px 14px 8px;
+  color: var(--ui-text);
+  font-size: 14px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-lg, var(--ui-shadow));
+  backdrop-filter: var(--ui-blur);
+}
+
+/* Durante o replay a caixa de mensagem sai (nada aqui age no escritório de verdade). */
+:root.is-replay .taskbox {
+  /* Escondida, mas no mesmo lugar: a câmera continua enquadrando a cena na área livre de antes. */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+:root.is-replay .office-controls__row,
+:root.is-replay .office-controls .connector-strip {
+  display: none;
+}
+
+.replay__linha {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.replay__folga {
+  flex: 1 1 0;
+}
+
+.replay__tocar,
+.replay__agora,
+.replay__velocidades button,
+.replay__dia {
+  min-height: 40px;
+  font: inherit;
+  color: inherit;
+  background: color-mix(in srgb, var(--ui-text) 8%, transparent);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.replay__tocar {
+  width: 44px;
+  font-size: 16px;
+}
+
+.replay__tocar:disabled,
+.replay__velocidades button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.replay__relogio {
+  display: grid;
+  line-height: 1.1;
+}
+
+.replay__hora {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.replay__faixa {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.replay__dia {
+  padding: 0 10px;
+  max-width: 100%;
+}
+
+.replay__velocidades {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.replay__velocidades button {
+  min-width: 52px;
+  padding: 0 8px;
+}
+
+.replay__velocidades button.is-on {
+  color: #0d1b12;
+  background: #4fd18b;
+  border-color: #4fd18b;
+}
+
+.replay__agora {
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.replay__agora span {
+  color: #ff5d5d;
+}
+
+.replay__mensagem {
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.replay__regua {
+  display: grid;
+  gap: 2px;
+}
+
+.replay__trilho {
+  position: relative;
+  height: 56px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-text) 6%, transparent);
+  overflow: hidden;
+}
+
+.replay__trilho::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--p, 0%);
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.replay__chart {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.replay__picos {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.replay__pico {
+  position: absolute;
+  top: 0;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  padding: 0;
+  pointer-events: auto;
+  background: #ffb547;
+  border: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  cursor: pointer;
+}
+
+.replay__range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.replay__horas {
+  position: relative;
+  height: 14px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.replay__horas span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-variant-numeric: tabular-nums;
+}
+
+.replay__vinheta {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: inset 0 0 120px 20px rgba(255, 181, 71, 0.18);
+}
+
+.replay__selo {
+  position: fixed;
+  top: calc(var(--topbar-bottom) + var(--gap));
+  left: 50%;
+  z-index: 17;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ui-text);
+  white-space: nowrap;
+  background: var(--ui-surface);
+  border: 1px solid #ffb547;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.replay__selo-bola {
+  width: 9px;
+  height: 9px;
+  background: #ff5d5d;
+  border-radius: 50%;
+}
+
+.replay__selo-nota,
+.replay__selo-dia {
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .replay {
+    left: var(--gap);
+    right: var(--gap);
+    padding: 8px 10px 6px;
+  }
+
+  .replay__hora {
+    font-size: 24px;
+  }
+
+  .replay__folga {
+    display: none;
+  }
+
+  .replay__dia {
+    flex: 1 1 140px;
+  }
+
+  .replay__velocidades {
+    flex: 1 1 100%;
+  }
+
+  .replay__velocidades button {
+    flex: 1;
+    min-height: 40px;
+  }
+
+  .replay__agora {
+    flex: 1 1 100%;
+  }
+
+  .replay__selo {
+    max-width: calc(100vw - 2 * var(--gap));
+    font-size: 12px;
+    overflow: hidden;
+  }
+
+  .replay__selo-nota {
+    display: none;
+  }
+}
+
+.office-controls__row [data-testid="replay-open"] {
+  grid-column: 1 / -1;
+}

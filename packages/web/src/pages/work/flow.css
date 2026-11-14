@@ -1,0 +1,246 @@
+/* ---------- Fluxo: quem faz, o quê e quem espera quem (linha embaixo do nome na árvore e o bloco do painel) ---------- */
+.tt-flow {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 0 8px 6px 50px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ui-text-2);
+}
+
+.tt-row--d2 .tt-flow {
+  padding-left: calc(var(--tt-indent) + 50px);
+}
+
+.tt-row--d3 .tt-flow {
+  padding-left: calc(var(--tt-indent) * 2 + 50px);
+}
+
+.tt-flow__who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ui-text);
+}
+
+.tt-flow__who b {
+  font-weight: 600;
+}
+
+.tt-flow__who .w-avatar {
+  flex: none;
+}
+
+.tt-flow__who--none {
+  color: var(--ui-text-3);
+  font-style: italic;
+}
+
+.tt-flow__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ui-text-2);
+}
+
+.tt-flow--mother .tt-stack {
+  flex: none;
+}
+
+.tt-row--step {
+  cursor: default;
+  background: color-mix(in srgb, var(--ui-surface-2) 35%, transparent);
+}
+
+.tt-row--step:hover {
+  background: color-mix(in srgb, var(--ui-surface-2) 35%, transparent);
+}
+
+.tt-tag--step {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .tt-row--flow {
+    grid-template-areas:
+      "name more"
+      "cells more"
+      "flow more";
+  }
+
+  .tt-row--step {
+    grid-template-areas:
+      "name more"
+      "flow more";
+    min-height: 0;
+    padding-bottom: 6px;
+  }
+
+  .tt-flow {
+    grid-area: flow;
+    padding: 0 4px 0 50px;
+  }
+
+  /* No celular o fluxo já mostra quem faz: o avatar solto da coluna sairia repetido. */
+  .tt-row--flow .tt-cell--resp {
+    display: none;
+  }
+
+  .tt-row--d2 .tt-flow {
+    padding-left: calc(var(--tt-indent) + 50px);
+  }
+
+  .tt-row--d3 .tt-flow {
+    padding-left: calc(var(--tt-indent) * 2 + 50px);
+  }
+}
+
+/* ---------- Bloco "Fluxo" do painel e a lista "Depois de" ---------- */
+.fl-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fl-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+}
+
+.fl-item--em_andamento {
+  border-color: var(--ui-accent);
+}
+
+.fl-num {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-text-3);
+  background: var(--ui-bg);
+  border-radius: 50%;
+}
+
+.fl-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ui-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.fl-who {
+  font-weight: 700;
+}
+
+.fl-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fl-final {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.fl-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin: 0;
+  padding-left: 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.fl-dep--done {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.fl-text {
+  font-style: italic;
+}
+
+.fl-result {
+  display: grid;
+  max-height: 360px;
+  overflow: auto;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--ui-bg);
+  border-radius: 8px;
+}
+
+.fl-depends {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fl-depends legend {
+  padding: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.fl-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.fl-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.fl-form {
+  display: grid;
+  gap: 12px;
+  min-width: min(420px, 100%);
+}

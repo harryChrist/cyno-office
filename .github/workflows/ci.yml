@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      # Parte dos testes do servidor abre um Chromium de verdade (navegador dos agentes).
+      - run: npx playwright install --with-deps chromium
+      - run: npx vitest run
+      # Build do web e do site (e dos demais pacotes que têm build).
+      - run: npm run build
+      # Os testes e2e (Playwright) não rodam aqui, por serem pesados.
+      # Localmente: npx playwright install chromium && npm run test:e2e

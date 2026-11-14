@@ -1,0 +1,189 @@
+/*
+ * Tokens da interface (tudo fora do canvas). Escuro e moderno: azul-marinho bem escuro,
+ * acento violeta, vidro (superfície translúcida + blur) e brilhos sutis.
+ * A paleta pixel (--p-*) continua existindo só para o que desenha pixel art (canvas, avatares,
+ * amostras de tema). Componente novo usa --ui-*.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Fundo e superfícies */
+  --ui-bg: #0b0d1a;
+  --ui-bg-glow:
+    radial-gradient(1200px 700px at 12% -10%, rgba(109, 92, 245, 0.18), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, rgba(56, 120, 255, 0.12), transparent 60%);
+  --ui-surface: rgba(22, 25, 48, 0.72);
+  --ui-surface-solid: #15182e;
+  --ui-surface-2: #1c2040;
+  --ui-surface-3: #252a52;
+  --ui-field: #10132a;
+  --ui-hover: rgba(255, 255, 255, 0.05);
+  --ui-blur: blur(14px) saturate(140%);
+
+  /* Bordas */
+  --ui-border: rgba(255, 255, 255, 0.08);
+  --ui-border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Texto */
+  --ui-text: #e8eaf6;
+  --ui-text-2: #b4b8d4;
+  --ui-text-3: #8a8fb3;
+  --ui-on-solid: #ffffff;
+
+  /* Acento violeta */
+  --ui-accent: #8b7cff;
+  --ui-accent-solid: #6d5cf5;
+  --ui-accent-bg: rgba(139, 124, 255, 0.14);
+  --ui-accent-glow: rgba(139, 124, 255, 0.35);
+  --ui-focus: #8b7cff;
+
+  /* Cyno, o agente da plataforma: âmbar frio, para não confundir com o violeta do resto (o chat do Maestro). */
+  --cyno: #e6b866;
+  --cyno-solid: #b9852c;
+  --cyno-bg: rgba(230, 184, 102, 0.12);
+  --cyno-border: rgba(230, 184, 102, 0.3);
+  --cyno-glow: rgba(230, 184, 102, 0.3);
+
+  /* Estados (texto/ícone, fundo suave e sólido para botões) */
+  --ui-ok: #3ddc97;
+  --ui-ok-bg: rgba(61, 220, 151, 0.12);
+  --ui-ok-solid: #1d7a4a;
+  --ui-warn: #f5b544;
+  --ui-warn-bg: rgba(245, 181, 68, 0.13);
+  --ui-danger: #ff6b81;
+  --ui-danger-bg: rgba(255, 107, 129, 0.12);
+  --ui-danger-solid: #c93a52;
+  --ui-info: #7ab4f3;
+  --ui-info-bg: rgba(122, 180, 243, 0.13);
+
+  /* Barras de nível (cota da assinatura, orçamento): trilho visível e a cor pela faixa — calmo, atenção, perigo. */
+  --ui-bar-track: rgba(255, 255, 255, 0.14);
+  --ui-bar-track-edge: rgba(255, 255, 255, 0.06);
+  --ui-level-ok: var(--ui-ok);
+  --ui-level-warn: var(--ui-warn);
+  --ui-level-danger: var(--ui-danger);
+
+  /*
+   * Paleta dos tipos do "Para você" (versão escura do painel do usuário). Cada tipo escolhe uma
+   * cor (azul, ciano, verde, violeta, anil, laranja, rosa, âmbar, cinza, coral = 1..10); os tipos
+   * de antes usam as mesmas cores de sempre.
+   */
+  --ui-tc-1: #86b5f2;
+  --ui-tc-2: #62c6c6;
+  --ui-tc-3: #94d077;
+  --ui-tc-4: #bba0f2;
+  --ui-tc-5: #a2acf2;
+  --ui-tc-6: #e9a067;
+  --ui-tc-7: #ee8bba;
+  --ui-tc-8: #e8b552;
+  --ui-tc-9: #b5b3ab;
+  --ui-tc-10: #ef8f86;
+
+  /* Forma */
+  --ui-radius-panel: 14px;
+  --ui-radius: 12px;
+  --ui-radius-button: 10px;
+  --ui-radius-sm: 8px;
+  --ui-radius-pill: 999px;
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ui-shadow: 0 8px 28px rgba(3, 4, 14, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ui-shadow-lg: 0 20px 60px rgba(3, 4, 14, 0.6), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --ui-glow: 0 0 0 1px rgba(139, 124, 255, 0.35), 0 0 18px rgba(139, 124, 255, 0.25);
+
+  /* Tipografia */
+  --ui-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ui-font-mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --ui-text-size: 14px;
+
+  /* Movimento */
+  --ui-fast: 120ms ease-out;
+  --ui-med: 180ms ease-out;
+}
+
+/* ---------- Base ---------- */
+html {
+  background: var(--ui-bg);
+}
+
+body {
+  background: var(--ui-bg-glow), var(--ui-bg);
+  background-attachment: fixed;
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-size);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+a {
+  color: var(--ui-accent);
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--ui-text);
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--ui-font-mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--ui-text);
+  background: rgba(139, 124, 255, 0.4);
+}
+
+/* Barra de rolagem escura e discreta. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.24);
+}
+
+.ui-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

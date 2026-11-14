@@ -1,0 +1,572 @@
+/*
+ * Painel lateral da página do Cyno: uma aba por vez (Resumo, Workspaces, Agenda, Mural), só o corpo rola.
+ * Computador: coluna de 360 px (arrastável, de 300 a 640) (ou uma faixa fina de contadores quando recolhido). Celular: folha de baixo
+ * para cima aberta pelos chips. Pouca borda: o espaço e o peso do texto fazem a hierarquia.
+ */
+
+.cyno-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ui-surface);
+  backdrop-filter: var(--ui-blur);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+}
+
+.cyno[data-side="closed"] .cyno-side {
+  display: none;
+}
+
+.cyno-side__top {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  padding: 8px 8px 0 10px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.cyno-side__tabs {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cyno-side__tab {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: 5px;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.cyno-side__tab:hover {
+  color: var(--ui-text);
+}
+
+.cyno-side__tab[aria-selected="true"] {
+  color: var(--ui-text);
+}
+
+.cyno-side__tab[aria-selected="true"]::after {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  content: "";
+  background: var(--cyno);
+  border-radius: 2px;
+}
+
+.cyno-side__tab:focus-visible,
+.cyno-side__collapse:focus-visible,
+.cyno-side__close:focus-visible,
+.cyno-rail__btn:focus-visible,
+.cyno-chip-btn:focus-visible,
+.srow:focus-visible,
+.rrow:focus-visible,
+.sblock__action:focus-visible {
+  outline: 2px solid var(--cyno);
+  outline-offset: -2px;
+}
+
+.sbadge {
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--ui-text-2);
+  text-align: center;
+  background: var(--ui-surface-2);
+  border-radius: 999px;
+}
+
+.sbadge--alert {
+  color: #fff;
+  background: var(--ui-danger-solid);
+}
+
+.cyno-side__collapse,
+.cyno-side__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 3px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+}
+
+.cyno-side__collapse:hover,
+.cyno-side__close:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+.cyno-side__grab,
+.cyno-chips,
+.cyno-sheet-backdrop,
+.cyno-side__close.cyno-side__close {
+  display: none;
+}
+
+.cyno-side__body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 14px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.cyno-side__body:focus-visible {
+  outline: none;
+}
+
+/* ---------- Faixa recolhida (computador) ---------- */
+.cyno-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+}
+
+.cyno-rail__btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+
+.cyno-rail__btn:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+.cyno-rail__btn--open {
+  margin-bottom: 4px;
+  color: var(--cyno);
+}
+
+.cyno-rail .sbadge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  font-size: 10px;
+  line-height: 16px;
+}
+
+/* ---------- Seções do Resumo ---------- */
+.side-summary {
+  display: grid;
+  gap: 22px;
+}
+
+.sblock__head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.sblock__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.sblock__count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-text-2);
+}
+
+.sblock__action {
+  min-height: 28px;
+  padding: 0 6px;
+  margin: -4px -6px -4px auto;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyno);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.sblock__action:hover {
+  background: var(--cyno-bg);
+}
+
+.sblock__empty {
+  margin: 2px 0;
+  font-size: 13.5px;
+  color: var(--ui-text-3);
+}
+
+.sblock__note {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.sblock__first {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.srows {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  margin: 0 -8px;
+  list-style: none;
+}
+
+.srow,
+.rrow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+
+.srow:hover:not(:disabled),
+.rrow:hover {
+  background: var(--ui-surface-2);
+}
+
+.srow:disabled {
+  cursor: default;
+}
+
+.srow__main,
+.rrow__main {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.srow__title,
+.rrow__title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.srow__meta,
+.rrow__meta {
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.srow__meta--soft {
+  opacity: 0.8;
+}
+
+.srow__go {
+  flex: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyno);
+}
+
+.srow--event {
+  border-left: 3px solid var(--ws, var(--cyno));
+  border-radius: 4px 10px 10px 4px;
+}
+
+.srow__when {
+  display: grid;
+  flex: none;
+  min-width: 64px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ui-text-2);
+}
+
+.srow__dot {
+  flex: none;
+  align-self: flex-start;
+  margin-top: 7px;
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.srow--busy .srow__dot {
+  background: var(--ui-ok);
+}
+
+.srow--wait .srow__dot {
+  background: var(--ui-warn);
+}
+
+.srow--wait .srow__meta {
+  color: var(--ui-warn);
+}
+
+.rrow .rcard__state {
+  flex: none;
+  font-size: 12px;
+}
+
+/* ---------- Abas com os componentes de antes: sem caixa dentro da caixa ---------- */
+.side-stack {
+  display: grid;
+  gap: 22px;
+}
+
+.cyno-side .hstrip__panel,
+.cyno-side .wcards,
+.cyno-side .rsec {
+  overflow: visible;
+  background: none;
+  backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.cyno-side .hstrip__head,
+.cyno-side .rsec__head {
+  padding: 0 0 8px;
+}
+
+.cyno-side .wcards__head {
+  display: none;
+}
+
+.cyno-side .wcards__scroll,
+.cyno-side .mural__scroll,
+.cyno-side .waiting-all__scroll {
+  padding: 0;
+  overflow: visible;
+}
+
+.cyno-side .rsec {
+  padding: 0;
+  margin: 0;
+}
+
+.cyno-side .rsec__list {
+  padding: 0;
+}
+
+/* Fichas compactas */
+.cyno-side .wcard {
+  gap: 8px;
+  padding: 12px;
+  background: var(--ui-surface-2);
+  border-color: transparent;
+  border-radius: 12px;
+}
+
+.cyno-side .wcard:hover {
+  border-color: var(--cyno-border);
+  box-shadow: none;
+}
+
+.cyno-side .wcard__usage {
+  display: none;
+}
+
+.cyno-side .wcard__foot {
+  gap: 8px;
+}
+
+.cyno-side .wcard__fact {
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+/* ---------- Celular: chips e folha ---------- */
+@media (max-width: 900px) {
+  .cyno-rail {
+    display: none;
+  }
+
+  .cyno-chips {
+    display: flex;
+    flex: none;
+    gap: 6px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .cyno-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cyno-chip-btn {
+    flex: none;
+    min-height: 40px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ui-text-2);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-pill);
+  }
+
+  .cyno-chip-btn--alert {
+    color: var(--ui-text);
+    background: var(--cyno-bg);
+    border-color: var(--cyno-border);
+  }
+
+  .cyno[data-side="closed"] .cyno-side {
+    display: flex;
+  }
+
+  .cyno-side {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 60;
+    height: min(82dvh, 720px);
+    visibility: hidden;
+    background: var(--ui-surface-solid);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+    transform: translateY(104%);
+    transition:
+      transform var(--ui-med),
+      visibility 0s linear var(--ui-med);
+  }
+
+  .cyno-side[data-sheet="open"] {
+    visibility: visible;
+    transform: none;
+    transition: transform var(--ui-med);
+  }
+
+  .cyno-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    display: block;
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  .cyno-side__grab {
+    display: block;
+    flex: none;
+    width: 40px;
+    height: 4px;
+    margin: 8px auto 0;
+    background: var(--ui-border-strong);
+    border-radius: 4px;
+  }
+
+  .cyno-side__top {
+    padding-top: 2px;
+  }
+
+  .cyno-side__collapse {
+    display: none;
+  }
+
+  .cyno-side__close.cyno-side__close {
+    display: grid;
+    width: 40px;
+    height: 40px;
+  }
+
+  .cyno-side__tab {
+    flex: 1 1 0;
+    min-height: 44px;
+    padding: 0 4px;
+    font-size: 12.5px;
+  }
+
+  .sblock__action,
+  .cyno-side .agenda-next__all,
+  .cyno-side .rsec__more {
+    min-height: 40px;
+  }
+
+  .cyno-side__body {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* A agenda dentro do painel: a lista cresce com o conteúdo (só o painel rola). */
+.cyno-side .agenda-next__list {
+  flex: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.cyno-side .agenda-next__all {
+  margin-right: -6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyno-side {
+    transition: none;
+  }
+}

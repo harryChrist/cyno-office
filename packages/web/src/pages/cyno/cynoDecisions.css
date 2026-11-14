@@ -1,0 +1,478 @@
+/*
+ * Cartões de decisão no chat do Cyno: confirmação de ação perigosa, proposta de workspace e a lista
+ * "Aguardando sua confirmação". Escuros e discretos; o âmbar do Cyno marca o que espera o dono, o
+ * verde o que deu certo, o vermelho o que falhou.
+ */
+.dcard {
+  --dcard-accent: var(--ui-warn);
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 12px 16px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--dcard-accent);
+  border-radius: 14px;
+}
+
+.dcard--ok {
+  --dcard-accent: var(--ui-ok);
+}
+
+.dcard--bad {
+  --dcard-accent: var(--ui-danger);
+}
+
+.dcard--idle {
+  --dcard-accent: var(--ui-text-3);
+}
+
+.dcard--wait {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-warn) 18%, transparent);
+}
+
+.dcard__head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.dcard__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--dcard-accent);
+  background: color-mix(in srgb, var(--dcard-accent) 14%, transparent);
+  border-radius: 9px;
+}
+
+.dcard__kind {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.dcard__state {
+  flex: none;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--dcard-accent);
+  background: color-mix(in srgb, var(--dcard-accent) 13%, transparent);
+  border-radius: 999px;
+}
+
+.dcard__summary {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.dcard__impact,
+.dcard__outcome {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.dcard__outcome--bad {
+  color: var(--ui-danger);
+}
+
+.dcard__reason {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  background: var(--cyno-bg);
+  border-radius: 9px;
+  overflow-wrap: anywhere;
+}
+
+.dcard__reason-who {
+  font-weight: 700;
+  color: var(--cyno);
+}
+
+.dcard__details {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.dcard__details summary {
+  width: max-content;
+  cursor: pointer;
+  color: var(--ui-text-3);
+}
+
+.dcard__details summary:hover {
+  color: var(--ui-text);
+}
+
+.dcard__details ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.dcard__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.dcard__timer {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.dcard__output {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--ui-bg, #0b0d12);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+}
+
+.dcard__gone {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Proposta de workspace ---------- */
+
+.pcard__name {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.pcard__summary {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.pcard__totals {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--cyno);
+}
+
+.pcard__rooms,
+.pcard__agents {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pcard__room {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  background: color-mix(in srgb, var(--ui-surface) 70%, transparent);
+  border: 1px solid var(--ui-border);
+  border-radius: 11px;
+}
+
+.pcard__room-head,
+.pcard__team-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.pcard__room-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.pcard__team {
+  display: grid;
+  gap: 5px;
+  padding-left: 10px;
+  border-left: 2px solid var(--ui-border);
+}
+
+.pcard__team-name {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.pcard__team-focus {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.pcard__agent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.pcard__agent-name {
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.pcard__agent-role {
+  color: var(--ui-text-3);
+}
+
+.pcard__engine,
+.pcard__chip {
+  padding: 1px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+}
+
+.pcard__engine--claude {
+  color: #e9b872;
+  border-color: color-mix(in srgb, #e9b872 35%, transparent);
+}
+
+.pcard__engine--gemini {
+  color: #8fb4ff;
+  border-color: color-mix(in srgb, #8fb4ff 35%, transparent);
+}
+
+.pcard__chip--connector {
+  color: var(--cyno);
+  border-color: var(--cyno-border);
+}
+
+.pcard__extras {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.pcard__extras dt {
+  font-weight: 650;
+  color: var(--ui-text-3);
+}
+
+.pcard__extras dd {
+  margin: 0;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.pcard__warnings {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 10px 8px 26px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-warn);
+  background: color-mix(in srgb, var(--ui-warn) 9%, transparent);
+  border-radius: 9px;
+}
+
+.pcard__progress {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--ui-text-3);
+  list-style: none;
+}
+
+.pcard__progress .is-done {
+  color: var(--ui-ok);
+}
+
+.pcard__progress .is-error {
+  color: var(--ui-danger);
+}
+
+.pcard__done {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+/* ---------- Aguardando sua confirmação ---------- */
+
+.pending {
+  display: grid;
+  flex: none;
+  gap: 6px;
+  max-height: 38%;
+  margin: 10px 12px 0;
+  overflow: auto;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--ui-warn) 8%, var(--ui-surface-2));
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 35%, var(--ui-border));
+  border-radius: 14px;
+}
+
+.pending__title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-warn);
+}
+
+.pending__count {
+  padding: 0 7px;
+  font-size: 12px;
+  color: #1a1306;
+  background: var(--ui-warn);
+  border-radius: 999px;
+}
+
+.pending__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.pending__text {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  overflow-wrap: anywhere;
+}
+
+.pending__text:hover {
+  text-decoration: underline;
+}
+
+.pending__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pending__timer {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.pending__btn.ui-button {
+  min-height: 28px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+
+.cyno-decision-item {
+  list-style: none;
+}
+
+@media (max-width: 560px) {
+  .dcard {
+    padding: 11px 12px 11px 13px;
+  }
+
+  .dcard__foot .ui-button {
+    flex: 1 1 auto;
+    min-height: 40px;
+  }
+
+  .dcard__timer {
+    flex: 1 0 100%;
+    margin-left: 0;
+  }
+
+  .pcard__extras {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .pcard__extras dd {
+    margin-bottom: 6px;
+  }
+
+  .pending__actions {
+    flex: 1 0 100%;
+  }
+
+  .pending__btn.ui-button {
+    flex: 1;
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 560px) {
+  .pending {
+    max-height: 30%;
+  }
+
+  .pending__adjust {
+    display: none;
+  }
+}

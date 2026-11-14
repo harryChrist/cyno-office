@@ -1,0 +1,1359 @@
+/*
+ * Para você: tema escuro do app (tokens --ui-*). Lateral e avisos em vidro; cards com uma barra
+ * na cor do tipo e brilho leve quando estão em foco. Cada tipo define --c (ícone, barra, selo).
+ */
+
+/* Padrões antes das cores por tipo (mesma especificidade: o tipo, que vem depois, vence). */
+.fy-card {
+  --c: var(--ui-tc-9);
+}
+
+.fy-types :where(button) {
+  --c: var(--ui-accent);
+}
+
+/* A cor de cada tipo vem do próprio tipo (style="--c: var(--ui-tc-N)"; veja typeStyle). */
+
+.fy-icon {
+  flex: none;
+}
+
+.page--foryou :focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.page--foryou kbd,
+.fy-kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  font: 600 11px/14px var(--ui-font-mono);
+  color: var(--ui-text-2);
+  text-align: center;
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* ---------- Filtros por tipo (a lateral é o fy-side, no fim do arquivo) ---------- */
+.fy-types button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition:
+    background-color var(--ui-fast),
+    color var(--ui-fast),
+    box-shadow var(--ui-med);
+}
+
+.fy-side__title {
+  margin: 0 0 6px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.fy-types {
+  display: grid;
+  gap: 2px;
+}
+
+.fy-types button {
+  position: relative;
+  min-height: 32px;
+  padding: 5px 8px;
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-types button:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.fy-types button[aria-pressed="true"] {
+  color: var(--ui-text);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--c) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 32%, transparent);
+}
+
+/* Marca do filtro ativo: um traço na cor do tipo, colado na borda esquerda. */
+.fy-types button[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  background: var(--c);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--c) 70%, transparent);
+}
+
+.fy-types .fy-icon {
+  color: var(--c);
+}
+
+.fy-types button[aria-pressed="false"] .fy-icon {
+  opacity: 0.85;
+}
+
+.fy-types__n {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fy-types__n--some {
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.fy-shortcuts {
+  display: grid;
+  gap: 8px;
+  padding: 14px 4px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-text-3);
+  border-top: 1px solid var(--ui-border);
+}
+
+.fy-shortcuts p {
+  margin: 0;
+}
+
+/* ---------- Lista ---------- */
+.fy-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 56px 16px;
+  text-align: center;
+  color: var(--ui-text-2);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+}
+
+.fy-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-empty p {
+  margin: 0;
+}
+
+.fy-empty strong {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.fy-empty__hint {
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+.fy-link {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.fy-link:hover {
+  color: var(--ui-text);
+}
+
+/* ---------- Card ---------- */
+.fy-card {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 14px 20px;
+  font-size: 13px;
+  color: var(--ui-text);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--c) 7%, transparent), transparent 38%),
+    var(--ui-surface-solid);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow-sm);
+  scroll-margin: 16px;
+  transition:
+    border-color var(--ui-med),
+    box-shadow var(--ui-med);
+}
+
+/* Barra do tipo, à esquerda, com um brilho fraco na mesma cor. */
+.fy-card::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  background: var(--c);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c) 55%, transparent);
+}
+
+.fy-card:hover {
+  border-color: var(--ui-border-strong);
+}
+
+.fy-card:focus {
+  outline: none;
+}
+
+.page--foryou .fy-card:focus-visible,
+.fy-card:focus-within {
+  outline: none;
+  border-color: color-mix(in srgb, var(--c) 50%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent),
+    0 0 28px color-mix(in srgb, var(--c) 16%, transparent),
+    var(--ui-shadow);
+}
+
+.fy-card[data-status]:not([data-status="pendente"])::before {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.fy-card[aria-busy="true"] {
+  opacity: 0.7;
+}
+
+.fy-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.fy-type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-card__id {
+  font: 12px var(--ui-font-mono);
+  color: var(--ui-text-3);
+}
+
+/* Status: pílula com um ponto na cor do estado. */
+.fy-status {
+  --s: var(--ui-text-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 3px 10px 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--s);
+  background: color-mix(in srgb, var(--s) 11%, transparent);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.fy-status--pendente {
+  --s: var(--ui-warn);
+}
+
+.fy-status--aprovado,
+.fy-status--respondido {
+  --s: var(--ui-ok);
+}
+
+.fy-status--rejeitado {
+  --s: var(--ui-danger);
+}
+
+.fy-card__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.fy-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-chips .fy-icon {
+  color: var(--ui-text-3);
+}
+
+.fy-chips .fy-chip--crivo-ok {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+  border-color: color-mix(in srgb, var(--ui-ok) 25%, transparent);
+}
+
+.fy-chips .fy-chip--crivo-no {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-color: color-mix(in srgb, var(--ui-danger) 25%, transparent);
+}
+
+.fy-chips .fy-chip--edited {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-color: color-mix(in srgb, var(--ui-info) 25%, transparent);
+}
+
+.fy-chips .fy-chip--crivo-ok .fy-icon,
+.fy-chips .fy-chip--crivo-no .fy-icon,
+.fy-chips .fy-chip--edited .fy-icon {
+  color: currentColor;
+}
+
+.fy-card__why {
+  margin: 0;
+  padding-left: 12px;
+  line-height: 1.55;
+  color: var(--ui-text-2);
+  border-left: 2px solid var(--ui-border-strong);
+  overflow-wrap: anywhere;
+}
+
+.fy-card__extra {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.fy-card__extra div {
+  display: grid;
+  grid-template-columns: minmax(70px, auto) 1fr;
+  gap: 10px;
+}
+
+.fy-card__extra dt {
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.fy-card__extra dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fy-field {
+  display: grid;
+  gap: 6px;
+}
+
+.fy-field__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.fy-field__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.fy-field__hint {
+  font-weight: 400;
+  color: var(--ui-text-3);
+}
+
+.fy-edited-mark {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--ui-fast), color var(--ui-fast);
+}
+
+.fy-undo:hover {
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+}
+
+.fy-textarea {
+  min-height: 52px;
+  max-height: 60vh;
+  padding: 9px 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-button);
+  field-sizing: content;
+  transition:
+    border-color var(--ui-fast),
+    box-shadow var(--ui-med);
+}
+
+.fy-textarea--note {
+  font-size: 13px;
+}
+
+/* Texto editado: uma borda esquerda em azul, como a marca "Editado". */
+.fy-field--changed .fy-textarea:not(.fy-textarea--note) {
+  border-left: 3px solid var(--ui-info);
+}
+
+.fy-field--over .fy-textarea:not(.fy-textarea--note) {
+  border-color: color-mix(in srgb, var(--ui-danger) 70%, transparent);
+}
+
+.fy-field--over .fy-textarea:not(.fy-textarea--note):focus {
+  box-shadow: 0 0 0 3px var(--ui-danger-bg);
+}
+
+.fy-readonly {
+  padding: 9px 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ui-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--ui-field) 70%, transparent);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-button);
+}
+
+/* Contador: número e uma barra fina que esquenta perto do limite. */
+.fy-counter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fy-counter__track {
+  width: 96px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-counter__fill {
+  display: block;
+  height: 100%;
+  background: var(--ui-accent);
+  border-radius: inherit;
+  transition:
+    width var(--ui-med),
+    background-color var(--ui-med);
+}
+
+.fy-counter--perto {
+  color: var(--ui-warn);
+  font-weight: 600;
+}
+
+.fy-counter--perto .fy-counter__fill {
+  background: var(--ui-warn);
+  box-shadow: 0 0 6px var(--ui-warn);
+}
+
+.fy-counter--passou {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+
+.fy-counter--passou .fy-counter__fill {
+  background: var(--ui-danger);
+  box-shadow: 0 0 6px var(--ui-danger);
+}
+
+/* Texto acima do limite: aviso claro logo abaixo do contador (aprovar pede confirmação). */
+.fy-limit-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text);
+  background: var(--ui-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-danger) 40%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-limit-warning .fy-icon {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ui-danger);
+}
+
+.fy-card__note {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--ui-text);
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 30%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-card .ui-error {
+  color: var(--ui-danger);
+}
+
+.fy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.fy-actions__space {
+  flex: 1;
+}
+
+.fy-actions .ui-button {
+  gap: 7px;
+}
+
+.fy-actions .ui-button--ghost {
+  margin-left: -8px;
+}
+
+/* Atalho dentro de botão sólido: vidro claro sobre a cor do botão. */
+.fy-actions .fy-kbd {
+  margin-left: 2px;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--ui-on-solid);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- Avisos (vidro) ---------- */
+.fy-toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.fy-toast {
+  --s: var(--ui-ok);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--ui-text);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--s) 10%, transparent), transparent 55%),
+    var(--ui-surface);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow-lg);
+  -webkit-backdrop-filter: var(--ui-blur);
+  backdrop-filter: var(--ui-blur);
+  animation: fy-toast-in var(--ui-med);
+}
+
+.fy-toast .fy-icon {
+  color: var(--s);
+}
+
+.fy-toast--aviso {
+  --s: var(--ui-warn);
+}
+
+.fy-toast--erro {
+  --s: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
+}
+
+.fy-toast__msg {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fy-toast__action {
+  padding: 3px 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--ui-fast), color var(--ui-fast);
+}
+
+.fy-toast__action:hover {
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-accent) 28%, transparent);
+}
+
+@keyframes fy-toast-in {
+  from {
+    transform: translateY(8px) scale(0.98);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fy-toast {
+    animation: none;
+  }
+}
+
+/* ---------- Telas menores ---------- */
+@media (max-width: 640px) {
+  .fy-card {
+    padding: 14px 14px 12px 16px;
+  }
+
+  .fy-actions .fy-kbd {
+    display: none;
+  }
+}
+
+/* ---------- Tipos: botão na lateral e janela "Tipos de aprovação" ---------- */
+.fy-types-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.fy-types-head .fy-side__title {
+  margin: 0;
+}
+
+.fy-icon-btn {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--ui-fast),
+    background-color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.fy-icon-btn:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border-color: var(--ui-border);
+}
+
+.fy-icon-btn:active {
+  transform: translateY(1px);
+}
+
+.fy-icon-btn--danger:hover {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+/* Ícone do tipo num quadradinho com a cor dele. */
+.fy-tbadge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 26%, transparent);
+  border-radius: 10px;
+}
+
+.fy-tsheet {
+  display: grid;
+  gap: 14px;
+}
+
+.fy-tsheet__intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.fy-tsheet__intro p {
+  max-width: 52ch;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.fy-tsheet__intro .ui-button {
+  flex: none;
+}
+
+.fy-tlist {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ui-border);
+}
+
+.fy-trow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.fy-trow__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fy-trow__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.fy-trow__id {
+  font: 11.5px var(--ui-font-mono);
+  font-weight: 400;
+  color: var(--ui-text-3);
+}
+
+.fy-trow__desc {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.fy-trow__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-trow__meta li {
+  padding: 1px 8px;
+  font-size: 11.5px;
+  line-height: 18px;
+  color: var(--ui-text-3);
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-trow__meta .fy-trow__by--maestro {
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 30%, transparent);
+}
+
+.fy-trow__actions {
+  display: flex;
+  gap: 2px;
+}
+
+/* Formulário do tipo */
+.fy-tform {
+  gap: 18px;
+}
+
+.fy-tform__preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-tform__desc {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.fy-tform__group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fy-tform__group legend {
+  margin-bottom: 8px;
+}
+
+.fy-tform__seg {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 420px;
+}
+
+.fy-tform__seg button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fy-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+  gap: 6px;
+}
+
+.fy-icon-grid__item {
+  --c: var(--ui-text-2);
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  color: var(--ui-text-3);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--ui-fast),
+    border-color var(--ui-fast),
+    background-color var(--ui-fast);
+}
+
+.fy-icon-grid__item:hover {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+
+.fy-icon-grid__item[aria-checked="true"] {
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 14%, var(--ui-field));
+  border-color: color-mix(in srgb, var(--c) 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c) 30%, transparent);
+}
+
+.fy-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px;
+}
+
+.fy-tform__limit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.fy-tform__limit .ui-input {
+  width: 120px;
+}
+
+.fy-tform__sub {
+  margin-top: 6px;
+}
+
+.fy-where {
+  display: grid;
+  gap: 6px;
+}
+
+.fy-where__head,
+.fy-where__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 90px minmax(0, 1fr) 30px;
+  gap: 8px;
+  align-items: center;
+}
+
+.fy-where__head {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.fy-tform__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.fy-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+}
+
+.fy-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ui-accent-solid);
+}
+
+@media (max-width: 640px) {
+  .fy-tsheet__intro {
+    flex-direction: column;
+  }
+
+  .fy-trow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fy-trow__actions {
+    grid-column: 2;
+  }
+
+  .fy-where__head {
+    display: none;
+  }
+
+  .fy-where__row {
+    grid-template-columns: minmax(0, 1fr) 72px 30px;
+  }
+
+  .fy-where__row input:nth-child(3) {
+    grid-column: 1 / 3;
+  }
+}
+
+/* ---------- Cancelados, "Atualizado" e o menu ⋯ do card ---------- */
+.fy-status--cancelado {
+  --s: var(--ui-text-3);
+}
+
+.fy-card[data-status="cancelado"] {
+  opacity: 0.86;
+}
+
+.fy-card__top .fy-status + .fy-menu {
+  margin-left: -4px;
+}
+
+.fy-menu {
+  position: relative;
+  flex: none;
+}
+
+.fy-menu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 168px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow);
+}
+
+.fy-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+}
+
+.fy-menu__item:hover,
+.fy-menu__item:focus-visible {
+  background: var(--ui-hover);
+  outline: none;
+}
+
+.fy-menu__item--danger {
+  color: var(--ui-danger);
+}
+
+.fy-menu__item--danger:hover,
+.fy-menu__item--danger:focus-visible {
+  background: var(--ui-danger-bg);
+}
+
+.fy-chips .fy-chip--updated {
+  padding: 0;
+  color: var(--ui-accent, var(--ui-info));
+  background: color-mix(in srgb, var(--ui-accent, var(--ui-info)) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ui-accent, var(--ui-info)) 30%, transparent);
+}
+
+.fy-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.fy-chip-btn .fy-icon {
+  color: currentColor;
+}
+
+.fy-chip-btn:focus-visible {
+  outline: 2px solid var(--ui-focus, currentColor);
+  outline-offset: 1px;
+}
+
+.fy-history {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  list-style: none;
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.fy-history__when {
+  color: var(--ui-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fy-card__cancelled {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.fy-card__cancelled .fy-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ui-text-3);
+}
+
+.fy-card__cancelled strong {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.fy-card__cancelled-when {
+  color: var(--ui-text-3);
+}
+
+.fy-discard {
+  display: grid;
+  gap: 8px;
+}
+
+.fy-discard p {
+  margin: 0 0 4px;
+}
+
+
+/* ---------- Recusa com motivo e lote de aprovações ---------- */
+.fy-field--reject {
+  padding: 10px 12px;
+  background: var(--ui-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-danger) 45%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-field--reject .fy-field__label {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.fy-field__hint--block {
+  display: block;
+  margin: 0;
+}
+
+/* Escolha rápida do motivo da recusa */
+.fy-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 8px;
+}
+
+.fy-cat {
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.fy-cat:hover:not(:disabled) {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong, var(--ui-border));
+}
+
+.fy-cat.is-on {
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-danger) 22%, var(--ui-field));
+  border-color: color-mix(in srgb, var(--ui-danger) 60%, var(--ui-border));
+}
+
+.fy-cat:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.fy-batch {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--ui-accent-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.fy-batch__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.fy-batch__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: color-mix(in srgb, var(--ui-text) 65%, transparent);
+}
+
+.fy-batch__label strong {
+  color: var(--ui-text);
+}
+
+.fy-batch__track {
+  flex: 1 1 80px;
+  min-width: 60px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-batch__fill {
+  display: block;
+  height: 100%;
+  background: var(--ui-ok);
+  border-radius: inherit;
+  transition: width var(--ui-med);
+}
+
+.fy-batch__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.fy-batch__reject {
+  display: grid;
+  gap: 6px;
+}
+
+.fy-batch__reject .fy-batch__actions {
+  margin-left: 0;
+  justify-content: flex-end;
+}
+
+.fy-row__batch {
+  flex: none;
+  font-weight: 600;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--ui-text) 65%, transparent);
+  white-space: nowrap;
+}
+
+/* Selo "Decidido sozinho" (Modo Automático) no cartão e na linha. */
+.fy-chips .fy-chip--auto {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg, color-mix(in srgb, var(--ui-ok) 12%, transparent));
+  border-color: color-mix(in srgb, var(--ui-ok) 30%, transparent);
+}
+
+.fy-chips .fy-chip--auto .fy-icon {
+  color: currentColor;
+}
+
+.fy-chips .fy-chip--auto-note {
+  color: var(--ui-warn);
+  background: color-mix(in srgb, var(--ui-warn) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ui-warn) 30%, transparent);
+}
+
+.fy-row__auto {
+  white-space: nowrap;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-ok);
+  border: 1px solid color-mix(in srgb, var(--ui-ok) 35%, transparent);
+  border-radius: var(--ui-radius-pill);
+}

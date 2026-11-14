@@ -1,0 +1,1263 @@
+/*
+ * Página Cérebro: três colunas em vidro (Cérebros, notas, nota aberta) que ocupam a altura da
+ * tela, cada uma com a própria rolagem. No celular vira um passo de cada vez (Cérebros → notas → nota).
+ */
+/* A casca (altura toda, cabeçalho em linha) vem de .page--fill e .page__header--row em pages.css. */
+.brain-browser {
+  /* Acento clarinho para textos pequenos sobre fundo tingido (contraste acima de 7:1). */
+  --brain-accent-text: color-mix(in srgb, var(--ui-accent) 55%, #ffffff);
+  display: grid;
+  flex: 1;
+  /* Faixa de Cérebros em cima; embaixo, notas e leitor. */
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px 14px;
+  min-height: 460px;
+}
+
+.brain-browser:has(> .brain-browser__warning) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+.brain-browser[data-loading="true"] .brain-col--notes {
+  opacity: 0.85;
+}
+
+.brain-browser :focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.brain-browser__warning {
+  grid-column: 1 / -1;
+}
+
+/* Cor de cada tipo de Cérebro (ícone, rótulo e o selo do resumo). */
+.brain-list__item--lobby,
+.brain-col--lobby,
+.brain-overview--lobby {
+  --brain-kind: var(--ui-info);
+}
+
+.brain-list__item--maestro,
+.brain-col--maestro,
+.brain-overview--maestro {
+  --brain-kind: var(--ui-accent);
+}
+
+.brain-list__item--team,
+.brain-col--team,
+.brain-overview--team {
+  --brain-kind: var(--ui-ok);
+}
+
+/* Cor de cada tipo de nota (ícone da lista e selo do leitor). */
+.brain-note--regras,
+.brain-reader--regras {
+  --brain-note-kind: var(--ui-warn);
+}
+
+.brain-note--briefing,
+.brain-reader--briefing {
+  --brain-note-kind: var(--ui-info);
+}
+
+.brain-note--indice,
+.brain-reader--indice {
+  --brain-note-kind: var(--ui-tc-2);
+}
+
+.brain-note--nota,
+.brain-reader--nota {
+  --brain-note-kind: var(--ui-tc-4);
+}
+
+.brain-note--historico,
+.brain-reader--historico {
+  --brain-note-kind: var(--ui-text-3);
+}
+
+/* ---------- Colunas ---------- */
+.brain-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: var(--ui-blur);
+}
+
+.brain-col__head {
+  flex: none;
+  padding: 14px 14px 10px;
+}
+
+.brain-col__scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 8px 14px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+.brain-col__title {
+  margin: 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.brain-empty {
+  margin: 8px 6px;
+  color: var(--ui-text-3);
+}
+
+.brain-error {
+  margin: 8px 0;
+  padding: 10px 12px;
+  font-weight: 600;
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-danger) 35%, transparent);
+  border-radius: var(--ui-radius);
+}
+
+.brain-error p {
+  margin: 0 0 8px;
+}
+
+/* "← Cérebros" e "← Notas": só no celular (no desktop as três colunas estão à vista). */
+.brain-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 4px 10px 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brain-accent-text);
+  text-decoration: none;
+  border-radius: var(--ui-radius-pill);
+  transition: background-color var(--ui-fast);
+}
+
+.brain-back:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+/* Ícone num quadradinho tingido com a cor do tipo do Cérebro. */
+.brain-kind-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--brain-kind, var(--ui-text-2));
+  background: color-mix(in srgb, var(--brain-kind, var(--ui-text-3)) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brain-kind, var(--ui-text-3)) 26%, transparent);
+  border-radius: 10px;
+}
+
+.brain-kind-tile--small {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+/* ---------- Itens das listas (Cérebros e notas) ---------- */
+.brain-list,
+.brain-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brain-list li + li,
+.brain-notes li + li {
+  margin-top: 2px;
+}
+
+.brain-list__item,
+.brain-note {
+  color: var(--ui-text);
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius);
+  transition:
+    background-color var(--ui-fast),
+    border-color var(--ui-fast),
+    box-shadow var(--ui-med);
+}
+
+.brain-list__item:hover,
+.brain-note:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border-color: var(--ui-border);
+}
+
+/* Selecionado: tinta do acento, contorno e um brilho leve. */
+.brain-list__item[aria-current="page"],
+.brain-note[aria-current="page"] {
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  box-shadow: var(--ui-glow);
+}
+
+/* ---------- Coluna dos Cérebros ---------- */
+.brain-list__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 10px;
+}
+
+.brain-list__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brain-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.brain-list__name {
+  min-width: 0;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.brain-list__count {
+  flex: none;
+  min-width: 24px;
+  padding: 0 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 19px;
+  text-align: center;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-3);
+  border-radius: var(--ui-radius-pill);
+}
+
+.brain-list__item[aria-current="page"] .brain-list__count {
+  color: var(--ui-on-solid);
+  background: var(--ui-accent-solid);
+}
+
+.brain-list__kind {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--brain-kind, var(--ui-text-2)) 50%, var(--ui-text-2));
+}
+
+.brain-list__crew {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-3);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.brain-list__item[aria-current="page"] .brain-list__crew {
+  color: var(--ui-text-2);
+}
+
+.brain-list__chevron {
+  display: none;
+  align-self: center;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Coluna das notas ---------- */
+.brain-notes__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.brain-notes__name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.brain-notes__count {
+  flex: none;
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.brain-search {
+  position: relative;
+}
+
+.brain-search__icon {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  color: var(--ui-text-3);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.brain-search .brain-search__input {
+  padding-left: 34px;
+  font-size: 13.5px;
+}
+
+/* ---------- Camadas da lista de notas ---------- */
+.brain-group + .brain-group {
+  margin-top: 16px;
+}
+
+.brain-group__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.brain-group__count {
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 17px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-pill);
+}
+
+/* Fixas: um bloco único levemente tingido, com as três notas que entram em toda tarefa. */
+.brain-group--fixed {
+  margin-top: 4px;
+  padding: 4px;
+  background: color-mix(in srgb, var(--ui-accent) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 16%, transparent);
+  border-radius: var(--ui-radius);
+}
+
+.brain-group--fixed > .brain-group__title {
+  margin: 6px 8px 4px;
+  color: var(--brain-accent-text);
+  cursor: help;
+}
+
+.brain-group--history > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.brain-group--history > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Setinha do histórico (fechado aponta para a direita, aberto para baixo). */
+.brain-group--history > summary::before {
+  width: 6px;
+  height: 6px;
+  margin: 0 2px 0 1px;
+  content: "";
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--ui-fast);
+}
+
+.brain-group--history[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.brain-group--history > summary:hover {
+  color: var(--ui-text-2);
+}
+
+.brain-group__hint {
+  margin: 0 8px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Nota da lista ---------- */
+.brain-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.brain-note__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--brain-note-kind, var(--ui-text-2));
+  background: color-mix(in srgb, var(--brain-note-kind, var(--ui-text-3)) 13%, transparent);
+  border-radius: 8px;
+}
+
+.brain-note__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.brain-note__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.brain-note__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.brain-note__date {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.brain-note[aria-current="page"] .brain-note__date,
+.brain-note[aria-current="page"] .brain-note__excerpt {
+  color: var(--ui-text-2);
+}
+
+.brain-tag {
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.brain-note__excerpt {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.brain-note--pinned {
+  align-items: center;
+  padding: 7px 8px;
+}
+
+.brain-note--pinned .brain-note__main {
+  gap: 1px;
+}
+
+.brain-note--pinned .brain-note__excerpt {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+/* ---------- Leitor sem nota: resumo do Cérebro ---------- */
+.brain-overview {
+  display: grid;
+  place-items: center;
+  padding: 40px 32px;
+  overflow: auto;
+}
+
+.brain-overview__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 460px;
+  text-align: center;
+}
+
+.brain-overview__mark {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 18px;
+  color: var(--brain-accent-text);
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--ui-accent) 32%, transparent), color-mix(in srgb, var(--ui-accent) 8%, transparent) 70%);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 38%, transparent);
+  border-radius: 22px;
+  box-shadow: 0 0 48px -8px var(--ui-accent-glow);
+}
+
+.brain-overview__kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--brain-kind, var(--ui-text-2)) 60%, var(--ui-text-2));
+}
+
+.brain-overview__name {
+  margin: 6px 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.brain-overview__audience {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.brain-overview__stats {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.brain-overview__fixed {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 24px 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.brain-overview__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+  text-decoration: none;
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  transition:
+    background-color var(--ui-fast),
+    border-color var(--ui-fast),
+    transform var(--ui-med);
+}
+
+.brain-overview__card:hover {
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--brain-note-kind, var(--ui-accent)) 9%, transparent);
+  border-color: color-mix(in srgb, var(--brain-note-kind, var(--ui-accent)) 40%, transparent);
+  transform: translateY(-1px);
+}
+
+.brain-overview__card .brain-note__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.brain-overview__hint {
+  max-width: 40ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Nota aberta ---------- */
+.brain-col--reader.brain-reader {
+  display: block;
+  padding: 36px 44px 56px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+/* Largura de leitura: cabeçalho e texto na mesma coluna de ~70 caracteres, centrada. */
+.brain-reader__header,
+.brain-reader__body {
+  max-width: 70ch;
+  margin-inline: auto;
+}
+
+.brain-reader__header {
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.brain-reader__eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.brain-reader__type,
+.brain-reader__fixed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 22px;
+  text-transform: uppercase;
+  border-radius: var(--ui-radius-pill);
+}
+
+.brain-reader__type {
+  color: color-mix(in srgb, var(--brain-note-kind, var(--ui-text-2)) 70%, #ffffff);
+  background: color-mix(in srgb, var(--brain-note-kind, var(--ui-text-3)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brain-note-kind, var(--ui-text-3)) 30%, transparent);
+}
+
+.brain-reader__fixed {
+  padding-inline: 10px;
+  color: var(--brain-accent-text);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 30%, transparent);
+}
+
+.brain-reader__title {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.022em;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+/* O foco vem do script ao abrir a nota (o leitor de tela anuncia o título): sem anel, o título não é um controle. */
+.brain-browser .brain-reader__title:focus,
+.brain-browser .brain-reader__title:focus-visible {
+  outline: none;
+}
+
+.brain-reader__where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.brain-reader__file {
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.brain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.brain-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 24px;
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.brain-chip__label {
+  color: var(--ui-text-3);
+}
+
+.brain-chips .brain-tag {
+  line-height: 22px;
+}
+
+/* ---------- Markdown (tipografia de leitura) ---------- */
+.md {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.brain-reader__body .md {
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md strong {
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.md__heading {
+  margin: 2em 0 0.65em;
+  font-weight: 650;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+  color: var(--ui-text);
+}
+
+.md__heading--1 {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.md__heading--2 {
+  padding-bottom: 6px;
+  font-size: 19px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.md__heading--3 {
+  font-size: 16.5px;
+}
+
+.md__heading--4,
+.md__heading--5,
+.md__heading--6 {
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  color: var(--ui-text-2);
+}
+
+.md__p {
+  margin: 0 0 1em;
+}
+
+.md__list {
+  margin: 0 0 1.1em;
+  padding-left: 1.4em;
+}
+
+.md__list .md__list {
+  margin: 0.35em 0 0;
+}
+
+.md__list li + li {
+  margin-top: 0.4em;
+}
+
+.md__list li::marker {
+  color: var(--ui-text-3);
+}
+
+.md__quote {
+  margin: 0 0 1.1em;
+  padding: 10px 16px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-left: 3px solid color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  border-radius: 0 var(--ui-radius-sm) var(--ui-radius-sm) 0;
+}
+
+.md__quote > :last-child {
+  margin-bottom: 0;
+}
+
+/* Código: a única coisa em fonte mono. */
+.md__code {
+  padding: 0.12em 0.4em;
+  font-family: var(--ui-font-mono);
+  font-size: 0.85em;
+  color: color-mix(in srgb, var(--ui-accent) 25%, var(--ui-text));
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.md__pre {
+  position: relative;
+  margin: 0 0 1.25em;
+  padding: 14px 16px;
+  overflow: auto;
+  font-family: var(--ui-font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  overflow-wrap: normal;
+}
+
+.md__pre[data-lang]::before {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+  content: attr(data-lang);
+}
+
+.md__pre code {
+  font: inherit;
+}
+
+/* Tabelas: rolam sozinhas quando não cabem; cabeçalho tingido e linhas zebradas bem de leve. */
+.md__table-wrap {
+  margin: 0 0 1.25em;
+  overflow-x: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.md__table {
+  width: 100%;
+  font-size: 0.9em;
+  line-height: 1.5;
+  border-collapse: collapse;
+  overflow-wrap: normal;
+}
+
+.md__table th,
+.md__table td {
+  min-width: 8ch;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.md__table th {
+  font-weight: 650;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.md__table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--ui-hover) 50%, transparent);
+}
+
+.md__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.md__rule {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--ui-border);
+}
+
+.md__link {
+  color: var(--brain-accent-text, var(--ui-accent));
+  text-decoration-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition:
+    color var(--ui-fast),
+    text-decoration-color var(--ui-fast);
+}
+
+.md__link:hover {
+  color: var(--ui-text);
+  text-decoration-color: currentColor;
+}
+
+/* No leitor, a setinha diz que o link abre outra aba. */
+.brain-reader__body .md__link::after {
+  margin-left: 2px;
+  font-size: 0.8em;
+  content: "↗";
+  opacity: 0.7;
+}
+
+/* [[wiki links]]: pílula sutil no acento. */
+.md__wiki {
+  padding: 0.05em 0.55em;
+  font-size: 0.94em;
+  font-weight: 500;
+  color: var(--brain-accent-text);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  border-radius: var(--ui-radius-pill);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition:
+    background-color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+a.md__wiki:hover {
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+}
+
+.md__wiki--missing {
+  color: var(--ui-text-3);
+  background: none;
+  border-style: dashed;
+  border-color: var(--ui-border-strong);
+  cursor: help;
+}
+
+/* ---------- Tela média: a coluna dos Cérebros encolhe ---------- */
+@media (max-width: 1180px) and (min-width: 901px) {
+  .brain-browser {
+    grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  }
+
+  .brain-col--reader.brain-reader {
+    padding: 28px 28px 44px;
+  }
+}
+
+/* ---------- Tela estreita: um passo de cada vez (Cérebros → notas → nota), com "voltar" ---------- */
+@media (max-width: 900px) {
+  .page.page--brain {
+    display: block;
+    height: auto;
+    padding: 16px 12px 32px;
+  }
+
+  /* Dentro de um Cérebro ou de uma nota, o título da página dá lugar ao conteúdo. */
+  .page--brain:has(.brain-browser:not([data-level="brains"])) .page__header {
+    display: none;
+  }
+
+  .brain-browser {
+    display: block;
+    min-height: 0;
+  }
+
+  .brain-browser__warning {
+    margin-bottom: 12px;
+  }
+
+  .brain-col {
+    display: block;
+    overflow: visible;
+  }
+
+  .brain-col__scroll {
+    overflow: visible;
+  }
+
+  .brain-browser[data-level="brains"] .brain-col--notes,
+  .brain-browser[data-level="brains"] .brain-col--reader,
+  .brain-browser[data-level="notes"] .brain-col--brains,
+  .brain-browser[data-level="notes"] .brain-col--reader,
+  .brain-browser[data-level="reader"] .brain-col--brains,
+  .brain-browser[data-level="reader"] .brain-col--notes {
+    display: none;
+  }
+
+  .brain-back {
+    display: inline-flex;
+  }
+
+  .brain-list__item {
+    padding: 12px 10px;
+  }
+
+  .brain-list__chevron {
+    display: block;
+  }
+
+  /* Na lista de Cérebros do celular nada está aberto ainda: sem destaque no Cérebro padrão. */
+  .brain-col--brains[data-selected="false"] .brain-list__item[aria-current="page"] {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .brain-col--brains[data-selected="false"] .brain-list__item[aria-current="page"] .brain-list__count {
+    color: var(--ui-text-2);
+    background: var(--ui-surface-3);
+  }
+
+  .brain-col--reader.brain-reader {
+    padding: 14px 16px 28px;
+  }
+
+  .brain-reader__back {
+    margin-left: -6px;
+  }
+
+  .brain-reader__title {
+    font-size: 23px;
+  }
+
+  .brain-reader__header {
+    margin-bottom: 22px;
+  }
+}
+
+/* ---------- Computador: Cérebros viram uma faixa de pílulas (ícone, nome e contagem) em cima ---------- */
+@media (min-width: 901px) {
+  .brain-col--brains {
+    grid-column: 1 / -1;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+
+  .brain-col--brains > .brain-col__head,
+  .brain-list__kind,
+  .brain-list__crew {
+    display: none;
+  }
+
+  .brain-col--brains .brain-col__scroll {
+    padding: 2px 2px 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .brain-list {
+    display: flex;
+    gap: 8px;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  .brain-list li + li {
+    margin-top: 0;
+  }
+
+  .brain-list__item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 8px 5px 6px;
+    white-space: nowrap;
+    background: var(--ui-surface);
+    border-color: var(--ui-border);
+    border-radius: var(--ui-radius-pill);
+  }
+
+  .brain-list__item .brain-kind-tile {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+  }
+
+  .brain-list__text,
+  .brain-list__head {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brain-list__name {
+    overflow-wrap: normal;
+  }
+}
+
+/* Linha do tipo do Cérebro e de quem o enxerga, no topo da coluna de notas. */
+.brain-notes__audience {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin: -6px 0 10px;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.brain-notes__kind {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--brain-kind, var(--ui-text-2)) 50%, var(--ui-text-2));
+}
+
+.brain-notes__crew {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Histórico de tarefas: bloco à parte (tracejado), com a data do último resultado ---------- */
+.brain-group--history {
+  margin-top: 20px;
+  padding: 2px 4px 6px;
+  background: color-mix(in srgb, var(--ui-text-3) 5%, transparent);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+}
+
+.brain-group--history > summary {
+  margin: 4px 4px 0;
+  padding: 6px 4px;
+}
+
+.brain-group--history:not([open]) > summary {
+  margin-bottom: 2px;
+}
+
+.brain-group__icon {
+  flex: none;
+  color: var(--ui-text-3);
+}
+
+.brain-group__latest {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Sumário da nota (só em leitor largo) ---------- */
+.brain-col--reader.brain-reader {
+  container-type: inline-size;
+}
+
+.brain-toc {
+  display: none;
+}
+
+@container (min-width: 880px) {
+  .brain-reader__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 70ch) 180px;
+    column-gap: 36px;
+    align-content: start;
+    justify-content: center;
+  }
+
+  .brain-reader__inner > .brain-reader__header,
+  .brain-reader__inner > .brain-reader__body {
+    grid-column: 1;
+    width: 100%;
+  }
+
+  .brain-reader__inner > .brain-toc {
+    position: sticky;
+    top: 0;
+    display: block;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+    padding-top: 6px;
+  }
+}
+
+.brain-toc__title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.brain-toc ul {
+  margin: 0;
+  padding: 0 0 0 2px;
+  list-style: none;
+  border-left: 1px solid var(--ui-border);
+}
+
+.brain-toc button {
+  display: block;
+  width: 100%;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-text-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.brain-toc button:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.brain-toc__item--3 button {
+  padding-left: 22px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}

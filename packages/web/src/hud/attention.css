@@ -1,0 +1,342 @@
+/*
+ * A cadeia de atenção na tela: o contador "Esperando você", os avisos (toasts) e o destaque do agente
+ * que espera o dono. As cores vêm dos tokens --ui-* (a de atenção é o âmbar --ui-warn).
+ */
+
+/* ---------- Contador na barra lateral ---------- */
+.navitem--attention .navitem__badge {
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.navitem--attention[aria-disabled="true"] {
+  cursor: default;
+  color: var(--ui-text-3, var(--ui-text-2));
+}
+
+.navitem--attention-on .nav-icon {
+  color: var(--ui-warn);
+}
+
+.navitem__badge--attn {
+  color: #2b1d00 !important;
+  background: var(--ui-warn) !important;
+  box-shadow: 0 0 12px var(--ui-warn-bg);
+}
+
+/* ---------- Pílula do celular e da barra de cima ---------- */
+.attn-pill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 6px 0 10px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-warn);
+  white-space: nowrap;
+  cursor: pointer;
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 38%, transparent);
+  border-radius: var(--ui-radius-pill);
+}
+
+.attn-pill__icon {
+  width: 16px;
+  height: 16px;
+}
+
+.attn-pill__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #2b1d00;
+  background: var(--ui-warn);
+  border-radius: var(--ui-radius-pill);
+}
+
+/* O rótulo some em tela muito estreita: sobra o ícone e o número. */
+@media (max-width: 400px) {
+  .attn-pill__label {
+    display: none;
+  }
+}
+
+/* ---------- Coluna do canto: os avisos e o cartão "Enquanto você estava fora" empilhados (um embaixo do outro) ---------- */
+.attn-stack {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  pointer-events: none;
+}
+
+.attn-stack > .attn-toasts,
+.attn-stack > .away-card {
+  position: static;
+  width: auto;
+}
+
+.attn-stack > .away-card {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+  pointer-events: auto;
+}
+
+@media (max-width: 760px) {
+  .attn-stack {
+    top: calc(var(--topbar-bottom) + 8px);
+    right: var(--gap);
+    left: var(--gap);
+    width: auto;
+  }
+}
+
+/* ---------- Avisos ---------- */
+.attn-toasts {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 90;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.attn-toast {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px 10px 12px;
+  color: var(--ui-text);
+  pointer-events: auto;
+  background: var(--ui-surface-solid, var(--ui-surface));
+  border: 1px solid var(--ui-border-strong);
+  border-left: 3px solid var(--ui-text-2);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  animation: attn-in 180ms ease-out;
+}
+
+.attn-toast--alert {
+  border-left-color: var(--ui-warn);
+}
+
+.attn-toast--info {
+  border-left-color: var(--ui-info, var(--ui-text-2));
+}
+
+.attn-toast__icon {
+  display: grid;
+  place-items: center;
+  color: var(--ui-warn);
+}
+
+.attn-toast--warn .attn-toast__icon,
+.attn-toast--info .attn-toast__icon {
+  color: var(--ui-text-2);
+}
+
+.attn-toast__body {
+  min-width: 0;
+}
+
+.attn-toast__text {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.attn-toast__times {
+  font-weight: 700;
+  color: var(--ui-warn);
+}
+
+.attn-toast__who {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.attn-toast__action {
+  white-space: nowrap;
+}
+
+.attn-toast__close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+}
+
+.attn-toast__close:hover {
+  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.attn-toast__close-icon {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes attn-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attn-toast {
+    animation: none;
+  }
+}
+
+/* No celular o aviso fica no topo, logo abaixo da barra curta, com a largura toda (a navegação continua à vista). */
+@media (max-width: 760px) {
+  .attn-toasts {
+    top: calc(var(--topbar-bottom) + 8px);
+    right: var(--gap);
+    left: var(--gap);
+    width: auto;
+  }
+}
+
+/* ---------- Agente que espera você, na lista de agentes ---------- */
+.agents-row--attention {
+  box-shadow: inset 3px 0 0 var(--ui-warn);
+  background: linear-gradient(90deg, var(--ui-warn-bg), transparent 60%);
+}
+
+.agents-row__attention {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.agents-row__attention .nav-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ---------- Sino: a seção "Esperando você" ---------- */
+.bell__waiting {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.bell__wait {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 30%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.bell__wait--soft {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--ui-border);
+}
+
+.bell__wait-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.bell__wait-meta {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--ui-text-2);
+}
+
+.bell__section-title {
+  margin: 0 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ui-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bell__wait-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+}
+
+/* ---------- Configurações > Avisos ---------- */
+.settings__rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.settings__row-name {
+  flex: 1;
+  min-width: 120px;
+  font-weight: 600;
+}
+
+.settings__field {
+  display: grid;
+  gap: 6px;
+  max-width: 360px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

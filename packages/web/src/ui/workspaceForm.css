@@ -1,0 +1,191 @@
+/* Criar workspace: nome em destaque e a parte do Maestro, recolhível. */
+.ws-form__name.ui-input {
+  min-height: 46px;
+  padding: 10px 14px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.ws-form__maestro {
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.ws-form__maestro-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--ui-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background-color var(--ui-fast);
+}
+
+.ws-form__maestro-toggle:hover,
+.ws-form__maestro-toggle:focus-visible {
+  background: var(--ui-hover);
+}
+
+.ws-form__maestro-face {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  background: radial-gradient(circle at 50% 40%, rgba(139, 124, 255, 0.28), transparent 72%), var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+}
+
+.ws-form__maestro-text {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ws-form__maestro-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-form__maestro-role {
+  font-weight: 500;
+  color: var(--ui-text-3);
+}
+
+.ws-form__maestro-engine {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-form__maestro-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-accent);
+}
+
+.ws-form__caret {
+  font-size: 10px;
+  transition: transform var(--ui-fast);
+}
+
+.ws-form__maestro-toggle[aria-expanded="true"] .ws-form__caret {
+  transform: rotate(180deg);
+}
+
+.ws-form__maestro-panel {
+  display: grid;
+  gap: 14px;
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.ws-form__maestro-intro {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.ws-form__maestro-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.ws-form__look {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.ws-form__stage.avatar-stage {
+  width: 112px;
+  background: radial-gradient(circle at 50% 35%, rgba(139, 124, 255, 0.22), transparent 70%), var(--ui-surface-2);
+}
+
+.ws-form__look-actions {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.ws-form__fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ws-form__actions--hero {
+  margin-top: 4px;
+}
+
+.ws-form__submit.ui-button {
+  min-height: 42px;
+  padding-inline: 22px;
+  font-size: 15px;
+}
+
+@media (max-width: 560px) {
+  .ws-form__maestro-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ws-form__look {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+  }
+
+  .ws-form__maestro-action-label {
+    display: none;
+  }
+
+  .ws-form__actions--hero .ws-form__submit {
+    flex: 1 1 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-form__caret {
+    transition: none;
+  }
+}
+
+/* Acesso dos agentes do workspace novo (recolhido) */
+.ws-form__access {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.ws-form__access-summary {
+  padding: 10px 12px;
+  font-size: 13.5px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+}
+
+.ws-form__access-panel {
+  display: grid;
+  gap: 12px;
+  padding: 2px 12px 12px;
+}

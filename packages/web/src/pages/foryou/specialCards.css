@@ -1,0 +1,246 @@
+/* "Para você": grupos por pedido, card de plano e questionário. */
+
+.fy-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.fy-group {
+  display: grid;
+  gap: 8px;
+}
+
+.fy-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  padding: 0 2px;
+}
+
+.fy-group__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-2);
+}
+
+.fy-group__waiting {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-warn);
+}
+
+/* O plano chega em markdown (renderizado): o espaçamento é dos blocos, não das quebras de linha. */
+.fy-plan-text {
+  white-space: normal;
+}
+
+.fy-quiz {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-quiz__item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-quiz__item--skipped {
+  opacity: 0.7;
+}
+
+.fy-quiz__q {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ui-text);
+}
+
+.fy-quiz__n {
+  color: var(--ui-text-3);
+}
+
+.fy-quiz__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fy-quiz__chip {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+}
+
+.fy-quiz__chip:hover:not(:disabled) {
+  border-color: var(--ui-border-strong);
+}
+
+.fy-quiz__chip[aria-pressed="true"] {
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+}
+
+.fy-quiz__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.fy-quiz__skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--ui-text-2);
+}
+
+.fy-quiz__count {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+/* Cartão "rotina": proposta de meta, baixar meta, retomar. */
+.fy-routine__lead {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.fy-routine {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+  padding: 14px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-routine > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fy-routine__wide {
+  grid-column: 1 / -1;
+}
+
+.fy-routine dt {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.fy-routine dd {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.fy-routine__sub {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.fy-routine__instruction {
+  max-height: 150px;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--ui-text-2);
+}
+
+.fy-routine__edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+}
+
+.fy-routine__num {
+  width: 120px;
+}
+
+.fy-routine__suggest {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ui-accent);
+}
+
+@media (max-width: 560px) {
+  .fy-routine {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Cartão "rotina" v2 (R5): tipo, horários, meta ou tabela e o modo. */
+.fy-rp { display: grid; gap: 14px; padding: 14px; background: var(--ui-surface-2); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); }
+.fy-rp__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.fy-rp__type { padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: var(--ui-accent-soft, rgba(120, 140, 255, 0.16)); color: var(--ui-accent); }
+.fy-rp__sub { margin: 0; font-size: 13px; color: var(--ui-text-2); }
+.fy-rp__big { margin: 0; font-size: 16px; font-weight: 600; color: var(--ui-text); }
+.fy-rp__sec { display: grid; gap: 6px; min-width: 0; }
+.fy-rp__sec h4 { margin: 0; font-size: 11.5px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--ui-text-3); }
+.fy-rp__list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fy-rp__sched { display: grid; gap: 4px; padding: 10px 12px; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); min-width: 0; }
+.fy-rp__sched.is-off { opacity: 0.65; }
+.fy-rp__sched.is-removed { border-style: dashed; opacity: 0.7; text-decoration: line-through; }
+.fy-rp__when { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
+.fy-rp__who { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; background: var(--ui-surface-2); border: 1px solid var(--ui-border); color: var(--ui-text-2); }
+.fy-rp__what { display: grid; gap: 2px; font-size: 13px; color: var(--ui-text-2); min-width: 0; }
+.fy-rp__what p { margin: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fy-rp__label { font-weight: 600; color: var(--ui-text); }
+.fy-rp__before { margin: 0; font-size: 12.5px; color: var(--ui-text-3); }
+.fy-rp__tag { padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; background: var(--ui-accent); color: var(--ui-bg, #0b0d12); }
+.fy-rp__tag--muted { background: var(--ui-surface-2); color: var(--ui-text-2); border: 1px solid var(--ui-border); }
+.fy-rp__tag--danger { background: var(--ui-danger, #e5484d); color: #fff; }
+.fy-rp__notes { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--ui-text); }
+.fy-rp__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fy-rp__table th, .fy-rp__table td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--ui-border); }
+.fy-rp__table th { font-size: 11.5px; color: var(--ui-text-3); font-weight: 600; }
+.fy-rp__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.fy-rp__chips li { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 13px; background: var(--ui-surface); border: 1px solid var(--ui-border); }
+.fy-rp__chips li small { font-size: 11px; color: var(--ui-text-3); }
+.fy-rp__chips li.is-alert { border-color: var(--ui-warning, #f5a524); }
+.fy-rp__chips li.is-final { border-color: var(--ui-accent); }
+.fy-rp__instruction { margin: 0; max-height: 130px; overflow: auto; font-size: 13px; line-height: 1.5; white-space: pre-wrap; color: var(--ui-text-2); }
+.fy-rp__modes { display: grid; gap: 8px; }
+.fy-rp__modes label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius); cursor: pointer; }
+.fy-rp__modes label.is-on { border-color: var(--ui-accent); }
+.fy-rp__modes label span { display: grid; gap: 2px; min-width: 0; }
+.fy-rp__modes small { font-size: 12.5px; color: var(--ui-text-2); }
+.fy-rp__adjust { display: grid; gap: 8px; }
+@media (max-width: 560px) { .fy-rp__who { margin-left: 0; } }

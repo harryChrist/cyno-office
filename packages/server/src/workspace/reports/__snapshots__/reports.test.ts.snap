@@ -1,0 +1,127 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`o Markdown de um relatório de referência > revisão da semana W46, do histórico fabricado (semente 7), com o parágrafo de IA 1`] = `
+"# Revisão da semana · Semana 46 · 9 a 15 de nov de 2026
+
+**Workspace de teste** · Calculado por código em seg 16/11 08:30, sem IA
+
+**Em uma linha:** 38 entregas · metas 1/2 · custo equivalente US$ 1,18
+
+## O que mudou (escrito pelo Maestro)
+
+A semana foi mais forte que a passada.
+
+## Números
+
+| Indicador | Valor | Detalhe |
+|---|---|---|
+| Entregas | 38 ↑ | antes: 28 |
+| Tempo até entregar | 2 h 41 min ↑ | 90% até 1 d 11 h |
+| Esperando seu OK | 1 | o mais antigo há 2 d 12 h · 1 há mais de 24 h |
+| Custo equivalente | US$ 1,18 | custo dos projetos rateado por entrega: US$ 0,03 (equivalente) |
+
+## Comparado com a semana passada
+
+| Indicador | Agora | Antes | Variação | Observação |
+|---|---|---|---|---|
+| Entregas | 38 | 28 | ↑ |  |
+| Tempo até entregar (mediana) | 2 h 41 min | 2 h 23 min | ↑ |  |
+| Espera pelo seu OK (mediana) | 32 min | 28 min | ↑ |  |
+| Recusado por você | 11% (3/28) | 16% | → |  |
+| Refeito a pedido | 10% (3/29) | 18% | → |  |
+| Você editou o texto | 20% (5/25) | 19% | → |  |
+| Falhas das tarefas | 6% (2/31) | 0% | → |  |
+| Custo por entrega (rateado, equivalente) | US$ 0,03 | US$ 0,09 | ↓ |  |
+| Gasto equivalente à API | US$ 1,18 | US$ 2,39 | — |  |
+
+## Entregas por semana
+
+| Semana | Entregas | Média de 4 semanas |
+|---|---|---|
+| 21/09 | 0 | 0 |
+| 28/09 | 0 | 0 |
+| 05/10 | 0 | 0 |
+| 12/10 | 0 | 0 |
+| 19/10 | 26 | 6,5 |
+| 26/10 | 32 | 14,5 |
+| 02/11 | 28 | 21,5 |
+| 09/11 (esta) | 38 | 31 |
+
+## O que cada agente fez
+
+### Clara (21)
+
+- [Posts do blog](https://www.linkedin.com/feed/update/seed-blog0) · dom 15/11 10:05
+- Comentário sobre a pesquisa de clima · sáb 14/11 20:06 (projeto seed-r104, tarefa S104)
+- [Conexões](https://www.linkedin.com/feed/update/seed-conexao1) · sáb 14/11 15:05
+- [Posts do blog](https://www.linkedin.com/feed/update/seed-blog1) · sáb 14/11 10:05
+- Post sobre o lançamento · sex 13/11 19:23 (projeto seed-r95, tarefa S95)
+- Post sobre o webinar de terça · sex 13/11 15:38 (projeto seed-r101, tarefa S101)
+- … e mais 15
+
+### Eco (6)
+
+- Comentário sobre a parceria com a loja · sáb 14/11 18:15 (projeto seed-r105, tarefa S105)
+- Comentário sobre a parceria com a loja · sex 13/11 16:01 (projeto seed-r102, tarefa S102)
+- Comentário sobre o programa de mentoria · qui 12/11 11:42 (projeto seed-r96, tarefa S96)
+- Levantar os números · qui 12/11 04:00 (projeto seed-p4, tarefa T1)
+- Comentário sobre o lançamento · ter 10/11 11:12 (projeto seed-r86, tarefa S86)
+- Comentário sobre o webinar de terça · seg 09/11 21:42 (projeto seed-r82, tarefa S82)
+
+### Beto (5)
+
+- Convite sobre a nova versão · dom 15/11 01:18 (projeto seed-r103, tarefa S103)
+- Convite sobre o evento de sexta · qui 12/11 19:10 (projeto seed-r97, tarefa S97)
+- Comentário sobre a pesquisa de clima · qua 11/11 19:36 (projeto seed-r91, tarefa S91)
+- Comentário sobre o lançamento · ter 10/11 18:53 (projeto seed-r87, tarefa S87)
+- Comentário sobre o evento de sexta · seg 09/11 19:41 (projeto seed-r83, tarefa S83)
+
+### Dani (3)
+
+- Post sobre o evento de sexta · sáb 14/11 20:32 (projeto seed-r106, tarefa S106)
+- Post sobre o programa de mentoria · qui 12/11 19:54 (projeto seed-r98, tarefa S98)
+- Post sobre a parceria com a loja · qua 11/11 17:04 (projeto seed-r92, tarefa S92)
+
+### Leo (3)
+
+- Post sobre o lançamento · qui 12/11 18:47 (projeto seed-r99, tarefa S99)
+- Comentário sobre o lançamento · ter 10/11 15:16 (projeto seed-r88, tarefa S88)
+- Comentário sobre o webinar de terça · seg 09/11 12:40 (projeto seed-r84, tarefa S84)
+
+## Metas
+
+| Meta | Entregue | Resultado |
+|---|---|---|
+| Comentários | 3 de 3 | bateu |
+| R-0901 | 2 de 5 | não bateu |
+
+## O que pede atenção
+
+**Travado (4)**
+
+- Convite para a mentoria: esperando você há 2 d 12 h (Beto)
+- Post sobre o evento de sexta: sem cota há 16 h 30 min (Leo)
+- Relatório do mês · Escrever o resumo: parado há 12 h 30 min (Clara)
+- Lançamento do webinar · Slides: parado há 12 h 30 min (Eco)
+
+**Esperando seu OK (1)**
+
+- Convite · Beto: há 2 d 12 h
+
+**Falhas no período**
+
+- 2 tarefas falharam de 31 terminadas (6%); cancelada não conta.
+
+**Prazos em risco**
+
+- Site novo: atrasa. No ritmo atual termina hoje às 10h18. Prazo: sábado, 14.
+- Lançamento do webinar: atrasa. No ritmo atual termina hoje às 12h06. Prazo: hoje às 07h.
+
+## Custo e cota
+
+- Gasto no período: US$ 1,18 (equivalente à API, medida do uso da assinatura; não é dinheiro pago).
+- Custo dos projetos rateado por entrega: US$ 0,03 (equivalente, não é o gasto do período) em 38 entregas.
+
+_Valores em dólar são equivalentes à tabela de preços da API: a conta é uma assinatura, então leia sempre junto da cota. Seta só quando há 5 ou mais amostras nos dois períodos._
+"
+`;

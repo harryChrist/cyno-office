@@ -1,0 +1,47 @@
+/* O selo do modo demonstração: canto de baixo, à esquerda, sempre por cima. */
+.selo-demo {
+  position: fixed;
+  left: var(--gap, 8px);
+  bottom: var(--gap, 8px);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ui-text, #e8ecf4);
+  background: var(--ui-surface, #151a24);
+  border: 1px solid #b388ff;
+  border-radius: 999px;
+  box-shadow: var(--ui-shadow, 0 4px 16px rgba(0, 0, 0, 0.4));
+}
+
+.selo-demo__ponto {
+  width: 9px;
+  height: 9px;
+  background: #b388ff;
+  border-radius: 50%;
+}
+
+.selo-demo__nota {
+  opacity: 0.7;
+}
+
+.selo-demo__sair {
+  color: #b388ff;
+}
+
+@media (max-width: 640px) {
+  .selo-demo {
+    bottom: auto;
+    top: calc(var(--topbar-bottom, 56px) + 44px);
+    left: 50%;
+    max-width: calc(100vw - 16px);
+    font-size: 12px;
+    transform: translateX(-50%);
+  }
+
+  .selo-demo__nota {
+    display: none;
+  }
+}

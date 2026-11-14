@@ -1,0 +1,468 @@
+/* ---------- Página Navegador ---------- */
+.browser-header .page__subtitle {
+  max-width: 680px;
+}
+
+.browser-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.browser-state__dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.browser-state[data-running="true"] .browser-state__dot {
+  background: var(--ui-ok);
+  box-shadow: 0 0 8px var(--ui-ok);
+}
+
+/* Abas em coluna de altura toda; a tela ocupa o resto da altura e da largura. */
+.browser-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+/* ---------- Abas ---------- */
+.browser-tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 10px;
+  padding: 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  backdrop-filter: blur(var(--ui-blur));
+}
+
+.browser-tabs__open {
+  justify-self: stretch;
+}
+
+.browser-tabs__empty {
+  margin: 0;
+  padding: 10px 4px;
+  font-size: 13px;
+  color: var(--ui-text-3);
+  text-align: center;
+}
+
+.browser-tabs__list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-tab {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  transition:
+    border-color var(--ui-fast),
+    background var(--ui-fast);
+}
+
+.browser-tab:hover {
+  background: var(--ui-hover);
+}
+
+.browser-tab[data-current="true"] {
+  background: var(--ui-surface-2);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  box-shadow: 0 0 14px -4px var(--ui-accent-glow);
+}
+
+.browser-tab__select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 4px 8px 8px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.browser-tab__select:focus-visible,
+.browser-tab__close:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.browser-tab__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+}
+
+.browser-tab__avatar--user {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ui-on-solid);
+  background: var(--ui-accent-solid);
+  border-color: transparent;
+}
+
+.browser-tab__text {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.browser-tab__title,
+.browser-tab__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-tab__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.browser-tab__meta {
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.browser-tab__close {
+  flex: none;
+  width: 30px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--ui-text-3);
+  background: none;
+  border: 0;
+  border-radius: 0 var(--ui-radius) var(--ui-radius) 0;
+  cursor: pointer;
+}
+
+.browser-tab__close:hover {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+/* ---------- Tela ---------- */
+.browser-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  backdrop-filter: blur(var(--ui-blur));
+}
+
+.browser-toolbar__btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-button);
+  cursor: pointer;
+}
+
+.browser-toolbar__btn:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.browser-toolbar__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.browser-toolbar__address {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px;
+  color: var(--ui-text-3);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.browser-toolbar__address:focus-within {
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent) 18%, transparent);
+}
+
+.browser-toolbar__address input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ui-text);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.browser-error {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-radius: var(--ui-radius);
+}
+
+/* A tela pega a altura que sobra. A imagem mantém a proporção 1440×900 (os cliques são
+   proporcionais à imagem) e é a maior que cabe na área: sobra faixa escura nas laterais. */
+.browser-screen {
+  position: relative;
+  display: grid;
+  flex: 1;
+  place-items: center;
+  min-height: 240px;
+  container-type: size;
+  overflow: hidden;
+  background: #05060d;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+}
+
+.browser-screen:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.browser-screen:focus-within {
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+}
+
+.browser-screen__img {
+  display: block;
+  width: min(100cqw, 100cqh * 1.6);
+  height: auto;
+  aspect-ratio: 1440 / 900;
+  object-fit: contain;
+  cursor: pointer;
+  user-select: none;
+}
+
+.browser-screen__img[hidden] {
+  display: none;
+}
+
+.browser-screen__empty,
+.browser-screen__loading {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 420px;
+  padding: 24px;
+  font-size: 14px;
+  color: var(--ui-text-2);
+  text-align: center;
+}
+
+.browser-screen__empty p {
+  margin: 0;
+}
+
+.browser-screen__empty svg {
+  color: var(--ui-accent);
+}
+
+.browser-typer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.browser-typer__field {
+  display: flex;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.browser-typer__field input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-button);
+}
+
+.browser-typer__field input:focus {
+  border-color: color-mix(in srgb, var(--ui-accent) 55%, transparent);
+  outline: none;
+}
+
+.browser-typer__key {
+  width: auto;
+  min-width: 34px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  background: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+
+.browser-hint {
+  margin: auto 0 0;
+  padding: 10px 4px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text-3);
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 760px) {
+  .browser-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  /* No celular a página rola e a tela volta a ter a proporção do site. */
+  .browser-screen {
+    flex: none;
+    aspect-ratio: 1440 / 900;
+    min-height: 0;
+    container-type: normal;
+  }
+
+  .browser-screen__img {
+    width: 100%;
+    height: 100%;
+  }
+
+  .browser-hint {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 6px 2px 0;
+  }
+
+  .browser-tabs {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    padding: 8px;
+  }
+
+  .browser-tabs__open {
+    justify-self: start;
+  }
+
+  .browser-tabs__list {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .browser-tabs__list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .browser-tab {
+    flex: 0 0 auto;
+    max-width: 220px;
+  }
+
+  .browser-tab__select {
+    padding: 6px 2px 6px 6px;
+  }
+
+  .browser-tab__avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  .browser-tabs__empty {
+    padding: 0;
+    text-align: left;
+  }
+
+  .browser-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .browser-toolbar__address {
+    order: 5;
+    flex-basis: 100%;
+  }
+
+  .browser-toolbar > .ui-button {
+    margin-left: auto;
+  }
+}
+
+/* ---------- Balão do navegador sobre o agente (mapa) ---------- */
+.agent-label__browser {
+  animation-duration: 8s;
+}
+
+.agent-label__browser-icon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: #8fd3ff;
+  background: rgba(143, 211, 255, 0.14);
+  border-radius: 50%;
+}

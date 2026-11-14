@@ -1,0 +1,1170 @@
+/* ---------- Trabalho: lista de projetos e tarefas, trilha, quadro e gaveta da etapa ---------- */
+
+.page--work {
+  --w-row-bg: color-mix(in srgb, var(--ui-surface-solid) 70%, transparent);
+  --w-wait: var(--ui-warn);
+  --w-block: var(--ui-danger);
+}
+
+.w-grow {
+  flex: 1;
+}
+
+/* ---- Visão: Lista | Quadro ---- */
+.w-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.w-seg button {
+  padding: 5px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+}
+
+.w-seg button:hover {
+  color: var(--ui-text);
+}
+
+.w-seg button[aria-pressed="true"] {
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 40%, transparent);
+}
+
+.w-seg button:focus-visible,
+.w-card__open:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.w-notice {
+  flex: none;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--ui-text);
+  background: var(--ui-ok-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-ok) 35%, transparent);
+  border-radius: var(--ui-radius);
+}
+
+/* ---- Filtros ---- */
+
+/* ---- Corpo: rola por dentro ---- */
+.w-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 2px 4px 24px 0;
+  overflow-y: auto;
+}
+
+.w-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 56px 24px;
+  text-align: center;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+}
+
+.w-empty__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.w-empty__text {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--ui-text-2);
+}
+
+/* ---- Selos e peças pequenas ---- */
+.w-prio {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.w-prio--alta {
+  background: var(--ui-danger);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--ui-danger) 60%, transparent);
+}
+
+.w-prio--normal {
+  background: var(--ui-info);
+}
+
+.w-prio--baixa {
+  background: var(--ui-text-3);
+  opacity: 0.7;
+}
+
+.w-kind {
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.w-kind--projeto {
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 35%, transparent);
+}
+
+.w-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.w-chip--wait {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-color: color-mix(in srgb, var(--ui-warn) 35%, transparent);
+}
+
+.w-chip--block {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-color: color-mix(in srgb, var(--ui-danger) 35%, transparent);
+}
+
+.w-chip--due-late,
+.w-chip--due-soon {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-color: color-mix(in srgb, var(--ui-danger) 35%, transparent);
+}
+
+.w-chip--pace {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-color: color-mix(in srgb, var(--ui-info) 30%, transparent);
+}
+
+.w-chip--prio-alta {
+  color: var(--ui-danger);
+}
+
+.w-avatar {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  /* Fundo neutro e um pouco mais claro que a lista: o contorno escuro do personagem continua aparecendo. */
+  background: color-mix(in srgb, var(--ui-text) 14%, var(--ui-surface-3));
+  border-radius: 50%;
+}
+
+.w-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.w-agent__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Lista ---- */
+
+/* ---- Trilha (linha aberta) ---- */
+
+.w-section__count {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--ui-text-3);
+}
+
+.w-plan {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--ui-warn) 8%, var(--ui-surface-2));
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 35%, var(--ui-border));
+  border-radius: var(--ui-radius);
+}
+
+.w-plan__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.w-plan .ui-link {
+  justify-self: start;
+  font-size: 13px;
+}
+
+.w-plan__text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+/* Aprovações ali mesmo (cartão do Para você, compacto). */
+.w-approvals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 10px;
+}
+
+.w-appr {
+  --fy-type-color: var(--ui-warn);
+
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--ui-surface-2);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 30%, var(--ui-border));
+  border-left: 3px solid var(--ui-warn);
+  border-radius: var(--ui-radius);
+}
+
+.w-appr__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.w-appr__type {
+  font-weight: 650;
+  color: var(--ui-warn);
+}
+
+.w-appr__age {
+  margin-left: auto;
+}
+
+.w-appr__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.w-appr__why {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.w-appr__field {
+  display: grid;
+  gap: 4px;
+}
+
+.w-appr__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.w-appr__edited {
+  font-weight: 500;
+  color: var(--ui-accent);
+}
+
+.w-appr__text {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.w-appr__counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.w-appr__counter--perto {
+  color: var(--ui-warn);
+}
+
+.w-appr__counter--passou {
+  color: var(--ui-danger);
+}
+
+.w-appr__warn {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-warn);
+}
+
+.w-appr__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Tarefas e etapas */
+
+/* A linha que liga as etapas em sequência. */
+
+/* Pronto quando… */
+.w-done__title {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.w-done__list {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.w-done__item {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.w-done__item > span:first-child {
+  flex: none;
+  width: 14px;
+  color: var(--ui-text-3);
+}
+
+.w-done__item--met {
+  color: var(--ui-text);
+}
+
+.w-done__item--met > span:first-child {
+  color: var(--ui-ok);
+}
+
+/* Ações do projeto */
+.w-controls {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.w-controls__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.w-controls__field {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.w-pace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius);
+}
+
+.w-pace label {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.w-pace .ui-input {
+  width: 110px;
+}
+
+.w-pace__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Linha do tempo por dia */
+.w-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.w-timeline__day {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.w-timeline__date {
+  display: grid;
+  align-content: start;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+
+.w-timeline__date small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ui-text-3);
+}
+
+.w-timeline__body {
+  display: grid;
+  gap: 6px;
+  padding-left: 14px;
+  border-left: 2px solid var(--ui-border-strong);
+}
+
+.w-timeline__entries {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.w-timeline__entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.w-timeline__entry time {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.w-timeline__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.w-timeline__entry--entrega .w-timeline__dot,
+.w-timeline__entry--fim .w-timeline__dot {
+  background: var(--ui-ok);
+}
+
+.w-timeline__entry--prazo .w-timeline__dot {
+  background: var(--ui-warn);
+}
+
+.w-timeline__entry--repasse .w-timeline__dot {
+  background: var(--ui-accent);
+  border-radius: 2px;
+}
+
+.w-timeline__entry--comeca .w-timeline__dot,
+.w-timeline__entry--aprovado .w-timeline__dot {
+  background: var(--ui-accent);
+}
+
+.w-timeline__worked {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-info);
+}
+
+/* ---- Quadro ---- */
+.w-board {
+  display: flex;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+  padding: 0 2px 4px 0;
+  overflow-x: auto;
+}
+
+.w-col {
+  --col-dot: var(--ui-text-3);
+
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 196px;
+  min-height: 0;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ui-surface-solid) 62%, transparent);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+}
+
+.w-col--doing {
+  --col-dot: var(--ui-accent);
+}
+
+.w-col--waiting {
+  --col-dot: var(--ui-warn);
+}
+
+.w-col--blocked {
+  --col-dot: var(--ui-danger);
+}
+
+.w-col--done {
+  --col-dot: var(--ui-ok);
+}
+
+.w-col__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 10px;
+}
+
+.w-col__head::before {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  content: "";
+  background: var(--col-dot);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--col-dot);
+}
+
+.w-col__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.w-col__count {
+  min-width: 24px;
+  margin-left: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.w-col__list {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 10px 12px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.w-col__empty {
+  margin: 4px 10px 12px;
+  padding: 20px 8px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--ui-text-3);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+}
+
+.w-col__more {
+  font-size: 11px;
+  text-align: center;
+  color: var(--ui-text-3);
+}
+
+.w-card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  transition: border-color var(--ui-fast), background var(--ui-fast);
+}
+
+.w-card:hover {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: var(--ui-border-strong);
+}
+
+.w-card--waiting {
+  border-color: color-mix(in srgb, var(--ui-warn) 35%, var(--ui-border));
+}
+
+.w-card--blocked {
+  border-color: color-mix(in srgb, var(--ui-danger) 35%, var(--ui-border));
+}
+
+.w-card__open {
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* O título cobre o cartão inteiro: clicar em qualquer parte abre; o link do projeto fica por cima. */
+.w-card__open::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.w-card__title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ui-text);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.w-card__project {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.w-card__project .w-prio {
+  width: 8px;
+  height: 8px;
+  margin-top: 0;
+}
+
+.w-card__project .ui-link {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.w-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+}
+
+.w-card__meta:empty {
+  display: none;
+}
+
+.w-card__note {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.w-card__note--error {
+  color: var(--ui-danger);
+}
+
+/* ---- Gaveta da etapa ---- */
+
+.w-drawer__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.w-drawer__line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.w-drawer__pre {
+  max-height: 280px;
+  padding: 10px 12px;
+  overflow: auto;
+  font-size: 13px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.w-drawer__pre--error {
+  margin: 0;
+  color: var(--ui-danger);
+  white-space: pre-wrap;
+}
+
+.w-history {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.w-history__step {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.w-history__step time {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+/* ---- Formulário Novo ---- */
+.w-new {
+  display: grid;
+  gap: 14px;
+  min-width: min(520px, 100%);
+}
+
+.w-new__field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.w-new__field > label,
+.w-new__field > legend {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.w-new__kind {
+  grid-template-columns: 1fr 1fr;
+}
+
+.w-new__kind > legend {
+  grid-column: 1 / -1;
+  margin-bottom: 5px;
+}
+
+.w-new__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.w-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.w-radio--on {
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 50%, transparent);
+}
+
+.w-radio input {
+  margin-top: 3px;
+  accent-color: var(--ui-accent);
+}
+
+.w-radio span {
+  display: grid;
+  gap: 2px;
+}
+
+.w-radio small {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.w-new__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+/* ---- Decisão do plano e link "Projeto 3/8" (também usados pelo Para você e pelo painel do Maestro) ---- */
+.plan-decision {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--ui-warn) 8%, var(--ui-surface-2));
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 35%, var(--ui-border));
+  border-radius: var(--ui-radius);
+}
+
+.plan-decision--compact {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.plan-decision__adjust {
+  display: grid;
+  gap: 6px;
+}
+
+.plan-decision__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.plan-decision__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-decision__space {
+  flex: 1;
+}
+
+.plan-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 35%, transparent);
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+}
+
+.plan-link:hover {
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+}
+
+/* ---- Telas estreitas (celular): nada de rolagem horizontal da página ---- */
+@media (max-width: 900px) {
+  .page--work {
+    height: auto;
+  }
+
+  .w-body {
+    padding-right: 0;
+    overflow: visible;
+  }
+
+  .w-board {
+    align-items: flex-start;
+    scroll-snap-type: x mandatory;
+  }
+
+  .w-col {
+    flex: 0 0 min(300px, 85vw);
+    max-height: 70vh;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Chips de situação numa faixa só, rolando por dentro (a página não rola de lado). */
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  
+
+  /* Título e selos (Projeto, Pedido pelo Cyno, Parte de um projeto conjunto) quebram em linhas, sem espremer o título. */
+  
+
+  
+
+  
+
+  
+
+  .w-timeline__day {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .w-new__row,
+.w-new__kind {
+    grid-template-columns: 1fr;
+  }
+
+  
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-card {
+    transition: none;
+  }
+}
+
+/* Selo "Automático" na lista e cartão Modo da trilha (fatia 7). */
+.w-kind--auto {
+  color: var(--ui-ok);
+  background: color-mix(in srgb, var(--ui-ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ui-ok) 35%, transparent);
+}
+
+.w-mode {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.w-mode--automatico {
+  background: color-mix(in srgb, var(--ui-ok) 6%, var(--ui-surface-2));
+  border-color: color-mix(in srgb, var(--ui-ok) 30%, var(--ui-border));
+}
+
+.w-mode__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.w-mode__head .w-section__title {
+  margin: 0;
+}
+
+.w-mode__badge {
+  padding: 1px 10px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.w-mode__badge--automatico {
+  color: var(--ui-ok);
+  border-color: color-mix(in srgb, var(--ui-ok) 40%, transparent);
+}
+
+.w-mode__usage {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-2);
+}
+
+.w-mode__text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.w-mode__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.w-mode__proposal {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--ui-warn) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 30%, var(--ui-border));
+  border-radius: var(--ui-radius);
+}
+
+.w-mode__form {
+  display: grid;
+  gap: 10px;
+}
+
+.w-mode__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.w-mode__types legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.w-mode__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.w-mode__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.w-mode__fields label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.w-mode__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---------- Tela Trabalho: "Pedido pelo Cyno" ---------- */
+
+.w-cyno__brief summary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.w-cyno__brief-text {
+  max-height: 320px;
+  padding: 10px 12px;
+  margin: 8px 0 0;
+  overflow: auto;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.w-kind--cyno {
+  color: var(--cyno);
+  background: var(--cyno-bg);
+  border-color: var(--cyno-border);
+}

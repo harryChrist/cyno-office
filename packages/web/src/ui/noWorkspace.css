@@ -1,0 +1,114 @@
+/* Estado vazio (sem workspace nenhum): cobre o canvas abaixo da barra, no fundo escuro do app. */
+.no-ws {
+  position: fixed;
+  top: var(--topbar-bottom);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  overflow: auto;
+  color: var(--ui-text);
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 0%, rgba(139, 124, 255, 0.16), transparent 70%),
+    var(--ui-bg-glow),
+    var(--ui-bg);
+  background-attachment: fixed;
+}
+
+.no-ws__inner {
+  display: grid;
+  gap: 20px;
+  width: min(600px, 100%);
+  margin: 0 auto;
+  padding: clamp(28px, 8vh, 72px) 16px 48px;
+  animation: no-ws-in var(--ui-med);
+}
+
+.no-ws__header {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.no-ws__logo {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 18px var(--ui-accent-glow));
+}
+
+.no-ws__eyebrow {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.no-ws__title {
+  margin: 0;
+  font-size: clamp(22px, 4vw, 28px);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.no-ws__lead {
+  max-width: 48ch;
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ui-text-2);
+}
+
+.no-ws__card {
+  padding: 20px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-lg);
+  backdrop-filter: var(--ui-blur);
+}
+
+.no-ws__foot {
+  margin: 0;
+  font-size: 13px;
+  text-align: center;
+  color: var(--ui-text-3);
+}
+
+.no-ws__link {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@keyframes no-ws-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .no-ws__inner {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .no-ws__card {
+    padding: 14px;
+  }
+}

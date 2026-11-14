@@ -1,0 +1,150 @@
+/* Abas de uma página (Gestão, Biblioteca, Projetos e tarefas, Atividade): o visual único das abas de página.
+   Tira fina, a aba atual sublinhada com o destaque do app; nunca quebra em duas linhas (rola por dentro). */
+.pagetabs {
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  gap: 8px 16px;
+  min-width: 0;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.pagetabs--flush {
+  padding: 0;
+}
+
+.pagetabs__list {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pagetabs__list::-webkit-scrollbar {
+  display: none;
+}
+
+.pagetabs__trailing {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding-bottom: 6px;
+  margin-left: auto;
+}
+
+.pagetabs__tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.pagetabs__tab:hover:not(:disabled) {
+  color: var(--ui-text);
+}
+
+.pagetabs__tab[aria-selected="true"] {
+  color: var(--ui-text);
+  border-bottom-color: var(--ui-accent);
+}
+
+.pagetabs__tab:disabled {
+  color: var(--ui-text-3);
+  cursor: default;
+}
+
+.pagetabs__tab:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+  border-radius: var(--ui-radius-sm);
+}
+
+.pagetabs__icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.pagetabs__badge {
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ui-text-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.pagetabs__tab[aria-selected="true"] .pagetabs__badge {
+  color: var(--ui-text-2);
+}
+
+@media (max-width: 640px) {
+  .pagetabs__tab {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  /* No celular o que vai à direita (seletor, visão) sobe para uma linha acima: as abas ficam com a largura toda. */
+  .pagetabs {
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  .pagetabs__list {
+    flex-basis: 100%;
+  }
+
+  .pagetabs__trailing {
+    flex-basis: 100%;
+    order: -1;
+    justify-content: flex-end;
+    padding-bottom: 8px;
+  }
+}
+
+/* A Gestão com abas: tira das abas em cima, a página escolhida embaixo (rola por dentro). */
+.gshell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.gshell__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Um título só: o da Gestão fica em cima; o das páginas montadas nas abas só para leitores de tela. */
+.gshell__head {
+  flex: none;
+  padding: 24px 16px 0;
+}
+
+.gshell__body .page {
+  padding-top: 16px;
+}
+
+.gshell__body .page__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

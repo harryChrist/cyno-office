@@ -1,0 +1,1487 @@
+/*
+ * Tela de trabalho de um agente (AgentWorkView) e o painel do Maestro, que a usa como a tela
+ * principal do workspace. Vidro escuro, acento violeta; só o avatar é pixel art.
+ */
+
+/* ---------- Tela de trabalho de um agente (dialog grande, no centro) ---------- */
+.work-panel {
+  width: min(1080px, calc(100vw - 32px));
+  height: min(820px, calc(100dvh - 48px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  font-size: 14px;
+  color: var(--ui-text);
+  background:
+    radial-gradient(700px 260px at 0% 0%, rgba(139, 124, 255, 0.12), transparent 70%),
+    color-mix(in srgb, var(--ui-surface-solid) 94%, transparent);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+  box-shadow:
+    var(--ui-shadow-lg),
+    0 0 0 1px rgba(139, 124, 255, 0.1),
+    0 0 60px rgba(109, 92, 245, 0.12);
+  backdrop-filter: var(--ui-blur);
+}
+
+.work-panel[open] {
+  display: flex;
+  animation: ui-pop var(--ui-med);
+}
+
+.work-panel::backdrop {
+  background: rgba(5, 6, 16, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+/* ---------- Estrutura ---------- */
+.work-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.work-view__threads {
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.work-view__body {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* Com lateral (WorkSplit): a largura vem de --work-aside-w; o CSS ainda garante os mínimos
+   (lateral ≥ 240px, conversa ≥ 360px) mesmo antes da primeira medida. */
+.work-split {
+  --work-aside-col: max(240px, min(var(--work-aside-w, 300px), 100% - 360px));
+
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) var(--work-aside-col);
+}
+
+.work-split--collapsed {
+  grid-template-columns: minmax(0, 1fr) 44px;
+}
+
+.work-split--dragging {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Divisória: área de toque de 10px sobre a borda da lateral; a linha acende no acento. */
+.work-split__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(var(--work-aside-col) - 5px);
+  z-index: 2;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.work-split__handle::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 2px;
+  background: transparent;
+  border-radius: 2px;
+  transition:
+    background var(--ui-fast),
+    box-shadow var(--ui-fast);
+}
+
+.work-split__handle:hover::before {
+  background: var(--ui-accent-glow);
+}
+
+.work-split__handle:focus-visible::before,
+.work-split--dragging .work-split__handle::before {
+  background: var(--ui-accent);
+  box-shadow: 0 0 10px var(--ui-accent-glow);
+}
+
+.work-view__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.work-view__aside {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: rgba(5, 6, 16, 0.22);
+  border-left: 1px solid var(--ui-border);
+}
+
+.work-view__aside-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.work-view__aside-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.work-view__aside-content[hidden] {
+  display: none;
+}
+
+.work-split__toggle {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+/* Recolhida: um trilho fino com o pulso ao vivo e o botão para mostrar de novo. */
+.work-split--collapsed .work-view__aside-head {
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.work-split--collapsed .work-view__aside-title {
+  padding: 8px 0 0;
+}
+
+.work-split--collapsed .work-view__aside-label {
+  display: none;
+}
+
+.work-view__aside-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 14px 16px 6px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.work-live-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--ui-ok);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--ui-ok);
+  animation: work-breathe 2.4s ease-in-out infinite;
+}
+
+.work-view__compose {
+  position: relative;
+  padding: 12px 16px 14px;
+  background: rgba(8, 10, 24, 0.5);
+  border-top: 1px solid var(--ui-border);
+}
+
+@media (max-width: 880px) {
+  .work-view--aside .work-view__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .work-view__aside,
+  .work-split__handle {
+    display: none;
+  }
+}
+
+/* ---------- Cabeçalho: avatar, estado ao vivo, progresso ---------- */
+.work-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px 14px 16px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.work-head__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(139, 124, 255, 0.28), transparent 70%),
+    var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+}
+
+.work-head__avatar--busy {
+  animation: work-ring 2.2s ease-out infinite;
+}
+
+.work-head__info {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.work-head__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.work-head__name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.work-head__count {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.work-head__sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.work-head__detail {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 13.5px;
+  color: var(--ui-text-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.work-head__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 440px;
+  margin-top: 4px;
+}
+
+.work-head__percent {
+  min-width: 36px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.work-head__actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+/* Estado ao vivo: pílula com ponto; o ponto pulsa enquanto ele trabalha. */
+.work-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 11px 3px 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-pill);
+}
+
+.work-status__dot {
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.work-status--neutral {
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--ui-border);
+}
+
+.work-status--busy {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-color: rgba(122, 180, 243, 0.25);
+}
+
+.work-status--attention {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-color: rgba(245, 181, 68, 0.28);
+}
+
+.work-status--success {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+}
+
+.work-status--danger {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.work-status--busy .work-status__dot,
+.work-status--attention .work-status__dot {
+  animation: work-breathe 1.6s ease-in-out infinite;
+}
+
+/* ---------- Linha do tempo ---------- */
+.timeline {
+  flex: 1;
+  min-height: 0;
+  padding: 22px 24px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.timeline:focus-visible {
+  outline-offset: -2px;
+}
+
+.timeline__list {
+  display: grid;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline__empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  text-align: center;
+}
+
+.timeline__footer {
+  padding-top: 18px;
+  text-align: center;
+}
+
+.work-footnote {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.work-empty {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.work-empty__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 620;
+  color: var(--ui-text);
+}
+
+.work-empty__text {
+  max-width: 400px;
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ui-text-3);
+}
+
+.tl-time {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+/* Pedido do usuário: balão à direita. */
+.tl-request {
+  display: grid;
+  gap: 8px;
+  animation: tl-in var(--ui-med);
+}
+
+.tl-ask {
+  justify-self: end;
+  max-width: min(560px, 86%);
+  padding: 10px 14px 7px;
+  background: linear-gradient(180deg, rgba(139, 124, 255, 0.24), rgba(109, 92, 245, 0.16));
+  border: 1px solid rgba(139, 124, 255, 0.34);
+  border-radius: 14px 14px 4px 14px;
+}
+
+.tl-ask__text {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tl-ask .tl-time {
+  display: block;
+  margin-top: 3px;
+  text-align: right;
+  color: rgba(232, 234, 246, 0.6);
+}
+
+/* Resposta do Maestro: cartão à esquerda. */
+.tl-reply {
+  display: grid;
+  gap: 9px;
+  justify-self: start;
+  width: min(640px, 92%);
+  padding: 12px 14px;
+  background: rgba(28, 32, 64, 0.72);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px 14px 14px 4px;
+}
+
+.tl-reply--attention {
+  border-color: rgba(245, 181, 68, 0.3);
+}
+
+.tl-reply--danger {
+  border-color: rgba(255, 107, 129, 0.26);
+}
+
+.tl-reply__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tl-reply__who {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ui-accent);
+}
+
+.tl-reply__head .tl-time {
+  margin-left: auto;
+}
+
+.tl-reply__line {
+  margin: 0;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.tl-reply__line strong {
+  font-weight: 620;
+  color: var(--ui-text);
+}
+
+.tl-muted {
+  color: var(--ui-text-3);
+}
+
+.tl-reply__ask {
+  color: var(--ui-warn);
+}
+
+.tl-reply__why {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.tl-reply__why-label {
+  flex: none;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 18px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+}
+
+.tl-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.tl-progress__text {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.tl-progress__value {
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-result {
+  padding: 10px 12px;
+  background: rgba(61, 220, 151, 0.06);
+  border: 1px solid rgba(61, 220, 151, 0.18);
+  border-radius: var(--ui-radius-button);
+}
+
+.tl-result--failed {
+  background: rgba(255, 107, 129, 0.06);
+  border-color: rgba(255, 107, 129, 0.2);
+}
+
+.tl-result__label {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-ok);
+}
+
+.tl-result--failed .tl-result__label {
+  color: var(--ui-danger);
+}
+
+.tl-result__text.md {
+  margin: 0;
+  color: var(--ui-text-2);
+}
+
+.tl-result__more summary {
+  font-size: 13.5px;
+  color: var(--ui-text-2);
+  list-style: none;
+  cursor: pointer;
+}
+
+.tl-result__more summary::-webkit-details-marker {
+  display: none;
+}
+
+.tl-result__more[open] summary {
+  display: none;
+}
+
+.tl-result__preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tl-result__toggle {
+  margin-left: 6px;
+  color: var(--ui-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tl-reply__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tl-action {
+  height: 28px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--ui-fast),
+    border-color var(--ui-fast),
+    background-color var(--ui-fast),
+    transform var(--ui-fast);
+}
+
+.tl-action:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border-color: var(--ui-border-strong);
+  transform: translateY(-1px);
+}
+
+.tl-action:active {
+  transform: translateY(0);
+}
+
+/* "Analisando…" com três pontinhos. */
+.tl-thinking {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.tl-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.tl-dots span {
+  width: 4px;
+  height: 4px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+  animation: tl-dot 1.2s ease-in-out infinite;
+}
+
+.tl-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.tl-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Passos (stream de trabalho): ponto colorido pelo estado, hora e texto. */
+.tl-step {
+  display: grid;
+  grid-template-columns: 8px auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.tl-step__dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.tl-step--running .tl-step__dot {
+  background: var(--ui-info);
+  box-shadow: 0 0 8px var(--ui-info);
+  animation: work-breathe 1.4s ease-in-out infinite;
+}
+
+.tl-step--ok .tl-step__dot {
+  background: var(--ui-ok);
+}
+
+.tl-step--error .tl-step__dot {
+  background: var(--ui-danger);
+}
+
+.tl-step--attention .tl-step__dot {
+  background: var(--ui-warn);
+}
+
+.tl-step__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tl-step__text {
+  margin: 0;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.tl-step--error .tl-step__text {
+  color: var(--ui-danger);
+}
+
+.tl-step--attention .tl-step__text {
+  color: var(--ui-warn);
+}
+
+.tl-step__detail {
+  margin: 0;
+  font-size: 0.92em;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.tl-step .ui-progress {
+  height: 3px;
+  margin-top: 4px;
+}
+
+/* Modo terminal: linhas compactas em mono (streams longos, o log cru de um agente). */
+.timeline--terminal {
+  padding: 4px 10px 12px;
+}
+
+.timeline--terminal .timeline__list {
+  gap: 1px;
+}
+
+.timeline--terminal .tl-step {
+  grid-template-columns: 6px 38px minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  border-radius: 6px;
+}
+
+.timeline--terminal .tl-step:hover {
+  background: var(--ui-hover);
+}
+
+.timeline--terminal .tl-step__dot {
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+}
+
+.timeline--terminal .tl-time {
+  font-size: 11px;
+}
+
+.timeline--terminal .timeline__empty {
+  padding: 16px 6px;
+}
+
+/* ---------- Log de trabalho: texto, ferramentas, linhas cruas ---------- */
+/* Markdown compacto (narração e resultados dentro da linha do tempo). */
+.md--compact {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ui-text-2);
+}
+
+.md--compact .md__p,
+.md--compact .md__list,
+.md--compact .md__quote,
+.md--compact .md__pre {
+  margin-bottom: 0.6em;
+}
+
+.md--compact > :last-child {
+  margin-bottom: 0;
+}
+
+.md--compact .md__heading {
+  margin: 0.9em 0 0.35em;
+  font-size: 13.5px;
+  padding-bottom: 0;
+  border: 0;
+}
+
+.md--compact .md__pre {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.tl-step__body--result {
+  padding: 10px 12px;
+  background: rgba(61, 220, 151, 0.06);
+  border: 1px solid rgba(61, 220, 151, 0.18);
+  border-radius: var(--ui-radius-button);
+}
+
+.tl-step[data-variant="text"] .tl-step__dot {
+  background: var(--ui-accent);
+}
+
+.tl-tool {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.tl-tool__name {
+  padding: 1px 7px;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+}
+
+.tl-tool__phrase {
+  font-weight: 600;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.tl-tool__summary {
+  min-width: 0;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.tl-tool__meta {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.tl-step--running .tl-tool__meta {
+  color: var(--ui-info);
+}
+
+.tl-step--error .tl-tool__meta {
+  color: var(--ui-danger);
+}
+
+.tl-tool__more summary {
+  width: fit-content;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+}
+
+.tl-tool__more summary:hover {
+  color: var(--ui-text-2);
+}
+
+.tl-pre {
+  max-height: 260px;
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--ui-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+}
+
+.tl-pre--error {
+  color: var(--ui-danger);
+  border-color: rgba(255, 107, 129, 0.25);
+}
+
+.tl-step[data-variant="raw"] .tl-step__text {
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--ui-text-3);
+}
+
+.tl-step__text--pre {
+  white-space: pre-wrap;
+}
+
+.tl-step__tag {
+  margin-right: 8px;
+  color: var(--ui-text-3);
+}
+
+.tl-step--error .tl-step__tag {
+  color: var(--ui-danger);
+}
+
+.tl-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tl-step__link {
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.tl-step__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* No terminal, ferramenta é uma linha só: nome em destaque, resumo e meta. */
+.timeline--terminal .tl-tool__name {
+  padding: 0;
+  font-size: inherit;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+}
+
+.timeline--terminal .tl-tool__meta {
+  font-size: inherit;
+}
+
+.timeline--terminal .tl-step__body--result {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.timeline--terminal .tl-step[data-variant="result"] .tl-step__text {
+  color: var(--ui-ok);
+}
+
+.timeline--terminal .tl-step[data-variant="raw"] .tl-step__text {
+  color: var(--ui-text-3);
+}
+
+/* Log de um agente em cartões: passos mais juntos que os pedidos ao Maestro. */
+.timeline--cards .timeline__list:not(:has(> .tl-request)) {
+  gap: 14px;
+}
+
+.timeline--terminal .md--compact {
+  font-size: inherit;
+  color: var(--ui-text-2);
+}
+
+/* "Ir para o mais novo": aparece quando o usuário sobe na lista. */
+.timeline__jump {
+  position: sticky;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px auto 0;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-surface-solid) 92%, transparent);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  box-shadow: var(--ui-shadow);
+  cursor: pointer;
+  animation: tl-in var(--ui-med);
+  transition: transform var(--ui-fast);
+}
+
+.timeline__jump:hover {
+  transform: translateY(-1px);
+}
+
+.timeline__jump:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ---------- Tela de um agente: abas (principal + subagentes), tarefa e modo ---------- */
+.work-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.work-tabs {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.work-tabs__tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  max-width: 240px;
+  height: 30px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+  transition:
+    color var(--ui-fast),
+    background var(--ui-fast);
+}
+
+.work-tabs__tab:hover {
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+}
+
+.work-tabs__tab[aria-selected="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-3);
+  border-color: var(--ui-border);
+}
+
+.work-tabs__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-tabs__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.work-tabs__dot--running {
+  background: var(--ui-info);
+  box-shadow: 0 0 6px var(--ui-info);
+  animation: work-breathe 1.4s ease-in-out infinite;
+}
+
+.work-tabs__dot--ok {
+  background: var(--ui-ok);
+}
+
+.work-tabs__dot--error {
+  background: var(--ui-danger);
+}
+
+.work-tabs__count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.work-bar__controls {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-bar__task.ui-input {
+  width: auto;
+  max-width: 280px;
+  height: 30px;
+  padding-block: 0;
+  font-size: 12.5px;
+}
+
+.work-mode {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.work-mode__option {
+  height: 24px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+}
+
+.work-mode__option[aria-pressed="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-3);
+}
+
+.work-goal {
+  margin: 14px 24px 0;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-left: 2px solid var(--ui-info);
+  border-radius: 0 8px 8px 0;
+}
+
+.work-goal strong {
+  color: var(--ui-text);
+}
+
+/* Selos no subtítulo (motor, subagentes). */
+.work-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.work-chip--phrase {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+.work-chip--sub {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-color: transparent;
+}
+
+.work-head__buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .work-head__buttons .tl-action {
+    display: none;
+  }
+}
+
+/* ---------- Caixa de pedido ---------- */
+.work-compose {
+  display: grid;
+  gap: 7px;
+}
+
+.work-compose__box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 4px 4px 0;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  transition:
+    border-color var(--ui-fast),
+    box-shadow var(--ui-med);
+}
+
+.work-compose__box:focus-within {
+  border-color: var(--ui-accent);
+  box-shadow:
+    0 0 0 3px var(--ui-accent-bg),
+    0 0 24px rgba(139, 124, 255, 0.18);
+}
+
+.work-compose__input.ui-input {
+  flex: 1;
+  min-height: 48px;
+  max-height: 180px;
+  padding: 12px 14px;
+  font-size: 15px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  resize: none;
+}
+
+.work-compose__input.ui-input:focus,
+.work-compose__input.ui-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.work-compose__input.ui-input[aria-invalid="true"] {
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px var(--ui-danger);
+}
+
+.work-compose__tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 1px;
+}
+
+.work-compose__send {
+  min-width: 92px;
+  min-height: 38px;
+}
+
+.work-compose__hint {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.work-compose__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.work-compose__status[data-phase="delivered"],
+.work-compose__status[data-phase="answered"] {
+  color: var(--ui-ok);
+}
+
+.work-compose__counter {
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.work-compose__counter[data-near-limit="true"] {
+  color: var(--ui-danger);
+}
+
+.work-compose__retry {
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: var(--ui-radius-pill);
+}
+
+.work-compose__retry:hover {
+  background: var(--ui-hover);
+}
+
+.work-compose__quota {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+
+.work-compose__hint code {
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-radius: 4px;
+}
+
+.work-compose kbd {
+  padding: 2px 6px;
+  font: 600 10.5px/1 var(--ui-font);
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+.work-compose__error {
+  margin: 0;
+  padding: 0 4px;
+  font-size: 13px;
+}
+
+@media (max-width: 560px) {
+  .work-compose__hint {
+    display: none;
+  }
+
+  .timeline {
+    padding: 16px 14px;
+  }
+
+  .tl-ask,
+  .tl-reply {
+    max-width: 100%;
+    width: auto;
+  }
+}
+
+/* ---------- Movimento ---------- */
+@keyframes work-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes work-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(139, 124, 255, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(139, 124, 255, 0);
+  }
+}
+
+@keyframes tl-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes tl-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-live-dot,
+  .work-head__avatar--busy,
+  .work-status__dot,
+  .tl-request,
+  .tl-dots span,
+  .tl-step__dot,
+  .tl-action,
+  .work-panel[open] {
+    animation: none !important;
+    transition: none;
+  }
+}
+
+/* Modelo do subagente na aba da thread */
+.work-tabs__model {
+  padding: 0 5px;
+  font-size: 10.5px;
+  color: var(--ui-text-3);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+}
+
+/* ---------- Celular: o terminal fica com quase toda a altura ----------
+ * A tela de trabalho vira tela cheia; o cabeçalho encolhe (avatar pequeno, só nome e estado), a nota das abas
+ * some, os filtros e a busca do terminal ficam numa faixa fina e a caixa de mensagem tem uma linha. A coluna da
+ * conversa, que some nesta largura, vira a aba "Conversa". Só vale em tela estreita: o desktop não muda. */
+.maestro-tab--narrow-only,
+.maestro-pane--narrow-only {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  .maestro-tab--narrow-only {
+    display: inline-flex;
+  }
+
+  .maestro-pane--narrow-only {
+    display: flex;
+  }
+}
+
+@media (max-width: 720px) {
+  .work-panel {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .work-head {
+    gap: 10px;
+    align-items: center;
+    padding: 8px 8px 8px 12px;
+  }
+
+  .work-head__avatar {
+    display: none;
+  }
+
+  .work-head__name {
+    font-size: 16px;
+  }
+
+  .work-head__sub,
+  .work-head__terminal,
+  .work-head__detail,
+  .work-head__progress,
+  .work-head__count {
+    display: none;
+  }
+
+  .work-head__line {
+    gap: 4px 8px;
+  }
+
+  .work-head__actions {
+    align-items: center;
+  }
+
+  .maestro-tabs {
+    gap: 2px;
+    padding: 4px 6px 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .maestro-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .maestro-tab {
+    flex: none;
+    padding: 6px 10px 7px;
+    font-size: 12.5px;
+  }
+
+  .maestro-tabs__note {
+    display: none;
+  }
+
+  .work-view__compose {
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .work-compose {
+    gap: 3px;
+  }
+
+  .work-compose__hint {
+    display: none;
+  }
+
+  .work-compose__input {
+    min-height: 0;
+    max-height: 84px;
+  }
+}

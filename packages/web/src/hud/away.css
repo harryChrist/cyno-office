@@ -1,0 +1,192 @@
+/* ---------- "Enquanto você estava fora": o cartão ao voltar (discreto, nunca cobre o trabalho) ---------- */
+.away-card {
+  position: fixed;
+  top: 76px;
+  right: var(--gap);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - 2 * var(--gap)));
+  max-height: min(calc(100vh - 76px - var(--gap)), 480px);
+  color: var(--ui-text);
+  background: var(--ui-surface-solid, var(--ui-surface));
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+  animation: away-in 200ms ease-out;
+}
+
+@keyframes away-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .away-card {
+    animation: none;
+  }
+}
+
+.away-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 10px 8px 14px;
+}
+
+.away-card__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.away-card__since {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.away-card__close {
+  display: grid;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.away-card__close:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+.away-card__close-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.away-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 14px 10px;
+  overflow-y: auto;
+}
+
+.away-sec {
+  --away-tone: var(--ui-text-2);
+}
+
+.away-sec--ok { --away-tone: var(--ui-ok); }
+.away-sec--danger { --away-tone: var(--ui-danger); }
+.away-sec--warn { --away-tone: var(--ui-warn); }
+.away-sec--info { --away-tone: var(--ui-info, var(--ui-text-2)); }
+
+.away-sec__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.away-sec__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 5px;
+  background: var(--away-tone);
+  border-radius: 50%;
+}
+
+.away-sec__ws {
+  font-weight: 500;
+  color: var(--ui-text-2);
+}
+
+.away-sec__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0 0 0 15px;
+  list-style: none;
+}
+
+.away-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.away-item--link {
+  cursor: pointer;
+}
+
+.away-item--link:hover,
+.away-item--link:focus-visible {
+  background: var(--ui-surface-2);
+}
+
+.away-item__label {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.away-item__sub {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.away-item__more {
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--ui-text-2);
+}
+
+.away-card__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+/* No celular o cartão fica no topo, logo abaixo da barra curta, com a largura toda (a navegação continua à vista). */
+@media (max-width: 760px) {
+  .away-card {
+    top: calc(var(--topbar-bottom) + 8px);
+    right: var(--gap);
+    left: var(--gap);
+    width: auto;
+    max-height: min(52vh, 420px);
+  }
+}

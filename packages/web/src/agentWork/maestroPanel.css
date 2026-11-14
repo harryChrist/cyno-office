@@ -1,0 +1,1105 @@
+/* ---------- Painel do Maestro: abas (conversa, pedidos, atividade, terminal) ---------- */
+
+.maestro-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.maestro-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.maestro-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 8px;
+  margin-bottom: -1px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px 9px 0 0;
+  transition:
+    color var(--ui-fast),
+    background var(--ui-fast);
+}
+
+.maestro-tab:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.maestro-tab--active {
+  color: var(--ui-text);
+  background: var(--ui-bg);
+  border-color: var(--ui-border);
+  border-bottom-color: var(--ui-bg);
+}
+
+.maestro-tab:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.maestro-tab__count {
+  min-width: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--ui-text-2);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--ui-radius-pill);
+}
+
+.maestro-tabs__note {
+  margin-left: auto;
+  padding-bottom: 6px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.maestro-pane {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.maestro-pane[hidden] {
+  display: none;
+}
+
+/* ---------- Terminal (xterm) ---------- */
+.mterm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ui-bg);
+}
+
+/* Faixa fina em cima do terminal: estado + dica numa linha só (a dica corta com reticências). */
+.mterm__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  white-space: nowrap;
+}
+
+.mterm__status {
+  flex: none;
+  padding-block: 1px;
+  font-size: 12px;
+}
+
+.mterm__hint {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+}
+
+.mterm__hint kbd {
+  padding: 0 5px;
+  font-family: var(--ui-font-mono);
+  font-size: 11px;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+}
+
+.mterm__retry {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.mterm__screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 8px 4px 4px 10px;
+}
+
+.mterm__xterm {
+  width: 100%;
+  height: 100%;
+}
+
+.mterm__xterm .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.mterm__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  background: color-mix(in srgb, var(--ui-bg) 86%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.mterm__overlay-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.mterm__overlay-text {
+  max-width: 440px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+/* ---------- Atividade por pedido ---------- */
+.mact {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 6px 12px 16px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mact:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.mact__empty {
+  padding: 18px 6px;
+}
+
+.mact-group {
+  flex: none;
+  overflow: hidden;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+
+.mact-group__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 9px;
+  background: rgba(255, 255, 255, 0.025);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.mact-group__prompt {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ui-text);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mact-group__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mact-group__time {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.mact-group__open {
+  margin-left: auto;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.mact-group__open:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.mact-group__empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.mact-chip {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.mact-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.mact-step {
+  display: grid;
+  grid-template-columns: 42px 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.mact-step:hover {
+  background: var(--ui-hover);
+}
+
+.mact-step__time {
+  padding-top: 1px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+  text-align: right;
+}
+
+.mact-step__icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  font-weight: 700;
+  place-items: center;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+}
+
+.mact-step--busy .mact-step__icon {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+}
+
+.mact-step--attention .mact-step__icon {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.mact-step--success .mact-step__icon {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+}
+
+.mact-step--danger .mact-step__icon {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.mact-step__body {
+  min-width: 0;
+}
+
+.mact-step__label {
+  margin: 0;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.mact-step[data-kind="note"] .mact-step__label {
+  font-style: italic;
+  color: var(--ui-text-2);
+}
+
+.mact-step__count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--ui-text-3);
+}
+
+.mact-step__detail {
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.mact-step__detail--result {
+  padding: 6px 9px;
+  color: var(--ui-text);
+  background: var(--ui-ok-bg);
+  border-radius: 8px;
+  -webkit-line-clamp: 6;
+}
+
+.mact-step__agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 150px;
+  padding: 2px 8px 2px 2px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.mact-step__agent:hover {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+
+.mact-step__avatar {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+}
+
+.mact-step__agent-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Atividade: trocas de conversa (leves, fechadas) ---------- */
+.mact-chat {
+  flex: none;
+  border-left: 2px solid var(--ui-border);
+  border-radius: 0 8px 8px 0;
+}
+
+.mact-chat[open] {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mact-chat[data-tone="danger"] {
+  border-left-color: var(--ui-danger);
+}
+
+.mact-chat__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  list-style: none;
+  border-radius: 0 8px 8px 0;
+}
+
+.mact-chat__head::-webkit-details-marker {
+  display: none;
+}
+
+.mact-chat__head:hover {
+  background: var(--ui-hover);
+}
+
+.mact-chat__head:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.mact-chat__tag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+}
+
+.mact-chat__said {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mact-chat__reply {
+  margin: 0;
+  padding: 2px 12px 8px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Conversa (chat) com o Maestro sem terminal interativo ---------- */
+.mchat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.mchat:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.mchat__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mchat__msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: min(680px, 85%);
+}
+
+.mchat__msg--user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.mchat__msg--agent {
+  align-self: flex-start;
+}
+
+.mchat__bubble {
+  padding: 8px 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px 14px 14px 4px;
+  overflow-wrap: anywhere;
+}
+
+.mchat__msg--user .mchat__bubble {
+  background: var(--ui-accent-bg);
+  border-color: transparent;
+  border-radius: 14px 14px 4px 14px;
+}
+
+.mchat__bubble--thinking {
+  font-style: italic;
+  color: var(--ui-text-2);
+}
+
+.mchat__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.mchat__md > :first-child {
+  margin-top: 0;
+}
+
+.mchat__md > :last-child {
+  margin-bottom: 0;
+}
+
+.mchat__meta,
+.mchat__time {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.mchat__notice {
+  align-self: center;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.mchat__notice--danger {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.mchat__pedido {
+  align-self: stretch;
+  padding: 8px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-accent);
+  border-radius: 10px;
+}
+
+.mchat__pedido-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mchat__pedido-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-accent);
+  text-transform: uppercase;
+}
+
+.mchat__pedido-title {
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Resultado do pedido em markdown (renderizado), cortado em ~6 linhas com um esmaecido no fim. */
+.mchat__pedido-result {
+  max-height: 9.5em;
+  margin: 6px 0 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+
+.mchat__pedido-result .md--compact {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.mchat__md :is(p, li) {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* ---------- Painel do Maestro acoplado à caixa do rodapé (TaskBox) ---------- */
+.mdock {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  /* Alto: o teto real é o da caixa (.taskbox, até a barra de cima); o painel encolhe para caber. */
+  height: min(84dvh, 1200px);
+  min-height: 0;
+  color: var(--ui-text);
+  animation: mdock-grow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes mdock-grow {
+  from {
+    opacity: 0;
+    clip-path: inset(55% 0 0 0);
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+}
+
+.mdock__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 8px 12px;
+}
+
+.mdock__avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(139, 124, 255, 0.28), transparent 70%),
+    var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 12px;
+}
+
+.mdock__avatar--busy {
+  animation: work-ring 2.2s ease-out infinite;
+}
+
+.mdock__who {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mdock__line,
+.mdock__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.mdock__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mdock__where {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdock__model {
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.mdock__collapse.ui-icon-button {
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+
+/* Em andamento: os pedidos abertos do Maestro, em pílulas (abrem os detalhes em Tarefas). */
+.mdock__active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 12px 8px;
+}
+
+.mdock__active-label {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+}
+
+.mdock__active-list {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.mdock__active-list::-webkit-scrollbar {
+  display: none;
+}
+
+.mdock__active-list > li {
+  flex: none;
+  max-width: 340px;
+}
+
+.mdock__req {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 4px 10px 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.mdock__req:hover {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+
+.mdock__req:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.mdock__req-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.mdock__req--busy .mdock__req-dot {
+  background: var(--ui-info);
+}
+
+.mdock__req--attention .mdock__req-dot {
+  background: var(--ui-warn);
+}
+
+.mdock__req-text {
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mdock__req-stage {
+  flex: none;
+  color: var(--ui-text-3);
+  white-space: nowrap;
+}
+
+.mdock__active-more {
+  align-self: center;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.mdock__tabs.maestro-tabs {
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mdock__tabs .maestro-tab {
+  flex: none;
+}
+
+.mdock__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ui-bg);
+}
+
+.mdock__pane .work-empty {
+  margin: auto;
+  padding: 24px;
+}
+
+/* Celular: a folha ocupa a altura que sobra (a caixa fica no rodapé dela). */
+@media (max-width: 760px) {
+  .mdock {
+    flex: 1 1 auto;
+    height: auto;
+  }
+
+  .mdock__head {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 6px 6px 10px;
+  }
+
+  .mdock__avatar {
+    border-radius: 10px;
+  }
+
+  .mdock__where {
+    display: none;
+  }
+
+  /* Modelo, terminal e Remote Control numa linha só que rola de lado (sem empilhar 3 linhas). */
+  .mdock__meta {
+    flex-wrap: nowrap;
+    margin-right: -6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, #000 88%, transparent);
+  }
+
+  .mdock__meta::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mdock__meta > * {
+    flex: none;
+  }
+
+  .rc-name {
+    flex-wrap: nowrap;
+  }
+
+  /* "Remote Control ligado" vira só a bolinha (verde = ligado); o nome e os botões ficam. */
+  .rc-name:not(.rc-name--editing) .rc-name__label {
+    display: none;
+  }
+
+  /* A faixa do terminal some com ele conectado (o estado já está no "Ligado" do cabeçalho); volta
+     para avisar de reconexão ou queda, sem a dica longa. */
+  .mterm[data-connection="open"] .mterm__bar {
+    display: none;
+  }
+
+  .mterm__hint {
+    display: none;
+  }
+
+  .mterm__bar {
+    padding: 3px 8px;
+  }
+
+  .mterm__screen {
+    padding: 4px 2px 2px 6px;
+  }
+
+  .mdock__tabs.maestro-tabs {
+    padding: 0 8px;
+  }
+
+  .mdock__req-stage {
+    display: none;
+  }
+
+  .mdock__active-list > li {
+    max-width: 220px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdock,
+  .mdock__avatar--busy {
+    animation: none;
+  }
+}
+
+/* ---------- Remote Control: nome da sessão (cabeçalho do painel do Maestro) ---------- */
+.rc-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 7px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+}
+
+.rc-name--active {
+  border-color: rgba(79, 214, 160, 0.3);
+}
+
+.rc-name__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.rc-name--active .rc-name__dot {
+  background: var(--ui-ok);
+  box-shadow: 0 0 0 3px rgba(79, 214, 160, 0.2);
+}
+
+.rc-name--waiting .rc-name__dot {
+  background: var(--ui-warn);
+}
+
+.rc-name__label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rc-name__state {
+  font-weight: 500;
+  color: var(--ui-text-3);
+}
+
+.rc-name--active .rc-name__state {
+  color: var(--ui-ok);
+}
+
+.rc-name__value {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-name__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.rc-name__icon:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.rc-name__icon:focus-visible,
+.rc-name__open:focus-visible,
+.rc-name__action:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.rc-name__open {
+  padding: 0 6px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rc-name__open:hover {
+  text-decoration: underline;
+}
+
+.rc-name__pending {
+  flex-basis: 100%;
+  padding-bottom: 2px;
+  font-size: 11.5px;
+  color: var(--ui-warn);
+}
+
+.rc-name--editing {
+  padding: 4px 6px 4px 10px;
+  border-color: var(--ui-accent);
+}
+
+.rc-name__input.ui-input {
+  width: min(280px, 60vw);
+  min-height: 28px;
+  padding: 3px 8px;
+  font-size: 13px;
+}
+
+.rc-name__action {
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.rc-name__action--primary {
+  color: var(--ui-on-solid);
+  background: var(--ui-accent-solid);
+  border-color: transparent;
+}
+
+.rc-name__action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rc-name__note {
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.rc-name__error {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ui-danger);
+}
+
+@media (max-width: 760px) {
+  .rc-name__value {
+    max-width: 150px;
+  }
+
+  .rc-name__note {
+    display: none;
+  }
+}

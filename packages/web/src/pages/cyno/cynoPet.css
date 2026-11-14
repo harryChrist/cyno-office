@@ -1,0 +1,237 @@
+/*
+ * O bichinho do Cyno (CynoPet): SVG chapado nas cores do Cyno (--cyno*), com o violeta do app só na
+ * coleira. Animação discreta e lenta, só transform e opacity; parado com prefers-reduced-motion.
+ */
+.cyno-pet {
+  --cp-fur: var(--cyno, #e6b866);
+  --cp-shade: var(--cyno-solid, #b9852c);
+  --cp-cream: #fbefd2;
+  --cp-eye: #2a1a08;
+  --cp-accent: var(--ui-accent, #8b7cff);
+  display: inline-block;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  line-height: 0;
+  transition: filter 0.3s;
+}
+
+.cyno-pet--lg {
+  width: 72px;
+  height: 72px;
+}
+
+.cyno-pet svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.cyno-pet[data-pose="sleeping"] {
+  filter: saturate(0.62) brightness(0.8);
+}
+
+.cp-fur {
+  fill: var(--cp-fur);
+}
+
+.cp-cream {
+  fill: var(--cp-cream);
+}
+
+.cp-inner {
+  fill: var(--cp-shade);
+  opacity: 0.8;
+}
+
+.cp-nose,
+.cp-eye {
+  fill: var(--cp-eye);
+}
+
+.cp-glint {
+  fill: #fff;
+  opacity: 0.9;
+}
+
+.cp-lid {
+  fill: none;
+  stroke: var(--cp-eye);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+.cp-collar {
+  fill: none;
+  stroke: var(--cp-accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.cp-tag {
+  fill: var(--cp-accent);
+  stroke: var(--cp-cream);
+  stroke-width: 1.4;
+}
+
+.cp-z {
+  fill: var(--cp-cream);
+  font: 700 12px/1 system-ui, sans-serif;
+}
+
+.cp-eyes-closed {
+  display: none;
+}
+
+.cyno-pet[data-pose="sleeping"] .cp-eyes {
+  display: none;
+}
+
+.cyno-pet[data-pose="sleeping"] .cp-eyes-closed {
+  display: inline;
+}
+
+/* Cada parte gira em torno do seu próprio ponto de apoio. */
+.cp-head,
+.cp-body,
+.cp-tail,
+.cp-ear,
+.cp-eyes,
+.cp-z {
+  transform-box: fill-box;
+}
+
+.cp-head {
+  transform-origin: 50% 100%;
+  transition: transform 0.6s ease;
+}
+
+.cp-body {
+  transform-origin: 50% 100%;
+}
+
+.cp-tail {
+  transform-origin: 8% 92%;
+}
+
+.cp-ear--l {
+  transform-origin: 70% 100%;
+  transition: transform 0.5s ease;
+}
+
+.cp-ear--r {
+  transform-origin: 30% 100%;
+  transition: transform 0.5s ease;
+}
+
+.cp-eyes {
+  transform-origin: 50% 50%;
+}
+
+/* Poses estáticas (valem também sem animação). */
+.cyno-pet[data-pose="sleeping"] .cp-head {
+  transform: translateY(3px) rotate(-4deg);
+}
+
+.cyno-pet[data-pose="waiting"] .cp-head {
+  transform: rotate(-9deg);
+}
+
+.cyno-pet[data-pose="working"] .cp-ear--l {
+  transform: rotate(-4deg) scaleY(1.07);
+}
+
+.cyno-pet[data-pose="working"] .cp-ear--r {
+  transform: rotate(4deg) scaleY(1.07);
+}
+
+.cyno-pet:not([data-pose="sleeping"]) .cp-z {
+  display: none;
+}
+
+.cyno-pet[data-pose="sleeping"] .cp-z {
+  opacity: 0.8;
+}
+
+/* Animações lentas. */
+@media (prefers-reduced-motion: no-preference) {
+  .cyno-pet[data-pose="idle"] .cp-eyes,
+  .cyno-pet[data-pose="waiting"] .cp-eyes {
+    animation: cp-blink 6.5s ease-in-out infinite;
+  }
+
+  .cyno-pet[data-pose="working"] .cp-tail {
+    animation: cp-wag 2.4s ease-in-out infinite;
+  }
+
+  .cyno-pet[data-pose="working"] .cp-body {
+    animation: cp-breathe 3.6s ease-in-out infinite;
+  }
+
+  .cyno-pet[data-pose="sleeping"] .cp-body {
+    animation: cp-breathe 5.4s ease-in-out infinite;
+  }
+
+  .cyno-pet[data-pose="sleeping"] .cp-z {
+    animation: cp-zzz 4.8s ease-in-out infinite;
+    opacity: 0;
+  }
+
+  .cyno-pet[data-pose="sleeping"] .cp-z--2 {
+    animation-delay: 2.4s;
+  }
+}
+
+@keyframes cp-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes cp-wag {
+  0%,
+  100% {
+    transform: rotate(-5deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+
+@keyframes cp-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.025);
+  }
+}
+
+@keyframes cp-zzz {
+  0% {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  30%,
+  60% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (max-width: 720px) {
+  .cyno-pet--md {
+    width: 32px;
+    height: 32px;
+  }
+}

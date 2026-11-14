@@ -1,0 +1,218 @@
+/*
+ * Mural: o que os workspaces compartilham com a plataforma. No bloco da página do Cyno (uma lista) e,
+ * na página Mídia de cada workspace, a seção "Do mural" (uma fileira de cartões).
+ */
+.mural__scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 2px 12px 12px;
+  overflow-y: auto;
+}
+
+.mural__empty {
+  margin: 8px 2px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-3);
+}
+
+.mural__list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.mural__item {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+
+.mural-thumb {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  background: var(--ui-surface);
+  border-radius: 9px;
+}
+
+.mural-thumb img,
+.mural-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mural-thumb--tile {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px dashed var(--ui-border);
+}
+
+.mural__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mural__title {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mural__meta,
+.mural__note,
+.mural__used,
+.mural__unused {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-3);
+}
+
+.mural__note {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ui-text-2);
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mural__used {
+  color: var(--ui-success, #4ade80);
+}
+
+.mural__retire {
+  align-self: center;
+  font-size: 12px;
+}
+
+.mural__error {
+  margin: 4px 2px 0;
+  font-size: 12.5px;
+  color: var(--ui-danger, #f87171);
+}
+
+/* ---------- "Do mural" na Mídia ---------- */
+.mural--media {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel, 14px);
+}
+
+.mural-media__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.mural-media__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.mural-media__sub {
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.mural-media__row {
+  display: flex;
+  gap: 10px;
+  padding: 0 0 4px;
+  margin: 0;
+  overflow-x: auto;
+  list-style: none;
+}
+
+.mural-card {
+  display: grid;
+  flex: none;
+  gap: 4px;
+  align-content: start;
+  width: 180px;
+  padding: 8px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+
+.mural-card .mural-thumb {
+  width: 100%;
+  height: 96px;
+}
+
+.mural-card__title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mural-card__meta,
+.mural-card__note,
+.mural-card__text,
+.mural-card__done {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-3);
+}
+
+.mural-card__note {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.mural-card__done {
+  color: var(--ui-success, #4ade80);
+}
+
+.mural-card__use {
+  margin-top: 2px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 760px) {
+  .mural__item {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .mural__retire {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .mural-thumb {
+    width: 56px;
+    height: 56px;
+  }
+}

@@ -1,0 +1,436 @@
+/*
+ * A faixa da cidade na página do Cyno e a janela "Espiar". Escura, no mesmo tom do resto da página (o canvas da
+ * cidade é pixel; a moldura é a interface do Cyno).
+ */
+.cidade {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+}
+
+.cidade__cabeca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 8px 4px 4px;
+}
+
+.cidade__alternar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cidade__alternar:hover {
+  background: var(--ui-surface-2);
+}
+
+.cidade__seta {
+  color: var(--ui-text-3);
+  font-size: 12px;
+}
+
+.cidade__resumo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-2);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cidade__selo {
+  min-width: 20px;
+  padding: 1px 7px;
+  color: #1a1206;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  background: #f5a524;
+  border-radius: 999px;
+}
+
+.cidade__ver {
+  flex: none;
+}
+
+.cidade__corpo {
+  position: relative;
+  height: clamp(220px, 34vh, 340px);
+  border-top: 1px solid var(--ui-border);
+}
+
+.cidade__tela {
+  position: absolute;
+  inset: 0;
+}
+
+.cidade__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #5e7f52;
+  touch-action: none;
+}
+
+.cidade__vazia {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: 0 16px;
+  color: var(--ui-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.cidade__zoom {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cidade__botao {
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  background: rgb(14 17 26 / 78%);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.cidade__botao:hover {
+  background: rgb(14 17 26 / 94%);
+}
+
+.cidade__meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--ui-text-2);
+  font-size: 12px;
+}
+
+.cidade__meta input {
+  width: 58px;
+  padding: 2px 4px;
+  color: var(--ui-text);
+  font: inherit;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: 4px;
+}
+
+.cidade__meta button {
+  padding: 2px 8px;
+  color: var(--ui-text-2);
+  font: inherit;
+  background: transparent;
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cidade__meta button:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+/* O cartão do prédio clicado, no canto de cima à direita da cidade. */
+.cidade-cartao {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(300px, calc(100% - 20px));
+  max-height: calc(100% - 20px);
+  padding: 12px;
+  overflow: auto;
+  color: var(--ui-text);
+  background: var(--ui-surface-2, #1b2030);
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+}
+
+.cidade-cartao__topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cidade-cartao__nome {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cidade-cartao__aberto {
+  padding: 1px 8px;
+  color: var(--ui-text-2);
+  font-size: 11px;
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: 999px;
+}
+
+.cidade-cartao__fechar {
+  width: 24px;
+  height: 24px;
+  color: var(--ui-text-2);
+  font-size: 18px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cidade-cartao__fechar:hover {
+  background: var(--ui-surface);
+}
+
+.cidade-cartao__frase {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ui-text-2);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.cidade-cartao__frase--vazia {
+  color: var(--ui-text-3);
+  font-style: italic;
+}
+
+.cidade-cartao__dados {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.cidade-cartao__dados > div {
+  display: flex;
+  gap: 8px;
+}
+
+.cidade-cartao__dados dt {
+  flex: none;
+  width: 84px;
+  color: var(--ui-text-3);
+}
+
+.cidade-cartao__dados dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ui-text);
+}
+
+.cidade-cartao__sub {
+  color: var(--ui-text-3);
+}
+
+.cidade-cartao__espera dd {
+  color: #f5a524;
+  font-weight: 700;
+}
+
+.cidade-cartao__acoes {
+  display: flex;
+  gap: 8px;
+}
+
+.cidade-cartao__acoes .ui-button {
+  flex: 1;
+}
+
+/* Espiar: janela com a cena do outro workspace. */
+.espiar {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(720px, calc(100dvh - 32px));
+  padding: 0;
+  color: var(--ui-text);
+  background: var(--ui-surface-2, #12151d);
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: 14px;
+}
+
+.espiar[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.espiar::backdrop {
+  background: rgb(0 0 0 / 62%);
+}
+
+.espiar__topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.espiar__titulo {
+  margin: 0;
+  font-size: 16px;
+}
+
+.espiar__aviso {
+  flex: 1;
+  min-width: 0;
+  color: var(--ui-text-3);
+  font-size: 12.5px;
+}
+
+.espiar__acoes {
+  display: flex;
+  gap: 8px;
+}
+
+.espiar__cena {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.espiar__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #12151d;
+}
+
+.espiar__carregando {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--ui-text-3);
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .cidade__resumo {
+    font-size: 12px;
+  }
+
+  .cidade__corpo {
+    height: clamp(180px, 28vh, 240px);
+  }
+
+  .cidade__meta {
+    display: none;
+  }
+
+  .cidade-cartao {
+    top: auto;
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
+    width: auto;
+    max-height: 90%;
+  }
+
+  .cidade__zoom {
+    bottom: auto;
+    top: 10px;
+  }
+
+  .espiar {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+  }
+}
+
+/* ---------- Tela cheia: a cidade cobre a janela (por cima do menu lateral e da conversa) ---------- */
+.cidade__corpo--cheia {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  height: auto;
+  background: #0b0d1a;
+  border-top: 0;
+}
+
+.cidade__barra-cheia {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  left: 10px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 6px 14px;
+  color: var(--ui-text);
+  background: rgb(14 17 26 / 82%);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.cidade__barra-cheia > * {
+  pointer-events: auto;
+}
+
+.cidade__barra-cheia .cidade__resumo {
+  flex: 1;
+  min-width: 120px;
+}
+
+.cidade__sair {
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .cidade__barra-cheia {
+    top: calc(8px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* No celular o zoom fica no topo; em tela cheia ele desce para baixo da barra (o botão de sair). */
+@media (max-width: 760px) {
+  .cidade__corpo--cheia .cidade__zoom {
+    top: calc(72px + env(safe-area-inset-top, 0px));
+  }
+}

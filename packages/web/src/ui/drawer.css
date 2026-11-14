@@ -1,0 +1,126 @@
+/* Gaveta à direita (ui/Drawer.tsx): o <dialog> cobre a janela com o fundo preto translúcido; o painel encosta na direita. */
+
+.ui-drawer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ui-text);
+  background: rgba(2, 3, 9, 0.7);
+  border: 0;
+  overscroll-behavior: contain;
+}
+
+.ui-drawer[open] {
+  animation: ui-drawer-fade 200ms ease-out;
+}
+
+.ui-drawer[data-closing="true"] {
+  background: transparent;
+  transition: background 180ms ease-in;
+}
+
+.ui-drawer::backdrop {
+  background: transparent;
+}
+
+.ui-drawer__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--ui-text);
+  background: var(--ui-surface-solid);
+  border-left: 1px solid var(--ui-border-strong);
+  /* Sombra forte na borda esquerda: a gaveta se destaca do fundo mesmo sobre uma página clara de miniaturas. */
+  box-shadow: -28px 0 64px rgba(0, 0, 0, 0.62), -2px 0 0 rgba(0, 0, 0, 0.5);
+}
+
+.ui-drawer__panel:focus {
+  outline: none;
+}
+
+.ui-drawer[open] .ui-drawer__panel {
+  animation: ui-drawer-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ui-drawer[data-closing="true"] .ui-drawer__panel {
+  transform: translateX(100%);
+  transition: transform 180ms cubic-bezier(0.4, 0, 1, 1);
+}
+
+.ui-drawer[data-dragging="true"] {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+/* A alça de arrasto da borda esquerda: faixa larga e invisível, com um traço que aparece ao passar o mouse. */
+.ui-drawer__grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -6px;
+  z-index: 3;
+  width: 14px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.ui-drawer__grip::after {
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 4px;
+  height: 56px;
+  content: "";
+  background: var(--ui-border-strong);
+  border-radius: 4px;
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity var(--ui-fast), background var(--ui-fast);
+}
+
+.ui-drawer__grip:hover::after,
+.ui-drawer__grip:focus-visible::after,
+.ui-drawer[data-dragging="true"] .ui-drawer__grip::after {
+  background: var(--ui-accent);
+  opacity: 1;
+}
+
+.ui-drawer__grip:focus-visible {
+  outline: none;
+}
+
+@keyframes ui-drawer-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-drawer-in {
+  from {
+    transform: translateX(48px);
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-drawer[open],
+  .ui-drawer[open] .ui-drawer__panel {
+    animation: none;
+  }
+
+  .ui-drawer[data-closing="true"],
+  .ui-drawer[data-closing="true"] .ui-drawer__panel {
+    transition: none;
+  }
+}

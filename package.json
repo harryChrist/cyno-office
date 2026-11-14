@@ -1,0 +1,55 @@
+{
+  "name": "cyno",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Escritório virtual em pixel art isométrica onde agentes reais (CLIs de assinatura) trabalham em workspaces. Cyno.",
+  "workspaces": [
+    "packages/shared",
+    "packages/cena",
+    "packages/server",
+    "packages/web",
+    "packages/site"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "concurrently --names server,web --prefix-colors blue,magenta --kill-others-on-fail \"npm run dev -w @cyno/server\" \"npm run dev -w @cyno/web\"",
+    "start": "npm run build -w @cyno/web && concurrently --names server,web --prefix-colors blue,magenta --kill-others-on-fail \"npm run start -w @cyno/server\" \"npm run preview -w @cyno/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces && tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "seed": "npm run seed -w @cyno/server -- --force",
+    "lab:setup": "npm run lab:setup -w @cyno/server",
+    "lab:up": "node scripts/lab-up.mjs",
+    "auth:code": "npm run -s auth:code -w @cyno/server",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:restart": "pm2 restart ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs",
+    "pm2:logs": "pm2 logs",
+    "docker:up": "docker compose up -d --build"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "minimatch": "^11.0.5"
+  },
+  "allowScripts": {
+    "esbuild": true
+  }
+}

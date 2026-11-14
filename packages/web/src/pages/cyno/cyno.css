@@ -1,0 +1,789 @@
+/*
+ * Página do Cyno (#/cyno): o chat com o agente da plataforma. Escura e moderna, com o âmbar frio do
+ * Cyno (--cyno*) como cor de destaque no lugar do violeta do resto do app (que é o chat do Maestro).
+ */
+/* O chat ocupa a altura toda também no celular (o composer fica colado embaixo; a conversa rola por dentro). */
+.page.cyno {
+  --cyno-pad: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 16px var(--cyno-pad);
+}
+
+/* A conversa é a coluna principal; o painel lateral (Resumo, Workspaces, Agenda, Mural) fica ao lado. */
+.cyno-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) var(--cyno-side-w, 360px);
+  position: relative;
+  gap: 16px;
+  width: 100%;
+  min-height: 0;
+}
+
+.cyno[data-side="closed"] .cyno-layout {
+  grid-template-columns: minmax(0, 1fr) 52px;
+}
+
+/* Alça entre a conversa e o painel: 8 px de área de toque no meio do vão de 16 px. */
+.cyno-resizer {
+  position: absolute;
+  top: 0;
+  right: calc(var(--cyno-side-w, 360px) + 4px);
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.cyno-resizer:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.cyno-resizer__line {
+  width: 2px;
+  height: 100%;
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.cyno-resizer:hover .cyno-resizer__line,
+.cyno-resizer:focus-visible .cyno-resizer__line,
+.cyno[data-resizing="true"] .cyno-resizer__line {
+  background: var(--ui-accent, #f5a524);
+}
+
+.cyno[data-resizing="true"] {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.cyno[data-resizing="true"] iframe {
+  pointer-events: none;
+}
+
+.cyno-conv {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---------- Cabeçalho: uma linha só ---------- */
+.cyno-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cyno-head__who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cyno-head__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.cyno-head__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* ---------- Orbe ---------- */
+.cyno-orb {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: #1a1306;
+  background: radial-gradient(circle at 32% 28%, #f6d99b, var(--cyno) 55%, var(--cyno-solid));
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 0 22px var(--cyno-glow);
+  transition:
+    filter var(--ui-med),
+    box-shadow var(--ui-med);
+}
+
+.cyno-orb svg {
+  width: 62%;
+  height: 62%;
+}
+
+.cyno-orb--lg {
+  width: 72px;
+  height: 72px;
+}
+
+.cyno-orb[data-status="sleeping"] {
+  filter: saturate(0.35) brightness(0.62);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.cyno-orb[data-status="waking"],
+.cyno-orb[data-status="working"] {
+  animation: cyno-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes cyno-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+      0 0 14px var(--cyno-glow);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.16) inset,
+      0 0 34px rgba(230, 184, 102, 0.55);
+  }
+}
+
+/* ---------- Estado, motor, nova conversa ---------- */
+.cyno-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  white-space: nowrap;
+}
+
+.cyno-status__dot {
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.cyno-status--awake {
+  color: var(--ui-text);
+}
+
+.cyno-status--awake .cyno-status__dot {
+  background: var(--ui-ok);
+  box-shadow: 0 0 8px rgba(61, 220, 151, 0.55);
+}
+
+.cyno-status--waking,
+.cyno-status--working {
+  color: var(--cyno);
+  background: var(--cyno-bg);
+  border-color: var(--cyno-border);
+}
+
+.cyno-status--waking .cyno-status__dot,
+.cyno-status--working .cyno-status__dot {
+  background: var(--cyno);
+  animation: cyno-pulse 1.2s ease-in-out infinite;
+}
+
+.cyno-status--attention {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-color: rgba(245, 181, 68, 0.3);
+}
+
+.cyno-status--attention .cyno-status__dot {
+  background: var(--ui-warn);
+}
+
+@keyframes cyno-pulse {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+/* O estado ao lado do título só aparece no celular (no computador ele fica entre as ferramentas). */
+.cyno-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 0 10px 0 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.cyno-chip--button {
+  cursor: pointer;
+  transition:
+    border-color var(--ui-fast),
+    color var(--ui-fast);
+}
+
+.cyno-chip--button:hover,
+.cyno-chip--button[aria-expanded="true"] {
+  color: var(--ui-text);
+  border-color: var(--cyno-border);
+}
+
+.cyno-chip--button:focus-visible {
+  outline: 2px solid var(--cyno);
+  outline-offset: 2px;
+}
+
+.cyno-chip__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cyno-solid.ui-button {
+  color: #1a1306;
+  background: var(--cyno);
+  border-color: transparent;
+}
+
+.cyno-solid.ui-button:hover:not(:disabled) {
+  background: #f0c77f;
+}
+
+.cyno-solid.ui-button:disabled {
+  opacity: 0.5;
+}
+
+.cyno-new.ui-button {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  background: transparent;
+  border-color: var(--ui-border-strong);
+}
+
+.cyno-new.ui-button:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border-color: var(--cyno-border);
+}
+
+.cyno-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 4px 3px 12px;
+  background: var(--cyno-bg);
+  border: 1px solid var(--cyno-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.cyno-confirm__text {
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.cyno-confirm .ui-button {
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* ---------- Seletor de modelo ---------- */
+.cyno-model {
+  position: relative;
+  max-width: 100%;
+}
+
+.cyno-model__pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 4px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 14px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow-lg);
+}
+
+.cyno-model__hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.cyno-model__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* ---------- Chat ---------- */
+.cyno-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--ui-surface);
+  backdrop-filter: var(--ui-blur);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+}
+
+.cyno-chat__scroll.mchat {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 18px 8px;
+}
+
+.cyno-list {
+  gap: 12px;
+}
+
+/* No Cyno, a fala do dono usa o âmbar (o violeta é o do Maestro). */
+.cyno .mchat__msg--user .mchat__bubble {
+  color: var(--ui-text);
+  background: rgba(230, 184, 102, 0.17);
+  border: 1px solid rgba(230, 184, 102, 0.38);
+}
+
+.cyno .mchat__msg--agent .mchat__bubble {
+  background: var(--ui-surface-2);
+}
+
+.cyno .mchat__msg {
+  max-width: min(100%, 720px);
+}
+
+.cyno .mchat__bubble {
+  font-size: 14px;
+}
+
+.cyno-notice--info {
+  color: var(--cyno);
+  background: var(--cyno-bg);
+}
+
+.cyno-loading {
+  margin: 40px 0;
+  font-size: 14px;
+  text-align: center;
+  color: var(--ui-text-3);
+}
+
+/* ---------- Trabalho ao vivo ---------- */
+.cyno-work-item {
+  list-style: none;
+}
+
+.cyno-work {
+  max-width: min(100%, 720px);
+  padding: 0;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+
+.cyno-work--live {
+  border-color: var(--cyno-border);
+  background: var(--cyno-bg);
+}
+
+.cyno-work__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.cyno-work__head::-webkit-details-marker {
+  display: none;
+}
+
+.cyno-work--live .cyno-work__head {
+  color: var(--cyno);
+  font-weight: 600;
+}
+
+.cyno-work__tick {
+  color: var(--ui-ok);
+}
+
+.cyno-steps {
+  display: grid;
+  gap: 2px;
+  padding: 0 12px 10px;
+  margin: 0;
+  list-style: none;
+}
+
+.cyno-step {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 3px 0;
+  color: var(--ui-text-2);
+}
+
+.cyno-step__icon {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  color: var(--ui-text-3);
+}
+
+.cyno-step__body {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.cyno-step__label {
+  overflow-wrap: anywhere;
+}
+
+.cyno-step[data-kind="note"] .cyno-step__label {
+  font-style: italic;
+  color: var(--ui-text-3);
+}
+
+.cyno-step__detail {
+  font-size: 12px;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.cyno-step__time {
+  flex: none;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.cyno-step--running .cyno-step__label {
+  color: var(--cyno);
+}
+
+.cyno-step--danger .cyno-step__label {
+  color: var(--ui-danger);
+}
+
+.cyno-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--cyno-border);
+  border-top-color: var(--cyno);
+  border-radius: 50%;
+  animation: cyno-spin 0.8s linear infinite;
+}
+
+@keyframes cyno-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Estado vazio ---------- */
+.cyno-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 520px;
+  padding: 28px 8px 8px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.cyno-empty__title {
+  margin: 10px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cyno-empty__text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-text-2);
+}
+
+.cyno-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  margin: 12px 0 0;
+  list-style: none;
+}
+
+.cyno-suggestion {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text);
+  text-align: left;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+  transition:
+    border-color var(--ui-fast),
+    background-color var(--ui-fast);
+}
+
+.cyno-suggestion:hover {
+  background: var(--cyno-bg);
+  border-color: var(--cyno-border);
+}
+
+.cyno-suggestion:focus-visible {
+  outline: 2px solid var(--cyno);
+  outline-offset: 2px;
+}
+
+/* ---------- Compositor ---------- */
+.cyno-compose {
+  position: relative;
+  display: grid;
+  flex: none;
+  gap: 4px;
+  padding: 10px 12px 10px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.cyno-compose__box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 14px;
+  transition:
+    border-color var(--ui-fast),
+    box-shadow var(--ui-med);
+}
+
+/* O foco é um anel âmbar só (borda + 1 px), sem halo por fora. */
+.cyno-compose__box:focus-within {
+  border-color: var(--cyno);
+  box-shadow: 0 0 0 1px var(--cyno);
+}
+
+/* Um anel só: o âmbar da caixa. Nenhum outro (o roxo global de foco) aparece por dentro dela. */
+.cyno-compose__box > .cyno-compose__input,
+.cyno-compose__box > .cyno-compose__input:focus,
+.cyno-compose__box > .cyno-compose__input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.cyno-compose__input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 180px;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  resize: none;
+  background: transparent;
+  border: 0;
+  outline: none;
+  field-sizing: content;
+}
+
+/* O anel de foco é o da caixa inteira (focus-within), não o do campo. */
+.cyno-compose__input:focus-visible {
+  outline: none;
+}
+
+.cyno-compose__input::placeholder {
+  color: var(--ui-text-3);
+}
+
+.cyno-compose__send {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1306;
+  background: var(--cyno);
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    filter var(--ui-fast),
+    opacity var(--ui-fast);
+}
+
+.cyno-compose__send:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.cyno-compose__send:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.cyno-compose__send:focus-visible {
+  outline: 2px solid var(--ui-text);
+  outline-offset: 2px;
+}
+
+.cyno-compose__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.cyno-compose__hint kbd {
+  padding: 0 5px;
+  font: inherit;
+  font-size: 11px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+}
+
+.cyno-compose__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-danger);
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 900px) {
+  .page.cyno {
+    --cyno-pad: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .cyno-layout,
+  .cyno[data-side="closed"] .cyno-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cyno-resizer {
+    display: none;
+  }
+
+  .cyno-conv {
+    gap: 10px;
+  }
+
+  .cyno-head__title {
+    font-size: 18px;
+  }
+
+  .cyno-orb {
+    width: 32px;
+    height: 32px;
+  }
+
+  .cyno-model {
+    min-width: 0;
+  }
+
+  .cyno-model__pop {
+    right: auto;
+    left: 0;
+  }
+
+  .cyno-chat__scroll.mchat {
+    padding: 12px 10px 6px;
+  }
+
+  .cyno-compose__send-text {
+    display: none;
+  }
+
+  .cyno-compose__send {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .cyno-compose__hint {
+    display: none;
+  }
+
+  .cyno-confirm {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 520px) {
+  .cyno-head {
+    flex-wrap: wrap;
+  }
+
+  .cyno-head__tools {
+    width: 100%;
+  }
+
+  .cyno-head__tools .cyno-model {
+    flex: 1 1 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyno-orb[data-status="waking"],
+  .cyno-orb[data-status="working"],
+  .cyno-status__dot,
+  .cyno-spinner {
+    animation: none;
+  }
+}

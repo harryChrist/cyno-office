@@ -1,0 +1,1577 @@
+/*
+ * Navegação lateral (protótipo): barra à esquerda no computador (aberta ~232px ou recolhida em
+ * ícones), gaveta no celular. Mesmo vidro, bordas e acento da barra de cima.
+ */
+
+/* ---------- Medidas: o resto da tela se ajusta por --nav-w (largura ocupada à esquerda) ---------- */
+:root {
+  --nav-w: 0px;
+  --sidenav-w: 232px;
+  --sidenav-rail-w: 60px;
+}
+
+/* Com a barra lateral não há barra de cima: o conteúdo começa no topo e à direita da barra. */
+:root:has(.sidenav) {
+  --topbar-h: 0px;
+  --topbar-top: 0px;
+  --nav-w: calc(var(--sidenav-w) + var(--gap));
+}
+
+:root:has(.sidenav--rail) {
+  --nav-w: calc(var(--sidenav-rail-w) + var(--gap));
+}
+
+/* Celular: só a barra curta em cima (uma linha). Vence o "--topbar-h: 102px" da barra antiga. */
+:root:has(.mbar) {
+  --topbar-h: 52px;
+}
+
+/* Páginas e estado vazio continuam cobrindo a tela inteira (o fundo passa por trás da barra de
+   vidro), mas o conteúdo começa depois dela. */
+html .pages,
+html .no-ws {
+  padding-left: var(--nav-w);
+}
+
+/* "html" na frente: este arquivo carrega antes do ui.css e do pages.css. */
+html .taskbox {
+  left: calc(var(--nav-w) + var(--controls-w) + 2 * var(--gap));
+}
+
+@media (max-width: 760px) {
+  html .taskbox {
+    left: var(--gap);
+  }
+}
+
+/* Fora do Office o escritório não aparece por trás da barra de vidro (fica o fundo do app). */
+:root:has(.sidenav):has(.pages, .no-ws) .office-canvas,
+:root:has(.mbar):has(.pages, .no-ws) .office-canvas {
+  visibility: hidden;
+}
+
+/* ---------- Barra lateral (computador) ---------- */
+.sidenav {
+  position: fixed;
+  top: var(--gap);
+  bottom: var(--gap);
+  left: var(--gap);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: var(--sidenav-w);
+  color: var(--ui-text);
+  background:
+    linear-gradient(180deg, rgba(139, 124, 255, 0.06), transparent 160px),
+    var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: var(--ui-blur);
+  transition: width 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sidenav--rail {
+  width: var(--sidenav-rail-w);
+}
+
+/* Arrastando a borda: a largura segue o ponteiro sem animação, e o cursor fica de redimensionar. */
+.sidenav--dragging {
+  transition: none;
+}
+
+:root:has(.sidenav--dragging),
+:root:has(.sidenav--dragging) * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+/* Puxador na borda direita: invisível até passar o mouse, arrastar ou focar pelo teclado. */
+.sidenav__resize {
+  position: absolute;
+  top: 14px;
+  right: -6px;
+  bottom: 14px;
+  z-index: 2;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidenav__resize::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 3px;
+  content: "";
+  background: transparent;
+  border-radius: 3px;
+  transition:
+    background-color var(--ui-fast),
+    box-shadow var(--ui-fast);
+}
+
+.sidenav__resize:hover::after,
+.sidenav--dragging .sidenav__resize::after {
+  background: var(--ui-accent);
+  box-shadow: 0 0 10px var(--ui-accent-glow);
+}
+
+.sidenav__resize:focus-visible {
+  outline: none;
+}
+
+.sidenav__resize:focus-visible::after {
+  background: var(--ui-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-focus) 35%, transparent);
+}
+
+.sidenav__head {
+  display: grid;
+  flex: none;
+  gap: 10px;
+  padding: 12px 10px 10px;
+}
+
+.sidenav__logo {
+  display: block;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  box-shadow: 0 0 14px var(--ui-accent-glow);
+}
+
+/* O seletor ocupa a largura toda da barra (o menu abre logo abaixo). */
+.sidenav__ws .ws-picker {
+  display: block;
+}
+
+.sidenav__ws .ws-picker__button {
+  width: 100%;
+  max-width: none;
+  border-radius: 12px;
+}
+
+.sidenav__ws .ws-picker__name {
+  flex: 1;
+  max-width: none;
+  text-align: left;
+}
+
+/* Menu opaco: por cima da lista de páginas, nada pode transparecer. */
+.sidenav__ws .ws-picker__menu {
+  min-width: 100%;
+  background: var(--ui-surface-solid);
+}
+
+.sidenav__scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 10px 8px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+/* ---------- Seções e itens ---------- */
+.navsections {
+  display: grid;
+  gap: 4px;
+}
+
+.navsection__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navsection--top {
+  margin-bottom: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.navsection__title {
+  margin: 12px 0 4px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.navitem {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text-2);
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background-color var(--ui-fast),
+    color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.navitem:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.navitem:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+/* Página atual: fundo violeta suave, ícone aceso e um traço de luz à esquerda. */
+.navitem[aria-current="page"] {
+  font-weight: 600;
+  color: var(--ui-text);
+  background: linear-gradient(90deg, rgba(139, 124, 255, 0.2), rgba(139, 124, 255, 0.08));
+  border-color: rgba(139, 124, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Painel aberto (notificações, agentes): realce discreto, para não competir com a página atual. */
+.navitem[aria-expanded="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border-strong);
+}
+
+.navitem[aria-current="page"]::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -11px;
+  width: 3px;
+  content: "";
+  background: var(--ui-accent);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px var(--ui-accent-glow);
+}
+
+.nav-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.navitem[aria-current="page"] .nav-icon,
+.navitem[aria-expanded="true"] .nav-icon {
+  color: var(--ui-accent);
+}
+
+.navitem__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.navitem__icon-wrap {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+/* Contador: pílula à direita do nome. */
+.navitem__badge {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ui-text);
+  background: rgba(139, 124, 255, 0.22);
+  border-radius: var(--ui-radius-pill);
+}
+
+.navitem[aria-current="page"] .navitem__badge--accent {
+  color: var(--ui-on-solid);
+  background: var(--ui-accent-solid);
+}
+
+.navitem__badge--danger,
+.navitem[aria-current="page"] .navitem__badge--danger {
+  color: #fff;
+  background: var(--ui-danger-solid);
+}
+
+.navitem__badge--ok {
+  color: #06281a;
+  background: var(--ui-ok);
+}
+
+/* Ponto de aviso novo no canto do ícone (o mesmo coral do sino antigo). */
+.navitem__dot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  background: var(--ui-tc-10);
+  border: 2px solid var(--ui-surface-solid);
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ui-tc-10) 70%, transparent);
+}
+
+/* ---------- Rodapé: conexão, agentes, Configurações e recolher ---------- */
+.navfoot {
+  display: grid;
+  flex: none;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.navfoot .conn:not(.conn--open) {
+  justify-self: stretch;
+  max-width: none;
+}
+
+.navfoot__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.navfoot__settings {
+  flex: 1;
+  min-width: 0;
+}
+
+.navfoot__collapse {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    background-color var(--ui-fast),
+    color var(--ui-fast);
+}
+
+.navfoot__collapse:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+/* Agentes: cartão com o ponto de status, "N agentes" e "M trabalhando". */
+.navagents {
+  min-height: 48px;
+  background: rgba(8, 10, 24, 0.45);
+  border-color: var(--ui-border);
+}
+
+.navagents:hover {
+  border-color: var(--ui-border-strong);
+}
+
+.navagents__dot {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
+  background: var(--ui-ok);
+  border: 2px solid var(--ui-surface-solid);
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ui-ok) 60%, transparent);
+}
+
+.navagents--busy .navagents__dot {
+  animation: ui-blink 1.6s ease-in-out infinite;
+}
+
+.navagents--offline .navagents__dot {
+  background: var(--ui-text-3);
+  box-shadow: none;
+}
+
+.navagents__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.navagents__count {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.navagents__working {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.navagents--busy .navagents__working {
+  color: var(--ui-ok);
+}
+
+/* Aberta, o número de quem trabalha já está no texto: o selo só aparece recolhida. */
+.navagents__rail-count {
+  display: none;
+}
+
+.navagents--static {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 0;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--ui-text-3);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+}
+
+.navagents--error {
+  color: var(--ui-danger);
+}
+
+/* ---------- Barra recolhida: só ícones, centralizados, com dica ao lado ---------- */
+.sidenav--rail .sidenav__head {
+  justify-items: center;
+  padding-inline: 0;
+}
+
+.sidenav--rail .navitem__label,
+.sidenav--rail .navagents__text,
+.sidenav--rail .ws-picker__name,
+.sidenav--rail .ws-picker__caret {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Recolhida, o seletor é só a inicial colorida do workspace. */
+.sidenav--rail .sidenav__ws .ws-picker__button {
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 12px;
+}
+
+.sidenav--rail .sidenav__ws .ws-picker__button:hover:not(:disabled),
+.sidenav--rail .sidenav__ws .ws-picker__button[aria-expanded="true"] {
+  background: var(--ui-hover);
+  border-color: var(--ui-border);
+}
+
+.sidenav--rail .sidenav__ws .ws-picker__initial {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+}
+
+.sidenav--rail .sidenav__ws .ws-picker__menu {
+  min-width: 240px;
+}
+
+.sidenav--rail .sidenav__scroll {
+  padding-inline: 0;
+}
+
+.sidenav--rail .navsection__list,
+.sidenav--rail .navsections {
+  justify-items: center;
+}
+
+/* Recolhida, o título da seção vira um traço fino. */
+.sidenav--rail .navsection__title {
+  width: 24px;
+  height: 1px;
+  margin: 10px auto 8px;
+  padding: 0;
+  overflow: hidden;
+  color: transparent;
+  background: var(--ui-border-strong);
+}
+
+.sidenav--rail .navitem {
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.sidenav--rail /* Painel aberto (notificações, agentes): realce discreto, para não competir com a página atual. */
+.navitem[aria-expanded="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border-strong);
+}
+
+.navitem[aria-current="page"]::before {
+  left: -10px;
+}
+
+/* Recolhida, o contador vira uma bolinha no canto de cima do ícone. */
+.sidenav--rail .navitem__badge {
+  position: absolute;
+  top: 2px;
+  left: 21px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  border: 2px solid var(--ui-surface-solid);
+  box-sizing: content-box;
+}
+
+.sidenav--rail .navagents {
+  min-height: 40px;
+}
+
+.sidenav--rail .navagents__rail-count {
+  display: inline-grid;
+}
+
+.sidenav--rail .navfoot {
+  justify-items: center;
+  padding-inline: 0;
+}
+
+.sidenav--rail .navfoot__row {
+  flex-direction: column;
+}
+
+.sidenav--rail .navfoot__settings {
+  flex: none;
+}
+
+/* Fora do ar, recolhida: só o ponto (o texto vai na dica e para leitores de tela). */
+.sidenav--rail .navfoot .conn:not(.conn--open) {
+  justify-self: center;
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.sidenav--rail .conn__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Dica do item (recolhida): balão à direita da barra. */
+.sidenav__tip {
+  position: fixed;
+  left: calc(var(--nav-w) + 6px);
+  z-index: 40;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+  white-space: nowrap;
+  pointer-events: none;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+  box-shadow: var(--ui-shadow);
+  transform: translateY(-50%);
+  animation: navtip-in 120ms ease-out;
+}
+
+@keyframes navtip-in {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+}
+
+/* ---------- Painel ao lado da barra (notificações, agentes) ---------- */
+.navpanel {
+  position: fixed;
+  top: var(--gap);
+  bottom: var(--gap);
+  left: calc(var(--nav-w) + var(--gap));
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  width: min(380px, calc(100vw - var(--nav-w) - 2 * var(--gap)));
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-surface-solid) 94%, transparent);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-lg);
+  backdrop-filter: var(--ui-blur);
+  animation: navpanel-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.navpanel--agentes {
+  width: min(460px, calc(100vw - var(--nav-w) - 2 * var(--gap)));
+}
+
+.navpanel .bell__body,
+.navpanel .agents__body {
+  flex: 1;
+}
+
+@keyframes navpanel-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+/* ---------- Celular: barra curta em cima ---------- */
+.mbar {
+  position: fixed;
+  top: var(--topbar-top);
+  right: var(--gap);
+  left: var(--gap);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--topbar-h);
+  padding: 0 6px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  box-shadow: var(--ui-shadow);
+  backdrop-filter: var(--ui-blur);
+}
+
+.mbar__button {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.mbar__button:hover,
+.mbar__button[aria-expanded="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border);
+}
+
+.mbar__button .nav-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.mbar__button .navitem__dot {
+  top: 6px;
+  right: 7px;
+}
+
+.mbar__titles {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mbar__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mbar__ws {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Fora do ar no celular: só o ponto (o texto fica na dica e para leitores de tela). */
+.mbar .conn:not(.conn--open) {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+}
+
+.mbar .conn__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* ---------- Celular: gaveta (dialog modal) ---------- */
+.mdrawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  display: flex;
+  flex-direction: column;
+  width: min(304px, 86vw);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0 0 env(safe-area-inset-bottom);
+  color: var(--ui-text);
+  background:
+    linear-gradient(180deg, rgba(139, 124, 255, 0.08), transparent 200px),
+    var(--ui-surface-solid);
+  border: 0;
+  border-right: 1px solid var(--ui-border-strong);
+  border-radius: 0 18px 18px 0;
+  box-shadow: var(--ui-shadow-lg);
+  animation: mdrawer-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mdrawer:not([open]) {
+  display: none;
+}
+
+.mdrawer::backdrop {
+  background: rgba(4, 5, 14, 0.62);
+  backdrop-filter: blur(2px);
+  animation: mdrawer-fade 220ms ease-out;
+}
+
+.mdrawer__head {
+  padding: 14px 14px 10px;
+}
+
+.mdrawer .sidenav__scroll {
+  padding-inline: 14px;
+}
+
+.mdrawer .navfoot {
+  padding: 10px 14px 14px;
+}
+
+/* Alvos de toque maiores no celular. */
+.mdrawer .navitem {
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.mdrawer /* Painel aberto (notificações, agentes): realce discreto, para não competir com a página atual. */
+.navitem[aria-expanded="true"] {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border-color: var(--ui-border-strong);
+}
+
+.navitem[aria-current="page"]::before {
+  left: -15px;
+}
+
+.mdrawer__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-left: auto;
+  padding: 0;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.mdrawer__close:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+}
+
+@keyframes mdrawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes mdrawer-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Celular: o painel vira uma folha logo abaixo da barra curta. */
+@media (max-width: 767px) {
+  .navpanel,
+  .navpanel--agentes {
+    top: calc(var(--topbar-bottom) + var(--gap));
+    right: var(--gap);
+    bottom: auto;
+    left: var(--gap);
+    z-index: 30;
+    width: auto;
+    max-height: calc(100dvh - var(--topbar-bottom) - 2 * var(--gap));
+    animation-name: navpanel-down;
+  }
+
+  @keyframes navpanel-down {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidenav,
+  .navpanel,
+  .mdrawer,
+  .mdrawer::backdrop,
+  .sidenav__tip {
+    transition: none;
+    animation: none;
+  }
+
+  .navagents--busy .navagents__dot {
+    animation: none;
+  }
+}
+
+/* ---------- Cyno no topo da barra: logo + nome + "Início" numa entrada só (marca e página inicial) ---------- */
+.navsection--cyno {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.navitem--cyno {
+  gap: 10px;
+  min-height: 42px;
+  padding-inline: 8px;
+}
+
+.navitem--cyno .navitem__label {
+  flex: none;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ui-text);
+}
+
+.navitem__sub {
+  font-size: 11.5px;
+  line-height: 1.25;
+  color: var(--ui-text-3);
+}
+
+.navitem--cyno:hover .navitem__sub,
+.navitem--cyno[aria-current="page"] .navitem__sub {
+  color: var(--cyno);
+}
+
+.navitem--cyno[aria-current="page"] {
+  background: linear-gradient(90deg, rgba(230, 184, 102, 0.16), rgba(230, 184, 102, 0.05));
+  border-color: var(--cyno-border);
+}
+
+.navitem--cyno[aria-current="page"]::before {
+  background: var(--cyno);
+  box-shadow: 0 0 10px var(--cyno-glow);
+}
+
+.sidenav--rail .navitem--cyno {
+  min-height: 40px;
+}
+
+.mdrawer .navsection--cyno {
+  flex: 1;
+  min-width: 0;
+}
+
+.mdrawer__top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Atalhos (Sua agenda, Navegador): dois botões lado a lado no rodapé; na gaveta do celular, uma seção com título. */
+.navshortcuts__list {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navshortcuts__list > li {
+  flex: 1;
+  min-width: 0;
+}
+
+.navitem--shortcut {
+  justify-content: center;
+}
+
+.mdrawer .navshortcuts {
+  padding: 8px 10px 0;
+}
+
+.mdrawer .navshortcuts__list {
+  flex-direction: column;
+}
+
+.mdrawer .navitem--shortcut {
+  justify-content: flex-start;
+}
+
+.sidenav--rail .navshortcuts__list {
+  flex-direction: column;
+  align-items: center;
+}
+
+.navitem--shortcut {
+  gap: 6px;
+  padding-inline: 8px;
+  font-size: 13px;
+}
+
+/* ---------- Nomes claros: nome + linha de descrição, grupos com destinos, menu flutuante ---------- */
+.navitem__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.navitem__hint {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.25;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navitem:has(.navitem__hint) {
+  min-height: 46px;
+  padding-block: 5px;
+}
+
+.navitem[aria-current="page"] .navitem__hint {
+  color: var(--ui-text-2);
+}
+
+/* Recolhida: nome e descrição somem (a dica ao lado mostra os dois). */
+.sidenav--rail .navitem__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.sidenav--rail .navitem:has(.navitem__hint) {
+  min-height: 40px;
+  padding-block: 0;
+}
+
+.sidenav__tip {
+  display: grid;
+  gap: 1px;
+}
+
+.sidenav__tip-hint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ui-text-2);
+}
+
+/* Grupo (Gestão, Biblioteca): o item, o botão de recolher e os destinos recuados. */
+.navgroup__row {
+  position: relative;
+}
+
+.navgroup .navitem--group {
+  padding-right: 38px;
+}
+
+.navgroup__toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  transform: translateY(-50%);
+}
+
+.navgroup__toggle:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.navgroup__toggle:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.navgroup__chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--ui-fast);
+}
+
+.navgroup__toggle[aria-expanded="false"] .navgroup__chevron {
+  transform: rotate(-90deg);
+}
+
+/* Os selos ficam antes do botão de recolher. */
+.navgroup .navitem--group .navitem__badge {
+  margin-right: 2px;
+}
+
+.navsub {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 6px 19px;
+  padding: 0 0 0 9px;
+  list-style: none;
+  border-left: 1px solid var(--ui-border);
+}
+
+.navitem--sub {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13.5px;
+}
+
+.navitem--sub[aria-current="page"]::before {
+  display: none;
+}
+
+.navitem--sub[aria-current="page"] {
+  color: var(--ui-text);
+  background: rgba(139, 124, 255, 0.16);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mdrawer .navitem--sub {
+  min-height: 40px;
+  font-size: 14.5px;
+}
+
+/* Barra recolhida: menu flutuante ao passar o mouse no ícone do grupo. */
+.navfly {
+  position: absolute;
+  left: 100%;
+  z-index: 40;
+  padding-left: 6px;
+}
+
+.navfly__box {
+  min-width: 210px;
+  padding: 8px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--ui-shadow);
+  animation: navtip-in 120ms ease-out;
+}
+
+.navfly__head {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 4px 10px 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.navfly__hint {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ui-text-3);
+}
+
+.navsub--fly {
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
+
+/* Atalhos do rodapé: lado a lado (rótulo curto); na gaveta, um embaixo do outro. */
+.sidenav--rail .navitem--shortcut {
+  justify-content: center;
+}
+
+/* Aviso "onde foi parar" no topo da barra. */
+.navmoved {
+  position: relative;
+  margin: 0 0 8px;
+  padding: 9px 30px 9px 11px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-2);
+  background: rgba(139, 124, 255, 0.1);
+  border: 1px solid rgba(139, 124, 255, 0.28);
+  border-radius: 10px;
+}
+
+.navmoved__close {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.navmoved__close:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.navmoved__close .nav-icon {
+  width: 12px;
+  height: 12px;
+}
+
+
+
+.sidenav--rail .navmoved {
+  display: none;
+}
+
+/* Itens mais compactos (a barra mostra mais coisas agora) e menu flutuante legível na barra recolhida. */
+.navitem:has(.navitem__hint) {
+  min-height: 42px;
+  padding-block: 4px;
+}
+
+.navitem__hint {
+  font-size: 11px;
+}
+
+.navitem--shortcut:has(.navitem__hint) {
+  min-height: 38px;
+}
+
+.navmoved {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.sidenav--rail .navfly .navitem {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.sidenav--rail .navfly .navitem__label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  clip: auto;
+}
+
+.sidenav--rail .navfly .navitem--sub[aria-current="page"]::before {
+  display: none;
+}
+
+/* Gestão e Biblioteca têm descrição mais longa (e o botão de recolher ao lado): até duas linhas. */
+.navitem--group .navitem__hint {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ---------- Compacta: tudo cabe sem rolar em 1440x900 e 1366x768 ---------- */
+/* A descrição fica só na dica (title): a linha extra deixava a barra alta demais. */
+.sidenav .navitem__hint {
+  display: none;
+}
+
+.sidenav .navitem:has(.navitem__hint),
+.sidenav .navitem--group:has(.navitem__hint) {
+  min-height: 36px;
+  padding-block: 0;
+}
+
+.sidenav .navitem--sub {
+  min-height: 28px;
+  font-size: 13px;
+}
+
+.sidenav .navsub {
+  margin: 1px 0 4px 19px;
+}
+
+.sidenav .navsection__title {
+  margin: 8px 0 3px;
+}
+
+.sidenav .navsection--top {
+  margin-bottom: 4px;
+  padding-bottom: 6px;
+}
+
+.sidenav .navitem--shortcut:has(.navitem__hint) {
+  min-height: 36px;
+}
+
+.sidenav__head {
+  gap: 8px;
+  padding: 10px 10px 8px;
+}
+
+.navfoot {
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+
+.navagents {
+  min-height: 40px;
+}
+
+.navmoved {
+  margin-bottom: 6px;
+  padding: 6px 28px 6px 10px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.navmoved__text {
+  margin: 0;
+}
+
+.sidenav .navitem--shortcut {
+  justify-content: center;
+  gap: 6px;
+}
+
+.mdrawer .navitem--shortcut {
+  justify-content: flex-start;
+}
+
+.mdrawer .navitem__hint {
+  display: block;
+}
+
+.sidenav--rail .navitem:has(.navitem__hint),
+.sidenav--rail .navitem--shortcut:has(.navitem__hint) {
+  min-height: 40px;
+}
+
+/* Telas baixas (notebook 1366x768): mais compacto ainda, para os dois grupos abertos caberem. */
+@media (max-height: 820px) {
+  .sidenav:not(.sidenav--rail) .navitem:has(.navitem__hint),
+  .sidenav:not(.sidenav--rail) .navitem--group:has(.navitem__hint),
+  .sidenav:not(.sidenav--rail) .navitem--shortcut:has(.navitem__hint) {
+    min-height: 32px;
+  }
+
+  .sidenav .navitem--sub {
+    min-height: 26px;
+  }
+
+  .sidenav .navagents {
+    min-height: 36px;
+  }
+
+  .sidenav .navsection__title {
+    margin: 6px 0 2px;
+  }
+
+  .sidenav__head {
+    gap: 6px;
+    padding: 8px 10px 6px;
+  }
+}
+
+@media (max-height: 820px) {
+  .sidenav .sidenav__scroll {
+    padding-bottom: 0;
+  }
+
+  .sidenav .navmoved {
+    margin-bottom: 4px;
+  }
+
+  .sidenav .navsub {
+    margin-bottom: 2px;
+  }
+}
+
+/* ---------- Uso do plano (rodapé do menu e da gaveta): uma linha por motor ---------- */
+.navusage {
+  display: grid;
+  gap: 6px;
+  align-items: stretch;
+  padding: 8px 10px 9px;
+  min-height: 0;
+  background: rgba(8, 10, 24, 0.45);
+  border-color: var(--ui-border);
+}
+
+.navusage:hover {
+  border-color: var(--ui-border-strong);
+}
+
+.navusage__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.navusage__head .nav-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.navusage__rows {
+  display: grid;
+  gap: 5px;
+}
+
+.navusage__row {
+  --usage-engine: var(--ui-text-3);
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.navusage__row[data-provider="claude"] {
+  --usage-engine: #d97757;
+}
+
+.navusage__row[data-provider="gemini"] {
+  --usage-engine: #60a5fa;
+}
+
+.navusage__row[data-provider="freebuff"] {
+  --usage-engine: #a78bfa;
+}
+
+.navusage__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navusage__bar {
+  position: relative;
+  height: 5px;
+  overflow: hidden;
+  background: var(--ui-bar-track);
+  border-radius: 999px;
+}
+
+.navusage__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ui-level-ok);
+  border-radius: inherit;
+  transition: width var(--ui-med);
+}
+
+.navusage__row--warn .navusage__fill {
+  background: var(--ui-level-warn);
+}
+
+.navusage__row--danger .navusage__fill {
+  background: var(--ui-level-danger);
+}
+
+.navusage__pct {
+  min-width: 34px;
+  text-align: right;
+  color: var(--ui-text);
+  white-space: nowrap;
+}
+
+.navusage__row--warn .navusage__pct {
+  font-weight: 600;
+  color: var(--ui-warn);
+}
+
+.navusage__row--danger .navusage__pct {
+  font-weight: 600;
+  color: var(--ui-danger);
+}
+
+/* Dado antigo: barra e número esmaecidos, com o ⏱ antes do número. */
+.navusage__row--old .navusage__fill {
+  opacity: 0.55;
+}
+
+.navusage__row--old .navusage__pct {
+  color: var(--ui-text-3);
+}
+
+.navusage__old {
+  margin-right: 3px;
+  font-size: 10px;
+  color: var(--ui-warn);
+}
+
+/* O ponto de alerta só aparece com o menu recolhido (aberto, a barra já mostra a cor). */
+.navusage__dot {
+  display: none;
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  background: var(--ui-warn);
+  border: 2px solid var(--ui-surface-solid);
+  border-radius: 50%;
+  box-sizing: content-box;
+}
+
+.navusage__dot--danger {
+  background: var(--ui-danger);
+}
+
+.sidenav--rail .navusage {
+  display: flex;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.sidenav--rail .navusage__rows,
+.sidenav--rail .navusage__title {
+  display: none;
+}
+
+.sidenav--rail .navusage__dot {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navusage__fill {
+    transition: none;
+  }
+}
+
+/* ---------- Barra recolhida: itens com sublinks (Gestão, Biblioteca) iguais aos demais ---------- */
+/* O espaço da seta de recolher (padding-right: 38px do grupo) não existe recolhida: a caixa é a de 40 px, ícone no meio. */
+.sidenav--rail .navgroup .navitem--group {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+}
+
+.sidenav--rail .navgroup .navitem--group .navitem__badge {
+  margin-right: 0;
+}
+
+.sidenav--rail .navgroup__row {
+  display: grid;
+  justify-items: center;
+}
+
+/* Os selos recolhidos ficam dentro da caixa de 40 px (canto de cima, à direita), sem estourar para a barra ou o conteúdo. */
+.sidenav--rail .navitem__badge {
+  top: 1px;
+  right: 1px;
+  left: auto;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  line-height: 12px;
+}
+
+/* Tela cheia do mapa do Escritório (`useTelaCheia`, classe na raiz; vale também para a cidade: a camada dela fica dentro de `.pages`, abaixo do menu): o menu lateral, a barra do celular e o painel
+   lateral somem; ficam o mapa, a caixa de pedir ao Maestro e os controles (com o botão de sair). */
+:root.is-mapa-cheio .sidenav,
+:root.is-mapa-cheio .mbar,
+:root.is-mapa-cheio .side-panel {
+  display: none;
+}
+
+:root.is-mapa-cheio:has(.sidenav),
+:root.is-mapa-cheio:has(.mbar) {
+  --nav-w: 0px;
+}

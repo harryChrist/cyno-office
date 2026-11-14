@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Dúvidas
+    url: https://github.com/harryChrist/cyno-office/discussions
+    about: Perguntas e conversas sobre como usar o Cyno ficam nas Discussions.
+  - name: Vulnerabilidade de segurança
+    url: https://github.com/harryChrist/cyno-office/security/advisories/new
+    about: Relate em privado, sem abrir issue pública.

@@ -1,0 +1,41 @@
+# Dependências e builds
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Dados do app: workspaces, projetos, tarefas, mídia, conversas dos agentes,
+# perfis de navegador, tokens de MCP, senha (auth.json) e apps instalados.
+# Nada disso vai para o git.
+data/
+data-*/
+*.legacy.json
+
+# Segredos e configuração local
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+auth.json
+
+# Backups e pacotes
+*.tar.gz
+*.tgz
+*.zip
+
+# Testes e QA
+test-results/
+playwright-report/
+blob-report/
+
+# Logs e sistema
+*.log
+.DS_Store
+
+# Notas de trabalho locais (fila, planos e estudos usados durante o desenvolvimento)
+vault/
+# Ferramentas de bastidor do desenvolvimento (scripts de conferência e agentes de IA de apoio)
+qa/
+.claude/

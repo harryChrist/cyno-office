@@ -1,0 +1,625 @@
+/* ---------- Terminal do agente (só leitura): o log de trabalho como sessão de terminal ---------- */
+.aterm {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--ui-bg);
+}
+
+.aterm__bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.aterm__badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.aterm__dot {
+  width: 7px;
+  height: 7px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.aterm__dot[data-live="true"] {
+  background: var(--ui-ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-ok) 25%, transparent);
+  animation: aterm-pulse 1.6s ease-in-out infinite;
+}
+
+.aterm__bar {
+  flex-wrap: wrap;
+}
+
+.aterm__filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.aterm__find {
+  display: flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.aterm__hint {
+  flex: none;
+  margin: 0;
+  padding: 3px 12px;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.aterm__counter {
+  flex: none;
+  min-width: 6ch;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  color: var(--ui-text-2);
+  text-align: center;
+}
+
+.aterm__step {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.aterm__step:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.aterm__step:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.aterm__search {
+  flex: 1;
+  min-width: 0;
+  max-width: 280px;
+  height: 26px;
+  padding: 0 8px;
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.aterm__search:focus-visible,
+.aterm__toggle:focus-visible,
+.aterm__screen:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.aterm__toggle {
+  flex: none;
+  height: 26px;
+  padding: 0 8px;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.aterm__toggle[aria-pressed="true"] {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.aterm__screen {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 14px 18px;
+  overflow: auto;
+  font-family: var(--ui-font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ui-text);
+  overscroll-behavior: contain;
+}
+
+.aterm__empty {
+  padding: 24px 4px;
+  font-family: var(--ui-font);
+  color: var(--ui-text-3);
+}
+
+.aterm__line {
+  display: flex;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+.aterm__time {
+  flex: none;
+  min-width: 5ch;
+  color: var(--ui-text-3);
+  opacity: 0.7;
+  user-select: none;
+}
+
+.aterm__body {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.aterm__prefix {
+  display: inline-block;
+  min-width: 2ch;
+  margin-right: 0.6ch;
+  font-weight: 700;
+  user-select: none;
+}
+
+.aterm__thread {
+  margin-right: 8px;
+  color: #b18cff;
+  opacity: 0.85;
+}
+
+.aterm__line--thread .aterm__body {
+  padding-left: 2ch;
+}
+
+.aterm__meta {
+  margin-left: 10px;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.aterm__detail {
+  display: block;
+  margin: 2px 0 2px 2ch;
+  padding-left: 10px;
+  color: var(--ui-text-3);
+  border-left: 1px solid var(--ui-border);
+}
+
+.aterm__connector {
+  margin: 0 2px 0 4px;
+  font-weight: 650;
+}
+
+.aterm__text :where(img, svg) {
+  vertical-align: -2px;
+}
+
+/* Cor por tipo (prefixo e texto). */
+.aterm__line--text .aterm__prefix {
+  color: var(--ui-text-2);
+}
+
+.aterm__line--user {
+  color: #cbb0ff;
+}
+
+.aterm__line--agent {
+  color: #7ee8bd;
+}
+
+.aterm__line--tool .aterm__prefix,
+.aterm__line--tool .aterm__text {
+  color: #94c1ff;
+}
+
+.aterm__line--ok {
+  color: var(--ui-ok);
+}
+
+.aterm__line--error {
+  color: var(--ui-danger);
+}
+
+.aterm__line--warn {
+  color: var(--ui-warn);
+}
+
+.aterm__line--info {
+  color: #8be4f1;
+}
+
+.aterm__line--dim {
+  color: var(--ui-text-3);
+}
+
+.aterm__line--result {
+  color: var(--ui-text);
+}
+
+.aterm__line--result .aterm__prefix {
+  color: var(--ui-ok);
+}
+
+.aterm__section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 6px;
+  font-size: 11px;
+  color: var(--ui-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.aterm__section::before,
+.aterm__section::after {
+  flex: 1;
+  height: 0;
+  content: "";
+  border-top: 1px dashed var(--ui-border-strong, var(--ui-border));
+}
+
+.aterm__section::before {
+  flex: 0 0 18px;
+}
+
+.aterm__cursor {
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+  color: var(--ui-accent);
+}
+
+.aterm__caret {
+  width: 0.6em;
+  height: 1.1em;
+  background: var(--ui-accent);
+  animation: aterm-blink 1s steps(1) infinite;
+}
+
+.aterm__jump {
+  position: absolute;
+  right: 18px;
+  bottom: 46px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text);
+  cursor: pointer;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong, var(--ui-border));
+  border-radius: var(--ui-radius-pill);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes aterm-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes aterm-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aterm__caret,
+  .aterm__dot[data-live="true"] {
+    animation: none;
+  }
+}
+
+/* ---------- Estado do terminal (cabeçalho do painel) ---------- */
+.work-head__terminal {
+  margin-top: 6px;
+}
+
+.work-head__terminal:empty {
+  display: none;
+}
+
+.term-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.term-state__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.term-state__badge[data-state="ligado"] {
+  color: var(--ui-ok);
+  border-color: color-mix(in srgb, var(--ui-ok) 35%, transparent);
+}
+
+.term-state__badge[data-state="erro"],
+.term-state__badge[data-state="sem_cota"] {
+  color: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 40%, transparent);
+}
+
+.term-state__badge[data-state="iniciando"] {
+  color: var(--ui-warn);
+}
+
+.term-state__detail {
+  max-width: 360px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-state__action {
+  height: 22px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.term-state__action:hover:not(:disabled) {
+  background: var(--ui-hover);
+}
+
+.term-state__action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.term-state__action--danger {
+  color: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
+}
+
+.term-state__error {
+  font-size: 12px;
+  color: var(--ui-danger);
+}
+
+/* ---------- Conversa direta com o agente (coluna e caixa) ---------- */
+.achat-note {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--ui-warn);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--ui-warn) 14%, transparent);
+  border-radius: var(--ui-radius-pill);
+}
+
+/* ---------- Busca, recolhimento, copiar, rodapé ---------- */
+.aterm__hit {
+  color: inherit;
+  background: color-mix(in srgb, var(--ui-warn) 38%, transparent);
+  border-radius: 2px;
+}
+
+.aterm__hit[data-hit-current="true"] {
+  background: color-mix(in srgb, var(--ui-accent) 70%, transparent);
+  outline: 1px solid var(--ui-accent);
+}
+
+.aterm__text--md {
+  display: inline-block;
+  width: calc(100% - 3.2ch);
+  vertical-align: top;
+}
+
+.aterm__md {
+  display: block;
+  font-family: var(--ui-font);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.aterm__md :where(p, ul, ol, pre, blockquote, table) {
+  margin-block: 0 6px;
+}
+
+.aterm__md :where(h1, h2, h3, h4, h5, h6) {
+  margin-block: 6px 4px;
+}
+
+.md__link--plain {
+  cursor: default;
+  text-decoration: none;
+}
+
+.aterm__md > :first-child {
+  margin-top: 0;
+}
+
+.aterm__md > :last-child {
+  margin-bottom: 0;
+}
+
+.aterm__more {
+  display: block;
+  padding: 0;
+  margin: 2px 0 0;
+  font-family: var(--ui-font-mono);
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.aterm__more:hover {
+  color: var(--ui-text);
+  text-decoration: underline;
+}
+
+.aterm__copy {
+  margin-left: 8px;
+  padding: 0 6px;
+  font-family: var(--ui-font-mono);
+  font-size: 10.5px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm, 6px);
+  opacity: 0;
+}
+
+.aterm__line:hover .aterm__copy,
+.aterm__copy:focus-visible,
+.aterm__copy[data-done] {
+  opacity: 1;
+}
+
+.aterm__copy--block {
+  display: inline-block;
+  margin: 2px 0 0;
+}
+
+@media (hover: none) {
+  .aterm__copy {
+    opacity: 0.7;
+  }
+}
+
+.aterm__older {
+  display: block;
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: var(--ui-surface-2);
+  border: 1px dashed var(--ui-border-strong, var(--ui-border));
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.aterm__older:hover {
+  color: var(--ui-text);
+}
+
+.aterm__jump[data-unread="true"] {
+  color: var(--ui-bg);
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+
+.aterm__footer {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 14px;
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  color: var(--ui-text-2);
+  border-top: 1px solid var(--ui-border);
+}
+
+.aterm__footer-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aterm__footer-since {
+  flex: none;
+  margin-left: auto;
+  color: var(--ui-text-3);
+}
+
+.aterm__footer[data-kind="waiting"] {
+  color: var(--ui-warn);
+}
+
+.aterm__footer[data-kind="failed"] {
+  color: var(--ui-danger);
+}
+
+.aterm__footer[data-kind="tool"] .aterm__footer-mark,
+.aterm__footer[data-kind="working"] .aterm__footer-mark {
+  color: var(--ui-ok);
+}
+
+/* Celular: a faixa do terminal (estado, filtros, busca) numa linha só que rola de lado; o texto ganha a altura. */
+@media (max-width: 720px) {
+  .aterm__bar {
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 4px 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .aterm__bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .aterm__bar > *,
+  .aterm__filters {
+    flex: none;
+  }
+
+  .aterm__filters {
+    flex-wrap: nowrap;
+  }
+
+  /* A busca vem primeiro (com o contador e os botões à vista); o estado "só leitura" fica no cabeçalho. */
+  .aterm__badge {
+    display: none;
+  }
+
+  .aterm__find {
+    flex: none;
+    order: -1;
+    width: 250px;
+    margin-left: 0;
+  }
+}

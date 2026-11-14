@@ -1,0 +1,289 @@
+/*
+ * Pedidos que o Cyno enviou aos Maestros: o cartão compacto (no chat e na seção "Pedidos enviados" da
+ * coluna das fichas), as linhas discretas das trocas `ask_cyno` e o selo de pedidos nas fichas.
+ */
+.rcard {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 10px 8px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--rcard-accent, var(--cyno));
+  border-radius: 12px;
+  transition: border-color var(--ui-fast);
+}
+
+.rcard--info {
+  --rcard-accent: var(--cyno);
+}
+
+.rcard--wait {
+  --rcard-accent: var(--ui-warn);
+}
+
+.rcard--ok {
+  --rcard-accent: var(--ui-ok);
+}
+
+.rcard--bad {
+  --rcard-accent: var(--ui-danger);
+}
+
+.rcard--idle {
+  --rcard-accent: var(--ui-text-3);
+}
+
+.rcard__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--rcard-accent, var(--cyno));
+  background: color-mix(in srgb, var(--rcard-accent, var(--cyno)) 14%, transparent);
+  border-radius: 8px;
+}
+
+.rcard__body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rcard__line {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+}
+
+.rcard__to {
+  flex: none;
+}
+
+.rcard__title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 650;
+  color: var(--ui-text);
+  text-overflow: ellipsis;
+}
+
+.rcard__sep {
+  flex: none;
+  color: var(--ui-text-3);
+}
+
+.rcard__tasks {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.rcard__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.rcard__state {
+  font-weight: 650;
+  color: var(--rcard-accent, var(--ui-text-2));
+}
+
+.rcard__state--wait {
+  color: var(--ui-warn);
+}
+
+.rcard__stage {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rcard__open {
+  flex: none;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--cyno);
+  cursor: pointer;
+  background: var(--cyno-bg);
+  border: 1px solid var(--cyno-border);
+  border-radius: 999px;
+}
+
+.rcard__open:hover,
+.rcard__open:focus-visible {
+  background: color-mix(in srgb, var(--cyno) 22%, transparent);
+}
+
+/* Na coluna estreita das fichas: o título primeiro e a linha do estado embaixo ("Laboratório · 1/1 tarefa · concluído"). */
+.rcard--compact .rcard__line {
+  font-size: 13px;
+}
+
+.rcard--compact .rcard__to,
+.rcard--compact .rcard__sep,
+.rcard--compact .rcard__line .rcard__tasks {
+  display: none;
+}
+
+.rcard--compact .rcard__title {
+  flex: 1;
+}
+
+.rcard--compact .rcard__where,
+.rcard--compact .rcard__meta .rcard__tasks {
+  color: var(--ui-text-3);
+}
+
+.rcard--gone {
+  color: var(--ui-text-3);
+}
+
+/* No chat o cartão ocupa a largura da conversa, sem balão. */
+.cyno-request-item {
+  list-style: none;
+  padding: 2px 0;
+}
+
+/* Troca `ask_cyno` (o Maestro perguntou, o Cyno respondeu): uma linha discreta, sem balão. */
+.cyno-ask-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 8px;
+  margin: 2px 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+  list-style: none;
+  border-left: 2px solid var(--ui-border);
+}
+
+.cyno-ask-item__tag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cyno-ask-item__text {
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Seção "Pedidos enviados" (coluna das fichas) ---------- */
+.rsec {
+  display: grid;
+  flex: none;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  background: color-mix(in srgb, var(--cyno) 5%, var(--ui-surface));
+  border: 1px solid var(--cyno-border);
+  border-radius: 14px;
+}
+
+.rsec__head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rsec__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cyno);
+}
+
+.rsec__toggle {
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+}
+
+.rsec__count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.rsec__count--on {
+  font-weight: 650;
+  color: var(--ui-text-2);
+}
+
+.rsec__list {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.rsec__more {
+  justify-self: start;
+  padding: 2px 4px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  text-decoration: underline;
+}
+
+/* Selo de pedidos do Cyno em andamento, na ficha do workspace. */
+.wcard__requests {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  justify-self: start;
+  padding: 1px 9px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--cyno);
+  background: var(--cyno-bg);
+  border: 1px solid var(--cyno-border);
+  border-radius: 999px;
+}
+
+/* Cartão estreito: o botão "Abrir" cai para baixo do texto. */
+@media (max-width: 460px) {
+  .rcard {
+    flex-wrap: wrap;
+  }
+
+  .rcard__line {
+    white-space: normal;
+  }
+
+  .rcard__open {
+    margin-left: 36px;
+  }
+}

@@ -1,0 +1,593 @@
+/* Aba Apps da Biblioteca. Usa os tokens --ui-* e as classes .lib-* da página. */
+
+.app-intro {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.app-intro strong {
+  color: var(--ui-text);
+}
+
+.app-warning {
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 40%, var(--ui-border));
+  border-radius: var(--ui-radius-panel);
+}
+
+.app-warning p {
+  margin: 6px 0 0;
+  color: var(--ui-text);
+}
+
+.app-count {
+  margin: 0;
+  font-size: 13px;
+}
+
+.app-section {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.app-repo {
+  font-size: 12.5px;
+  color: var(--ui-accent);
+  text-decoration: none;
+  overflow-wrap: break-word;
+}
+
+.app-repo:hover {
+  text-decoration: underline;
+}
+
+.app-chip--warn {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.app-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.app-facts section {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-facts__p,
+.app-facts__note,
+.app-facts__warn {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-facts__warn {
+  color: var(--ui-warn);
+}
+
+.app-reqs {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-req {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.app-req__mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 50%;
+}
+
+.app-req--success .app-req__mark {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+}
+
+.app-req--busy .app-req__mark {
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+}
+
+.app-req--attention .app-req__mark {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.app-req--danger .app-req__mark {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.app-req__found {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.app-req__cmd {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.app-hint {
+  font-size: 12.5px;
+}
+
+.app-link {
+  padding: 0;
+  font: inherit;
+  color: var(--ui-accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Progresso ao vivo */
+
+.app-progress {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-panel);
+}
+
+.app-progress__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 14px;
+}
+
+.app-bar {
+  height: 8px;
+  overflow: hidden;
+  background: var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.app-bar__fill {
+  height: 100%;
+  background: var(--ui-accent);
+  border-radius: var(--ui-radius-pill);
+  transition: width 0.4s ease;
+}
+
+.app-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+.app-step {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.app-step__mark {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+}
+
+.app-step--feito {
+  color: var(--ui-text-2);
+}
+
+.app-step--feito .app-step__mark {
+  color: var(--ui-ok);
+}
+
+.app-step--andando {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.app-step--andando .app-step__mark {
+  color: var(--ui-accent);
+}
+
+.app-step--falhou {
+  color: var(--ui-danger);
+}
+
+.app-step--precisa {
+  color: var(--ui-warn);
+}
+
+.app-log summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.app-log__text {
+  max-height: 240px;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  overflow: auto;
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ui-bg, #0b0d12);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+/* Precisa de você / falhou / resultado */
+
+.app-needs,
+.app-failed,
+.app-result {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  font-size: 13.5px;
+  border-radius: var(--ui-radius-panel);
+}
+
+.app-needs p,
+.app-failed p,
+.app-result p {
+  margin: 0;
+}
+
+.app-needs {
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 40%, var(--ui-border));
+}
+
+.app-failed {
+  background: var(--ui-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-danger) 40%, var(--ui-border));
+}
+
+.app-needs__title,
+.app-failed__title,
+.app-result__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.app-needs__title {
+  color: var(--ui-warn);
+}
+
+.app-failed__title {
+  color: var(--ui-danger);
+}
+
+.app-needs__cmd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--ui-bg, #0b0d12);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.app-needs__cmd code {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.app-result--ok {
+  background: var(--ui-ok-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-ok) 35%, var(--ui-border));
+}
+
+.app-result--ok .app-result__title {
+  color: var(--ui-ok);
+}
+
+.app-result--bad {
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 40%, var(--ui-border));
+}
+
+.app-result--bad .app-result__title {
+  color: var(--ui-warn);
+}
+
+.app-result__detail {
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.app-result__meta {
+  font-size: 12.5px;
+}
+
+.app-connector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 18px;
+}
+
+.app-connector section {
+  min-width: 0;
+}
+
+/* Runtimes */
+
+.app-runtimes {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.app-runtimes__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+/* Janela "Instalar X" */
+
+.app-plan {
+  display: grid;
+  gap: 14px;
+  font-size: 14px;
+}
+
+.app-plan__lead {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.app-plan__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+}
+
+.app-plan__facts dt {
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.app-plan__facts dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.app-plan__facts a {
+  color: var(--ui-accent);
+}
+
+.app-plan__h {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.app-plan__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.app-plan__from {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.app-plan__p,
+.app-plan__note,
+.app-plan__ok {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.app-plan__note {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+.app-plan__warn {
+  padding: 10px 14px;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-radius: var(--ui-radius-sm);
+}
+
+.app-plan__warn ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.app-plan__blockers {
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-radius: var(--ui-radius-sm);
+}
+
+.app-plan__blockers ul,
+.app-plan__blockers p {
+  margin: 6px 0 0;
+  color: var(--ui-text);
+}
+
+.app-plan__accept {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.app-plan__actions {
+  position: sticky;
+  bottom: -1px;
+  justify-content: flex-end;
+  padding: 10px 0 4px;
+  background: var(--ui-surface, #12151d);
+  border-top: 1px solid var(--ui-border);
+}
+
+@media (max-width: 720px) {
+  .app-facts,
+  .app-connector,
+  .app-plan__facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.app-tool-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Fila e última execução de um app com ferramentas próprias (conector `app`). */
+.app-runs-section,
+.app-skills {
+  display: grid;
+  gap: 6px;
+}
+
+.app-runs {
+  display: grid;
+  gap: 8px;
+}
+
+.app-run {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+}
+
+.app-run__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.app-run__line {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}
+
+.app-run--ok {
+  border-color: color-mix(in srgb, var(--ui-success, #3fb97a) 45%, var(--ui-border));
+}
+
+.app-run--bad {
+  border-color: color-mix(in srgb, var(--ui-danger, #e5534b) 45%, var(--ui-border));
+}
+
+.app-run--queued {
+  border-style: dashed;
+}
+
+.app-skills__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-skill {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+}
+
+.app-skill__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.app-skill__meta {
+  font-size: 12px;
+}
+
+.app-tool-desc {
+  display: block;
+}

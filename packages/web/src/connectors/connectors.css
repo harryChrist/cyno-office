@@ -1,0 +1,584 @@
+/* ---------- Ícone de conector: azulejo com a cor da marca ---------- */
+.cicon {
+  --cicon-size: 20px;
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--cicon-size);
+  height: var(--cicon-size);
+  overflow: hidden;
+  color: var(--cicon-fg, #fff);
+  background: var(--cicon-bg, var(--ui-accent-solid));
+  border-radius: calc(var(--cicon-size) * 0.28);
+}
+
+/* Marca preta (GitHub, Notion, X) no fundo escuro: contorno para não sumir. */
+.cicon--outlined {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.cicon__glyph {
+  width: 64%;
+  height: 64%;
+  background: currentColor;
+  -webkit-mask: var(--cicon-mask) center / contain no-repeat;
+  mask: var(--cicon-mask) center / contain no-repeat;
+}
+
+.cicon__text {
+  font-size: calc(var(--cicon-size) * 0.42);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.cicon--image {
+  background: var(--ui-surface-2, #1c2040);
+}
+
+.cicon--image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Ponto de estado no canto. */
+.cicon-badge {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+
+.cicon-badge__dot {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border: 2px solid var(--ui-surface-solid);
+  border-radius: 50%;
+}
+
+.cicon-badge[data-status="ok"] .cicon-badge__dot {
+  background: var(--ui-ok);
+}
+
+.cicon-badge[data-status="warn"] .cicon-badge__dot {
+  background: var(--ui-warn);
+}
+
+.cicon-badge[data-status="error"] .cicon-badge__dot {
+  background: var(--ui-danger);
+}
+
+/* Fileira pequena (lista de agentes, cabeçalho da tela de trabalho). */
+.cicon-row {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
+.cicon-row__item {
+  display: inline-grid;
+  border-radius: 5px;
+}
+
+.cicon-row__item--active {
+  animation: cicon-pulse 0.9s ease-out 4;
+}
+
+.cicon-row__more {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+@keyframes cicon-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-accent) 70%, transparent);
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.12);
+  }
+  100% {
+    box-shadow: 0 0 0 7px transparent;
+    transform: scale(1);
+  }
+}
+
+/* ---------- Faixa de conectores do Office (nos controles, canto inferior direito) ---------- */
+.connector-strip {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px 0;
+}
+
+.connector-strip__label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.connector-strip__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector-strip__item {
+  display: inline-grid;
+  padding: 2px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color var(--ui-fast);
+}
+
+.connector-strip__item:hover {
+  background: var(--ui-hover);
+}
+
+.connector-strip__item:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.connector-strip__item[data-active="running"] .cicon {
+  animation: cicon-pulse 0.9s ease-out infinite;
+}
+
+.connector-strip__item[data-active="done"] .cicon {
+  animation: cicon-pulse 0.9s ease-out 3;
+}
+
+.connector-strip__item[data-enabled="false"] .cicon {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+/* ---------- Balão sobre o agente (rótulo do mapa) ---------- */
+.agent-label__connector {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background: rgba(11, 13, 26, 0.86);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 999px;
+  box-shadow: var(--ui-shadow-sm);
+  transform: translateX(-50%);
+  animation: connector-bubble 4s ease-out forwards;
+  pointer-events: none;
+}
+
+.agent-label__connector-tool {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-label__connector[data-running="true"] {
+  animation: connector-bubble-in 0.25s ease-out forwards;
+}
+
+.agent-label__connector::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 4px solid transparent;
+  border-top-color: rgba(11, 13, 26, 0.86);
+  transform: translateX(-50%);
+}
+
+@keyframes connector-bubble-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes connector-bubble {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.85);
+  }
+  8%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -3px) scale(0.95);
+  }
+}
+
+/* ---------- Seletor de conectores (painel do agente, tela de trabalho) ---------- */
+.connector-picker {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  background: var(--ui-surface-2, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-button);
+  cursor: pointer;
+}
+
+.connector-picker__item:has(input:checked) {
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
+  background: var(--ui-accent-bg);
+}
+
+.connector-picker__item:has(input:focus-visible) {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.connector-picker__item input {
+  accent-color: var(--ui-accent);
+}
+
+.connector-picker__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.connector-picker__name {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connector-picker__meta {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.connector-picker__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+/* Botão "Conectores" do cabeçalho da tela de trabalho + o popover. */
+.connector-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.connector-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connector-menu__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 10px;
+  width: min(320px, 86vw);
+  max-height: min(420px, 70vh);
+  overflow: auto;
+  padding: 12px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-lg);
+}
+
+.connector-menu__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.work-head__actions {
+  align-items: flex-start;
+}
+
+.agent-connectors__hint {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+
+/* Linha de ferramenta de conector no log de trabalho. */
+.tl-tool__name--connector {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+}
+
+.connector-picker__row {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.connector-picker__row .connector-picker__item {
+  flex: 1;
+  min-width: 0;
+}
+
+.connector-picker__info {
+  flex: none;
+  align-self: center;
+  font-size: 18px;
+}
+
+/* ---------- Detalhe de um conector ---------- */
+.connector-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.connector-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.connector-detail__title {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+}
+
+.connector-detail__target {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connector-detail__reason {
+  margin: 0;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+  border-radius: var(--ui-radius-sm);
+}
+
+.connector-detail__reason--attention {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.connector-detail__reason--danger {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.connector-detail__section {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.connector-detail__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.connector-detail__agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connector-detail__agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 9px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 9px;
+  font: inherit;
+  text-align: left;
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-button);
+  cursor: pointer;
+}
+
+.connector-detail__agent:hover {
+  border-color: var(--ui-border-strong);
+  background: var(--ui-hover);
+}
+
+.connector-detail__avatar {
+  grid-row: span 2;
+  display: inline-grid;
+}
+
+.connector-detail__agent-name {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connector-detail__agent-role {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connector-detail__tools {
+  display: grid;
+  gap: 5px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.connector-detail__tools li {
+  display: grid;
+  gap: 1px;
+}
+
+.connector-detail__tools span {
+  color: var(--ui-text-3);
+}
+
+/* Configurações: o nome do conector abre o detalhe. */
+.connector-card__name {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.connector-card__name:hover {
+  text-decoration: underline;
+}
+
+/* Painel do agente: seção Ferramentas (conectores + skills). */
+.agent-tools__sub {
+  margin: 12px 0 6px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ui-text-2);
+}
+
+.agent-skills__empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-button);
+}
+
+/* ---------- Painel do agente: "O que este agente tem" ---------- */
+
+.agent-has {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-has__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.agent-has__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 1px;
+}
+
+.agent-has__name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.agent-has__from {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.agent-has-wrap {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.agent-has {
+  width: 100%;
+}
+
+.agent-has__open {
+  flex: none;
+  margin-left: auto;
+  font-size: 12.5px;
+}

@@ -1,0 +1,233 @@
+/* ---------- Configurações: arranjo por largura, hierarquia e separação plataforma x workspace ----------
+   Os pontos de quebra (390, 768, 1280, 1680, 2200) estão em settingsLayout.ts; a página passa o resultado por
+   `data-cols` (1, 2 ou 3 colunas de cartões), `data-split` e a variável --settings-max (largura máxima do conteúdo). */
+.settings {
+  --settings-max: 920px;
+  --settings-cols: 1;
+  --settings-gap: 16px;
+}
+
+.settings[data-cols="2"] {
+  --settings-cols: 2;
+}
+
+.settings[data-cols="3"] {
+  --settings-cols: 3;
+}
+
+/* Largura máxima de leitura: o texto e os formulários nunca esticam com a janela. */
+.settings__panel > *,
+.settings__panel > .settings__top,
+.settings__panel > .settings__area {
+  max-width: var(--settings-max);
+}
+
+.settings__panel {
+  padding: 20px 28px 36px;
+  scroll-padding-top: 12px;
+}
+
+/* ---------- Cartões em grade (telas largas) ---------- */
+.settings__area .settings__groups {
+  grid-template-columns: repeat(var(--settings-cols), minmax(0, 1fr));
+  align-items: start;
+  gap: var(--settings-gap);
+}
+
+/* O que é aviso, barra de ações, texto corrido ou a lista de motores ocupa a linha inteira. */
+.settings__groups > :is(p, ul, ol, .settings__toolbar, .settings__notice, .settings__card--wide, .engine-list, [role="status"], [role="alert"]) {
+  grid-column: 1 / -1;
+}
+
+/* Os padrões de modelo (Maestro, agentes, subagentes) têm três campos por linha: pedem a linha inteira. */
+.settings__groups > .settings__card:has(.settings__models-group) {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Hierarquia: seção > cartão > controle ---------- */
+.settings__sec {
+  gap: 14px;
+  padding-top: 28px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.settings__area > .settings__sec:first-of-type,
+.settings__area-head + .settings__sec {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.settings__sec-head {
+  gap: 4px 12px;
+  padding-top: 0;
+}
+
+.settings__section-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.settings__sec-hint {
+  font-size: 13.5px;
+  color: var(--ui-text-2);
+}
+
+.settings__card {
+  gap: 12px;
+  padding: 18px;
+}
+
+.settings__card-title {
+  font-size: 15px;
+}
+
+/* Textos de ajuda: legíveis, sem linha comprida, abaixo do controle e sem competir com ele. */
+.settings__card-hint,
+.settings__sec-hint,
+.settings__area-hint,
+.opt-head__line {
+  max-width: 74ch;
+}
+
+/* Selo de escopo: o da seção e da área já dizem onde vale; o do cartão só aparece quando muda o escopo (ex.: "Só neste navegador"). */
+.settings__area:not(.settings__area--workspace) .settings__card .opt-seal--plataforma,
+.settings__area:not(.settings__area--workspace) .settings__models-group .opt-seal--plataforma,
+.settings__area:not(.settings__area--workspace) .engine-card .opt-seal--plataforma,
+.settings__area--workspace .settings__card .opt-seal--workspace,
+.settings__area--workspace .settings__models-group .opt-seal--workspace {
+  display: none;
+}
+
+.opt-seal {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* ---------- Plataforma x workspace: a área do workspace é uma região à parte, com a cor dele ---------- */
+.settings__area--workspace {
+  margin-top: 48px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--ui-ok) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ui-ok) 28%, var(--ui-border));
+  border-radius: calc(var(--ui-radius-panel) + 4px);
+}
+
+.settings__area--workspace .settings__area-head {
+  border-left-color: var(--ui-ok);
+  background: color-mix(in srgb, var(--ui-ok) 8%, var(--ui-surface));
+}
+
+.settings__area--workspace .settings__sec {
+  border-top-color: color-mix(in srgb, var(--ui-ok) 18%, var(--ui-border));
+}
+
+/* No menu lateral: o grupo do workspace também ganha a marca. */
+.settings__nav-group:last-of-type .settings__nav-group-title {
+  color: var(--ui-ok);
+}
+
+/* ---------- Menu lateral fixo, com a seção atual marcada ---------- */
+.settings__nav-item {
+  min-height: 44px;
+}
+
+.settings__nav-item[aria-current="true"] {
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+}
+
+.settings__nav-item:focus-visible,
+.settings__nav-item:focus {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+
+/* ---------- Telas largas: menu um pouco mais largo e painel com mais respiro ---------- */
+@media (min-width: 1680px) {
+  .settings {
+    grid-template-columns: 296px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .settings__panel {
+    padding: 24px 36px 44px;
+  }
+}
+
+@media (min-width: 2200px) {
+  .settings {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .settings__nav-label {
+    font-size: 15px;
+  }
+}
+
+/* ---------- Celular: o índice vira duas faixas que rolam de lado; alvos de toque de 44 px ---------- */
+@media (max-width: 767px) {
+  .settings__nav {
+    padding: 8px;
+  }
+
+  .settings__nav-group {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 4px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .settings__nav-group-title {
+    flex: none;
+    padding: 0 4px 0 2px;
+  }
+
+  .settings__nav-item {
+    flex: none;
+    min-height: 44px;
+    scroll-snap-align: start;
+    white-space: nowrap;
+  }
+
+  .settings__nav-group + .settings__nav-group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .settings__panel {
+    padding: 14px 12px 28px;
+  }
+
+  .settings__area--workspace {
+    padding: 12px 10px;
+    margin-top: 36px;
+  }
+
+  .settings__sec {
+    padding-top: 22px;
+  }
+
+  .settings__section-title {
+    font-size: 19px;
+  }
+
+  .settings__card {
+    padding: 14px;
+  }
+
+  .settings .ui-button--small {
+    min-height: 40px;
+  }
+
+  .settings .ui-input,
+  .settings select {
+    min-height: 44px;
+  }
+}

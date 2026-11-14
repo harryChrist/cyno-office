@@ -1,0 +1,22 @@
+# docker compose up -d --build   ->   http://localhost:5173
+services:
+  cyno:
+    build: .
+    image: cyno:local
+    container_name: cyno
+    init: true
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5173}:${WEB_PORT:-5173}"   # só o web; o server fica em 127.0.0.1 dentro do contêiner
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - cyno-data:/data           # workspaces, projetos, senha (auth.json)
+      - cyno-home:/home/node      # logins das CLIs (~/.claude, ~/.claude.json, ~/.codex...)
+
+volumes:
+  cyno-data:
+  cyno-home:

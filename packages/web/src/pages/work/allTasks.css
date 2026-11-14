@@ -1,0 +1,485 @@
+/* "Todas as tarefas": a lista plana com filtros, grupos e janela de rolagem. */
+
+.at {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .at--panel {
+    padding-right: 464px;
+  }
+}
+
+.wt-tabs {
+  margin-top: -4px;
+}
+
+/* ---- Filtros ---- */
+
+.at-bar {
+  display: grid;
+  flex: none;
+  gap: 8px;
+}
+
+.at-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.at-bar__spacer {
+  flex: 1;
+}
+
+.at-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 170px;
+  min-width: 120px;
+  color: var(--ui-text-3);
+}
+
+.at-search svg {
+  position: absolute;
+  left: 10px;
+  pointer-events: none;
+}
+
+.at-search .ui-input {
+  width: 100%;
+  min-height: 32px;
+  padding-left: 30px;
+  font-size: 13px;
+}
+
+.at-fmenu {
+  position: relative;
+}
+
+.at-fmenu__btn,
+.at-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.at-fmenu__btn:hover,
+.at-pill:hover {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+
+.at-fmenu__btn--on,
+.at-pill[aria-pressed="true"] {
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-accent) 18%, var(--ui-surface));
+  border-color: color-mix(in srgb, var(--ui-accent) 60%, var(--ui-border));
+}
+
+.at-fmenu__btn:focus-visible,
+.at-pill:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.at-fmenu__chev {
+  opacity: 0.6;
+}
+
+.at-fmenu__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  min-width: 190px;
+  max-height: 320px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.at-fmenu__opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.at-fmenu__opt:hover {
+  background: var(--ui-hover);
+}
+
+.at-fmenu__opt[aria-selected="true"] {
+  color: var(--ui-accent-text, var(--ui-accent));
+  font-weight: 600;
+}
+
+.at-fmenu__n {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.at-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.at-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.at-switch__track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  background: var(--ui-border-strong);
+  border-radius: 999px;
+  transition: background 0.15s;
+}
+
+.at-switch__track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  content: "";
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.at-switch input:checked + .at-switch__track {
+  background: var(--ui-accent);
+}
+
+.at-switch input:checked + .at-switch__track::after {
+  transform: translateX(12px);
+}
+
+.at-switch input:focus-visible + .at-switch__track {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.at-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.at-active__count {
+  margin-right: 4px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.at-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 9px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-accent) 14%, var(--ui-surface));
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 45%, var(--ui-border));
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.at-chip:hover {
+  border-color: var(--ui-accent);
+}
+
+/* ---- Lista ---- */
+
+.at-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 200px;
+  min-width: 0;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  overflow: hidden;
+}
+
+.at-head,
+.at-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 124px 104px 76px 92px 104px;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.at-head {
+  flex: none;
+  padding: 0 14px;
+  min-height: 30px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.at-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.at-space {
+  position: relative;
+}
+
+.at-rows {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.at-row {
+  box-sizing: border-box;
+  padding: 0 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ui-border) 70%, transparent);
+  cursor: pointer;
+}
+
+.at-row:hover {
+  background: var(--ui-hover);
+}
+
+.at-row.is-selected {
+  background: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--ui-accent);
+}
+
+.at-row:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.at-row.is-done .at-title {
+  color: var(--ui-text-3);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--ui-text-3) 60%, transparent);
+}
+
+.at-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.at-name__text {
+  display: grid;
+  min-width: 0;
+}
+
+.at-title,
+.at-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.at-title {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.at-path {
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.at-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.at-state {
+  font-size: 12px;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+}
+
+.at-state--esperando_voce {
+  color: var(--ui-warn);
+}
+
+.at-state--falhou {
+  color: var(--ui-danger, #f26b6b);
+}
+
+.at-due--late {
+  color: var(--ui-danger, #f26b6b);
+}
+
+.at-due--soon {
+  color: var(--ui-warn);
+}
+
+.at-group {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ui-text-2);
+  background: color-mix(in srgb, var(--ui-bg) 60%, var(--ui-surface));
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.at-group__count {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.at-empty {
+  flex: none;
+}
+
+/* ---- Celular ---- */
+
+@media (max-width: 640px) {
+  .at-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+    row-gap: 6px;
+  }
+
+  .at-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 26px;
+    font-size: 12px;
+  }
+
+  .at-search {
+    flex: 1 1 auto;
+  }
+}
+
+.at-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+}
+
+.at-sheet__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 14, 0.6);
+  border: 0;
+}
+
+.at-sheet__panel {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  max-height: 85vh;
+  padding: 16px 16px 20px;
+  overflow-y: auto;
+  background: var(--ui-surface-solid);
+  border-top: 1px solid var(--ui-border-strong);
+  border-radius: 16px 16px 0 0;
+}
+
+.at-sheet__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.at-sheet__field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.at-sheet__pills {
+  display: flex;
+  gap: 8px;
+}
+
+.at-sheet__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* Celular: a página inteira rola, então a lista ganha altura própria (senão a janela de rolagem desenharia tudo). */
+@media (max-width: 640px) {
+  .at-list {
+    flex: none;
+    height: calc(100dvh - 150px);
+    min-height: 360px;
+  }
+}

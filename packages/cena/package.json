@@ -1,0 +1,19 @@
+{
+  "name": "@cyno/cena",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Motor de cena do escritório (código do Habblaud, MIT, quase intacto). Ver ORIGEM.md e PATCHES.md.",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    "./arte": "./arte.ts",
+    "./cidade": "./cidade.ts",
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --root ../.. packages/cena"
+  }
+}

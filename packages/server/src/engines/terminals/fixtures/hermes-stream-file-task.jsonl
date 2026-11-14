@@ -1,0 +1,15 @@
+{"type": "system", "subtype": "init", "model": "fake-model", "session_id": "", "timestamp": 1794527749501}
+{"type": "tool_use", "name": "write_file", "tool_call_id": "call_fake_74", "input": {"path": "ola.txt", "content": "olá"}, "timestamp": 1794527750031}
+{"type": "tool_result", "name": "write_file", "tool_call_id": "call_fake_74", "output": "{\"bytes_written\": 4, \"dirs_created\": true, \"verified\": true, \"lint\": {\"status\": \"skipped\", \"message\": \"No linter for .txt files\"}, \"resolved_path\": \"/tmp/work/ola.txt\", \"files_modified\": [\"/tmp/work/ola.txt\"]}", "duration_ms": 168, "is_error": false, "timestamp": 1794527750199}
+{"type": "text", "text": "\n\nPronto:", "timestamp": 1794527750213}
+{"type": "text", "text": " ", "timestamp": 1794527750216}
+{"type": "text", "text": "ola.txt", "timestamp": 1794527750217}
+{"type": "text", "text": " ", "timestamp": 1794527750217}
+{"type": "text", "text": "criado", "timestamp": 1794527750217}
+{"type": "text", "text": " ", "timestamp": 1794527750217}
+{"type": "text", "text": "e", "timestamp": 1794527750217}
+{"type": "text", "text": " ", "timestamp": 1794527750218}
+{"type": "text", "text": "resultado", "timestamp": 1794527750218}
+{"type": "text", "text": " ", "timestamp": 1794527750218}
+{"type": "text", "text": "entregue.", "timestamp": 1794527750218}
+{"type": "result", "session_id": "local-f6444e73844470c1c890c6da04c73263b1b3c84f38e42e7dae17f5bbc2006796", "exit_code": 0, "text": "Pronto: ola.txt criado e resultado entregue.", "tokens": {"input": 389, "output": 34, "total": 423, "cache_read": 0, "cache_write": 0}, "duration_ms": 744, "timestamp": 1794527750246}

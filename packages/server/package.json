@@ -1,0 +1,34 @@
+{
+  "name": "@cyno/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "seed": "tsx src/workspace/office/seed-cli.ts",
+    "auth:set-password": "tsx src/platform/auth/cli.ts set-password",
+    "auth:code": "tsx src/platform/auth/cli.ts setup-code",
+    "auth:clear": "tsx src/platform/auth/cli.ts clear",
+    "auth:reset-2fa": "tsx src/platform/auth/cli.ts reset-2fa",
+    "lab:setup": "tsx src/dev/lab-cli.ts",
+    "usage:backfill": "tsx src/engines/usage/backfill-cli.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@cyno/shared": "*",
+    "@fastify/websocket": "^11.3.7",
+    "@lydell/node-pty": "1.2.0-beta.15",
+    "fastify": "^5.12.8",
+    "playwright-core": "^1.65.0",
+    "web-push": "^4.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.1"
+  }
+}

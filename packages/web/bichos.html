@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Folhas de poses dos bichos</title>
+    <style>
+      body { margin: 0; padding: 16px; background: #1b1d2b; color: #d8dbe8; font: 13px system-ui, sans-serif; }
+      h1 { font-size: 16px; margin: 0 0 12px; }
+      h2 { font-size: 14px; margin: 18px 0 6px; }
+      .linha { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+      .quadro { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px; border-radius: 6px; }
+      .quadro canvas { image-rendering: pixelated; }
+      .dia { background: #d8d2c4; color: #222; }
+      .noite { background: #34405c; color: #eee; }
+      .rotulo { font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1>Folhas de poses dos bichos (página de conferência; só em desenvolvimento)</h1>
+    <div id="raiz"></div>
+    <script type="module" src="/src/cena/bichos/folha.ts"></script>
+  </body>
+</html>

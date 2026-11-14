@@ -1,0 +1,28 @@
+{
+  "name": "@cyno/site",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Site de apresentação do Cyno: React 19 + Vite, com um escritório de demonstração rodando de verdade (motor de cena @cyno/cena).",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b ../cena && tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "@cyno/cena": "*",
+    "@fontsource/silkscreen": "^5.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

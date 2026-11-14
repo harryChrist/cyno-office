@@ -1,0 +1,98 @@
+/* Páginas fora do Office: ocupam a tela abaixo da barra de cima, no fundo escuro do app. */
+.pages {
+  position: fixed;
+  top: var(--topbar-bottom);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  overflow: auto;
+  color: var(--ui-text);
+  background: var(--ui-bg-glow), var(--ui-bg);
+  background-attachment: fixed;
+}
+
+/*
+ * Casca das páginas (painel ao lado da barra lateral): cabeçalho com título e subtítulo à
+ * esquerda e ações à direita, depois o conteúdo. Páginas de rolagem longa (Gastos, Diário) deixam
+ * a página crescer; as que preenchem a tela usam .page--fill (altura toda, painéis rolam por dentro).
+ */
+.page {
+  max-width: none;
+  margin: 0;
+  padding: 24px 16px 48px;
+}
+
+.page__header {
+  margin-bottom: 20px;
+}
+
+/* Cabeçalho em linha: título e subtítulo (.page__heading) à esquerda, ações (.page__actions) à direita. */
+.page__header--row {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-bottom: 16px;
+}
+
+.page__heading {
+  min-width: 0;
+}
+
+.page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.page__header--row .page__subtitle {
+  max-width: 760px;
+}
+
+/* Preenche a altura da tela: o conteúdo (grade, colunas, painéis) fica dentro dela e rola por dentro. */
+.page--fill {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-bottom: 16px;
+}
+
+.page__title {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.page__subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ui-text-2);
+}
+
+.page__empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--ui-text-2);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+}
+
+/* Telas estreitas: a página rola inteira. */
+@media (max-width: 900px) {
+  .page--fill {
+    height: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 16px 12px 32px;
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "ok": true,
+  "status": "ok",
+  "final": "Pronto: ola.txt criado e resultado entregue.",
+  "payloads": [
+    {
+      "text": "Pronto: ola.txt criado e resultado entregue.",
+      "mediaUrl": null
+    }
+  ],
+  "usage": {
+    "usageReport": {
+      "state": "available"
+    },
+    "input": 513,
+    "output": 51,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "total": 564,
+    "cost": {
+      "total": 0
+    }
+  },
+  "codeModeEngaged": false,
+  "assistantTurns": 3,
+  "toolSummary": {
+    "calls": 2,
+    "tools": [
+      "write",
+      "office__submit_result"
+    ],
+    "failures": 1,
+    "unresolvedError": {
+      "toolName": "office__submit_result"
+    }
+  },
+  "model": "fake/model",
+  "provider": "fakeai",
+  "sessionId": "4790b576-f642-4e77-bc71-31bf5632eb62"
+}

@@ -1,0 +1,60 @@
+ ↑↓ choose model · Tab reasoning · Enter select · Esc cancel
+ STANDARD · 1x usage (21 hours per day)
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   DeepSeek V4.1 Flash Slow • low · Slow · cheapest · Images · New ·          │
+ │ Promotional                                                                  │
+ │                                      1x                                      │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Beam 1.0 • high · Reflection · coding · New                                │
+ │                         May use data for AI training                         │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Nemotron 3.5 Lightning • high · Fast                                       │
+ │                         May use data for AI training                         │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Glyph Cluster • high · Stealth preview                                     │
+ │       Preview model: prompts and outputs may be retained for training        │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Solar Pro 4 · Upstage flagship · Promotional                               │
+ │                         May use data for AI training                         │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Solar Mini 4 · Fast and light · Promotional                                │
+ │                         May use data for AI training                         │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ PREMIUM · 2–3x cost · lower usage (7–10 hours per day)
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │ › DeepSeek V4.1 Flash • high · Steady speed · Images                         │
+ │               2x · Recommended · May use data for AI training                │
+ │ DeepSeek V4.1 Flash at a steady speed (100 tokens a second with full access, │
+ │  80 with limited), so a session costs two hours.                             │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Muse Spark 1.3 • high · Falls back when busy                               │
+ │                      3x · May use data for AI training                       │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ POWERFUL · Frontier models included with your plan
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   DeepSeek V4.1 Flash Fast • high · Fastest · Images                         │
+ │                      3x · May use data for AI training                       │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   GPT-6 Luna • high · Strong all-around · Images                             │
+ │                                      4x                                      │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Claude Haiku 5.5 · 100k context • medium · Anthropic · fast · Images       │
+ │                                      6x                                      │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────────┐
+ │   Muse Ember • medium · Meta · fast · Images · New                           │
+ │                                      6x                                      │
+ └──────────────────────────────────────────────────────────────────────────────┘
+ STARTER · 17/21 hours daily · resets in 11h 57m · 25 hours in wallet
+ ↑  Show fewer
+ DeepSeek V4.1 Flash • high · /tmp/pasta · /model to change · Chat: Crie um arquivo
+ palavra olá nesta pasta
+ ← for history · ? for help

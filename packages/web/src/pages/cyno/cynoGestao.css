@@ -1,0 +1,120 @@
+/* Bloco "Gestão" do Resumo do Cyno: o nome e o que espera você em cima, o resto embaixo (uma linha só quando há espaço). */
+.gblock__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  container-type: inline-size;
+}
+
+.gblock__row {
+  display: grid;
+  gap: 1px;
+  width: 100%;
+  min-height: 44px;
+  padding: 7px 8px;
+  font: inherit;
+  color: var(--ui-text);
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+}
+
+.gblock__row:hover {
+  background: var(--ui-surface-2);
+}
+
+.gblock__row:focus-visible {
+  outline: 2px solid var(--cyno);
+  outline-offset: -2px;
+}
+
+.gblock__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.gblock__name {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gblock__waiting {
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.gblock__waiting--late {
+  font-weight: 600;
+  color: var(--ui-warn);
+}
+
+.gblock__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.gblock__stats--soft {
+  color: var(--ui-text-3);
+}
+
+.gblock__cell {
+  white-space: nowrap;
+}
+
+.gblock__cell + .gblock__cell::before {
+  margin-right: 6px;
+  color: var(--ui-text-3);
+  content: "·";
+}
+
+.gblock__trend {
+  font-weight: 700;
+}
+
+.gblock__trend--up {
+  color: var(--ui-success, #3ddc97);
+}
+
+.gblock__trend--down {
+  color: var(--ui-warn);
+}
+
+.gblock__trend--flat {
+  color: var(--ui-text-3);
+}
+
+/* Com espaço (painel largo): uma linha só por workspace. */
+@container (min-width: 620px) {
+  .gblock__row {
+    display: flex;
+    gap: 16px;
+    align-items: baseline;
+  }
+
+  .gblock__top {
+    flex: 0 0 auto;
+    gap: 14px;
+  }
+
+  .gblock__stats {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+}

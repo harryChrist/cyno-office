@@ -1,0 +1,133 @@
+/* "O que aprendemos" (retrospectiva da Gestão): o quadro dentro da aba Relatórios. Tema escuro do Cyno (tokens --ui-*). */
+
+.rel__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 8px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ui-bg, #0b0d1a);
+  background: var(--ui-accent);
+  border-radius: 999px;
+  vertical-align: 1px;
+}
+
+.retro {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.retro__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.retro__title {
+  margin: 0 0 2px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.retro__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.retro__h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.retro__ask {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 340px);
+  gap: 16px;
+  align-items: start;
+  padding: 14px 16px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.retro__groups,
+.retro__lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.retro__ask-action {
+  display: grid;
+  gap: 8px;
+  justify-items: stretch;
+  min-width: 0;
+}
+
+.retro__ask-action .ui-button {
+  height: auto;
+  min-height: 40px;
+  padding-block: 8px;
+  line-height: 1.3;
+  white-space: normal;
+  text-align: center;
+}
+
+.retro__cost {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+}
+
+.retro__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.retro__box {
+  padding: 14px 16px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.retro__box--warn {
+  border-color: color-mix(in srgb, var(--ui-warn) 40%, var(--ui-border));
+}
+
+.retro__report {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+@media (max-width: 700px) {
+  .retro__ask {
+    grid-template-columns: 1fr;
+  }
+
+  .retro__cards {
+    grid-template-columns: 1fr;
+  }
+}

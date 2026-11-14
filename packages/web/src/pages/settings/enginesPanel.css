@@ -1,0 +1,554 @@
+/* ---------- Configurações › Motores ---------- */
+.engine-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.engine-card {
+  align-content: start;
+  gap: 8px;
+}
+
+.engine-card[data-supported="false"] {
+  border-style: dashed;
+}
+
+.engine-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.engine-card__head .settings__card-title {
+  margin-right: auto;
+}
+
+.engine-card__blurb {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.engine-card__version {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+
+.engine-card__version--off {
+  color: var(--ui-text-3);
+}
+
+.engine-card__path {
+  margin: -4px 0 0;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.engine-card__soon {
+  margin: 0;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border-radius: var(--ui-radius-sm);
+}
+
+.engine-card__warn {
+  margin: 0;
+  padding: 6px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-radius: var(--ui-radius-sm);
+}
+
+.engine-card__test {
+  margin: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-card__test--ok {
+  color: var(--ui-success, var(--ui-text-2));
+}
+
+.engine-card__test--bad {
+  color: var(--ui-danger);
+}
+
+.engine-card__defaults {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.engine-card__actions,
+.engine-card__default-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.engine-card__default-label {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.engine-card__saved {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.engine-config {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.engine-config__row {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.engine-config__label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.engine-config__field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.engine-config__field .ui-input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.engine-config__hint {
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.engine-card code,
+.engine-config code {
+  padding: 1px 6px;
+  font-size: 12px;
+  background: var(--ui-surface-3);
+  border-radius: 6px;
+}
+
+@media (max-width: 767px) {
+  .engine-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Freebuff: modelo da plataforma, horas do dia e horas abertas ---------- */
+.freebuff {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.freebuff__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.freebuff__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ui-text-3);
+}
+
+.freebuff__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.freebuff__field {
+  display: grid;
+  flex: 1 1 200px;
+  gap: 3px;
+}
+
+.freebuff__field--small {
+  flex: 0 1 130px;
+}
+
+.freebuff__hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+}
+
+.freebuff__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.freebuff__hours {
+  display: grid;
+  gap: 4px;
+}
+
+.freebuff__old {
+  opacity: 0.6;
+}
+
+.freebuff__sessions {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0 0 0 16px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.freebuff__confirm {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text);
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 45%, var(--ui-border));
+  border-radius: var(--ui-radius-sm);
+}
+
+.freebuff__confirm p {
+  margin: 0;
+}
+
+/* ---------- OpenClaw e Hermes: o passo a passo ---------- */
+/* O cartão de um desses motores ocupa a linha inteira (o passo a passo precisa de largura). */
+.engine-card:has(.oneshot) {
+  grid-column: 1 / -1;
+}
+
+.oneshot {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-2, transparent);
+}
+
+.oneshot__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.oneshot__steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oneshot__step {
+  display: grid;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+}
+
+.oneshot__step--current {
+  border-color: var(--ui-accent);
+}
+
+.oneshot__step--error {
+  border-color: var(--ui-danger);
+}
+
+.oneshot__step--todo {
+  opacity: 0.7;
+}
+
+.oneshot__step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.oneshot__glyph {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  background: var(--ui-surface-3, rgba(127, 127, 127, 0.18));
+}
+
+.oneshot__step--done .oneshot__glyph {
+  color: var(--ui-ok);
+}
+
+.oneshot__step--error .oneshot__glyph {
+  color: var(--ui-danger);
+}
+
+.oneshot__step--current .oneshot__glyph {
+  color: var(--ui-accent);
+}
+
+.oneshot__state {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ui-text-3);
+}
+
+.oneshot__detail,
+.oneshot__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.oneshot__hint {
+  color: var(--ui-text-3);
+}
+
+.oneshot__body {
+  display: grid;
+  gap: 8px;
+}
+
+.oneshot__body > .ui-button,
+.oneshot__body > .engine-card__actions {
+  justify-self: start;
+}
+
+.oneshot__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.oneshot__form .ui-input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.oneshot__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.oneshot__plan,
+.oneshot__job,
+.oneshot__verify,
+.oneshot__confirm {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--ui-border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.oneshot__plan ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.oneshot__code {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ui-surface-3, rgba(127, 127, 127, 0.14));
+}
+
+.oneshot__code--log {
+  max-height: 180px;
+  overflow: auto;
+}
+
+.oneshot__checks {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oneshot__check--ok {
+  color: var(--ui-text);
+}
+
+.oneshot__check--ok > span:first-child {
+  color: var(--ui-ok);
+}
+
+.oneshot__check--bad > span:first-child {
+  color: var(--ui-danger);
+}
+
+.oneshot__check--skip {
+  color: var(--ui-text-3);
+}
+
+.oneshot__fix {
+  display: block;
+  color: var(--ui-text);
+}
+
+.oneshot__found {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.oneshot__paid,
+.oneshot__note,
+.oneshot__unverified {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--ui-warn-bg);
+  color: var(--ui-text);
+}
+
+.oneshot__note {
+  background: var(--ui-ok-bg);
+}
+
+/* A cerca de arquivos (Landlock): a opção e o estado dela, à vista no topo do cartão. */
+.oneshot__fence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.oneshot__fence-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.oneshot__fence-state {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-dim, var(--ui-text));
+}
+.oneshot__fence-state--on {
+  color: var(--ui-ok);
+}
+
+@media (max-width: 600px) {
+  .engine-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Passo "Conta": a configuração do próprio programa (provedores ligados, comandos copiáveis, o que o Cyno escreve). */
+.oneshot__program {
+  display: grid;
+  gap: 8px;
+}
+.oneshot__commands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.oneshot__commands li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.oneshot__commands .oneshot__code {
+  flex: 1 1 260px;
+  margin: 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.oneshot__providers {
+  margin: 0;
+  padding-left: 18px;
+}
+.mpick-source {
+  display: grid;
+  gap: 8px;
+}
+
+.oneshot__gateways {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.oneshot__gateways .ui-input {
+  width: auto;
+  min-width: 64px;
+}
+.oneshot__gateways .oneshot__hint {
+  flex-basis: 100%;
+  margin: 0;
+}

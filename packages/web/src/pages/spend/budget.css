@@ -1,0 +1,205 @@
+/* ---------- Orçamento de consumo (só avisa, nunca trava) ---------- */
+.budget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.budget__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.budget__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.budget__summary {
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.budget__empty,
+.budget__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.budget__rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 18px;
+}
+
+.budget-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.budget-row__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.budget-row__title {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.budget-row__amounts {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.budget-row__percent {
+  font-weight: 650;
+  color: var(--budget-tone, var(--ui-ok));
+}
+
+.budget-row__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  background: var(--ui-bar-track);
+  box-shadow: inset 0 0 0 1px var(--ui-bar-track-edge);
+  border-radius: 999px;
+}
+
+.budget-row__fill {
+  height: 100%;
+  background: var(--budget-tone, var(--ui-ok));
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* A marca dos 80%: onde o Cyno começa a avisar. */
+.budget-row__mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80%;
+  width: 1px;
+  background: color-mix(in srgb, var(--ui-text) 45%, transparent);
+}
+
+.budget-row--ok { --budget-tone: var(--ui-level-ok); }
+.budget-row--warn { --budget-tone: var(--ui-level-warn); }
+.budget-row--danger { --budget-tone: var(--ui-level-danger); }
+
+.budget-row__note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--budget-tone);
+}
+
+.budget-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.budget-form__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.budget-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.budget-form__input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.budget-form__input .ui-input {
+  width: 110px;
+  text-align: right;
+}
+
+.budget-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.budget-form__hint {
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.budget-form__message {
+  font-size: 12px;
+  color: var(--ui-danger);
+}
+
+/* Avisos discretos do período: turno ignorado e turno cortado */
+.spend-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spend-flag {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-warn);
+  border-radius: var(--ui-radius);
+}
+
+.spend-flag--partial {
+  border-left-color: var(--ui-info);
+}
+
+.spend-flag summary {
+  cursor: pointer;
+  color: var(--ui-text);
+}
+
+.spend-flag p {
+  margin: 6px 0 0;
+}
+
+.spend-flag em {
+  font-style: normal;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+@media (max-width: 640px) {
+  .budget__rows {
+    grid-template-columns: 1fr;
+  }
+}

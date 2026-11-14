@@ -1,0 +1,563 @@
+/* ---------- Painel "Hoje": cabeçalho, indicador ao vivo da barra e as seções do dia ---------- */
+.actp__head {
+  align-items: flex-start;
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+
+.actp__sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.actp__live,
+.navitem__live-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--ui-info);
+  border-radius: 50%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ui-info) 70%, transparent);
+  animation: actp-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes actp-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.actp__close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.actp__close:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.navitem .navitem__badge--live {
+  white-space: nowrap;
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+}
+
+.sidenav--rail .navitem .navitem__badge--live {
+  display: inline-grid;
+  color: #06202e;
+  background: var(--ui-info);
+}
+
+.navitem__live-text,
+.sidenav--rail .navitem__live-dot {
+  display: none;
+}
+
+
+.hoje {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.hoje__scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.hoje__foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.hj-quiet {
+  margin: 8px 4px 4px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-radius: 10px;
+}
+
+.hj-quiet--ws {
+  margin: 14px 4px 2px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  background: transparent;
+  padding: 0;
+}
+
+/* Seções */
+.hj-section {
+  margin-top: 14px;
+}
+
+.hj-section__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.hj-section__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ui-text-3);
+  opacity: 0.8;
+}
+
+/* Seção vazia: uma linha só, título e texto curto. */
+.hj-section--empty {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-top: 8px;
+}
+
+.hj-section--empty .hj-section__title {
+  flex: none;
+  margin-bottom: 0;
+}
+
+.hj-section__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  opacity: 0.75;
+}
+
+.hj-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+/* Linha clicável */
+.hj-row {
+  position: relative;
+  border-radius: 10px;
+}
+
+.hj-row:hover {
+  background: var(--ui-hover);
+}
+
+.hj-row__open {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 8px 8px 8px 10px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.hj-row__open:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.hj-row__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hj-row__title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.hj-row__title--soft {
+  font-weight: 400;
+  color: var(--ui-text-2);
+}
+
+.hj-agent {
+  font-weight: 700;
+}
+
+.hj-row__sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ui-text-3);
+}
+
+.hj-row__delivery {
+  color: var(--ui-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hj-row__note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.hj-next {
+  color: var(--ui-text-2);
+}
+
+.hj-row__meta {
+  flex: none;
+  padding-top: 1px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+  white-space: nowrap;
+}
+
+.hj-row--run .hj-row__meta {
+  font-weight: 700;
+  color: var(--ui-info);
+}
+
+.hj-chev {
+  flex: none;
+  margin-top: 3px;
+  color: var(--ui-text-3);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+
+.hj-row:hover .hj-chev,
+.hj-row__open:focus-visible .hj-chev {
+  opacity: 0.8;
+}
+
+.hj-tag {
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: var(--ui-accent-bg);
+  border-radius: var(--ui-radius-pill);
+}
+
+.hj-tag--routine {
+  color: var(--ui-text-3);
+  background: var(--ui-hover);
+}
+
+/* Pontos e marcas de estado */
+.hj-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--ui-text-3);
+}
+
+.hj-dot--run {
+  background: var(--ui-info);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--ui-info) 70%, transparent);
+}
+
+.hj-dot--ok {
+  background: var(--ui-ok);
+}
+
+.hj-dot--warn {
+  background: var(--ui-warn);
+}
+
+.hj-dot--danger {
+  background: var(--ui-danger);
+}
+
+.hj-dot--queue,
+.hj-dot--muted {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--ui-text-3);
+}
+
+.hj-mark {
+  flex: none;
+  width: 12px;
+  margin-top: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  color: var(--ui-text-3);
+}
+
+.hj-mark--ok {
+  color: var(--ui-ok);
+}
+
+.hj-mark--danger {
+  color: var(--ui-danger);
+}
+
+.hj-mark--run {
+  color: var(--ui-info);
+}
+
+.hj-time {
+  flex: none;
+  min-width: 40px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 18px;
+  color: var(--ui-accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hj-dot--pulse,
+  .hj-mark--pulse {
+    animation: actp-pulse 1.6s ease-in-out infinite;
+  }
+}
+
+/* Barra de progresso fina */
+.hj-bar {
+  display: block;
+  height: 3px;
+  margin-top: 2px;
+  overflow: hidden;
+  background: var(--ui-border);
+  border-radius: 2px;
+}
+
+.hj-bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--ui-info);
+  border-radius: 2px;
+  transition: width 400ms ease;
+}
+
+.hj-more {
+  margin: 4px 0 0 10px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.hj-more:hover {
+  background: var(--ui-hover);
+}
+
+/* Chips */
+.hj-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.hj-chip {
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-pill);
+}
+
+.hj-chip--ok {
+  color: var(--ui-ok);
+  background: var(--ui-ok-bg);
+}
+
+.hj-chip--warn {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.hj-chip--danger {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+.hj-chip--muted {
+  color: var(--ui-text-3);
+}
+
+/* Esperando você */
+.hj-waiting__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.hj-waiting__main--on {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+}
+
+.hj-waiting__main:hover {
+  border-color: var(--ui-border-strong);
+}
+
+.hj-waiting__list {
+  padding: 0;
+  margin: 6px 0 0;
+  list-style: none;
+}
+
+.hj-waiting__item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hj-waiting__item:hover {
+  background: var(--ui-hover);
+}
+
+.hj-waiting__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Bloco da página do Cyno: um grupo por workspace */
+.hj-ws {
+  padding: 10px 4px 2px;
+  margin-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.hj-ws:first-of-type {
+  margin-top: 4px;
+}
+
+.hj-ws__name {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.hj-ws__link {
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.hj-ws__link:hover {
+  color: var(--ui-accent);
+}
+
+/* Painel ao lado da barra: um pouco mais largo que os outros (as linhas têm etapa, próximo passo e selos). */
+.navpanel.navpanel--hoje {
+  width: min(420px, calc(100vw - var(--nav-w) - 2 * var(--gap)));
+}
+
+/* Celular: o painel abre em tela cheia. */
+@media (max-width: 767px) {
+  .navpanel.navpanel--hoje {
+    inset: 0;
+    z-index: 40;
+    width: auto;
+    max-height: none;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    border: 0;
+    border-radius: 0;
+  }
+
+  .hoje__scroll {
+    padding-bottom: 16px;
+  }
+
+  .hj-row__open {
+    padding-block: 10px;
+  }
+
+  .hj-chev {
+    opacity: 0.5;
+  }
+}
