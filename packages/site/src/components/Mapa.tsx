@@ -113,7 +113,7 @@ export function Mapa() {
       </div>
       <div className="janela-pe">
         <p>
-          Tudo aqui é fabricado dentro desta página: nenhum servidor, nenhum dado real. {aoVivo ? "Arraste para mover o mapa; Ctrl e a roda aproximam." : ""}
+          Tudo aqui é fabricado dentro desta página: nenhum servidor, nenhum dado real. {aoVivo ? (window.matchMedia("(pointer: coarse)").matches ? "Arraste para os lados para mover o mapa." : "Arraste para mover o mapa; Ctrl e a roda aproximam.") : ""}
         </p>
         {aoVivo ? (
           <button type="button" className="btn-mini" onClick={() => demo.current?.mundo.overview()}>

@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { Cabecalho, Revela } from "../components/pequenos";
 
-const PERGUNTAS = [
+const PERGUNTAS: Array<{ p: string; r: ReactNode }> = [
   {
     p: "Preciso de chave de API?",
     r: "Não. Cada agente é uma CLI logada na sua assinatura, como o Claude Code. O Cyno limpa do ambiente de cada processo as variáveis de provedores e para o terminal se a CLI tentar usar uma chave.",
@@ -25,6 +26,26 @@ const PERGUNTAS = [
     p: "Qual é a licença?",
     r: "MIT. O código está no GitHub, e o motor de cena vem do projeto Habblaud, também MIT, com os créditos no rodapé.",
   },
+  {
+    p: "O que o Cyno gasta, e o que mostra de custo?",
+    r: "Os agentes gastam a cota da assinatura da CLI de cada um. A aba Gastos mostra o equivalente na API, não o que você paga. Dá para definir orçamento por dia, semana e mês; o Cyno só avisa ao chegar em 80% e em 100%, e nunca trava nem para o trabalho.",
+  },
+  {
+    p: "Algum dado sai do computador por outro caminho?",
+    r: "Em dois casos. O Freebuff manda o que o agente lê para os servidores da Codebuff. E o OpenClaw e o Hermes, se você usar a chave do OpenRouter, rodam os modelos de lá. Nos demais, quem fala com o provedor é a CLI do agente, como faria sem o Cyno.",
+  },
+  {
+    p: "O que o Cyno ainda não faz?",
+    r: (
+      <ul className="faq-lista">
+        <li>O progresso de uma tarefa em andamento não sobrevive a reiniciar o servidor: uma aprovação pendente volta com 0% e uma mensagem genérica, mas aprovar e recusar funcionam.</li>
+        <li>Cada aba do navegador tem a própria simulação do mapa: o status é o mesmo, mas a posição de um agente ocioso pode mudar de uma aba para outra.</li>
+        <li>A posição de uma sala no grid e a sala de um time inteiro só mudam pela API.</li>
+        <li>O Hermes só foi lido no código-fonte, sem teste com o programa instalado, e no OpenClaw o formato de um turno bem-sucedido ainda não foi conferido.</li>
+        <li>A cerca de arquivos do OpenClaw e do Hermes usa o Landlock do Linux. Sem ele, os agentes rodam sem a cerca e o app avisa.</li>
+      </ul>
+    ),
+  },
 ];
 
 export function Faq() {
@@ -37,7 +58,7 @@ export function Faq() {
             {PERGUNTAS.map((q) => (
               <details key={q.p}>
                 <summary>{q.p}</summary>
-                <p>{q.r}</p>
+                {typeof q.r === "string" ? <p>{q.r}</p> : <div className="faq-resp">{q.r}</div>}
               </details>
             ))}
           </div>

@@ -92,3 +92,86 @@ export function Revela({ children, atraso = 0, className = "" }: { children: Rea
     </div>
   );
 }
+
+/**
+ * Imagem que abre ampliada ao clicar ou tocar (lightbox sem biblioteca): `<dialog>` modal, Esc e clique no fundo fecham,
+ * o foco vai para o diálogo e volta para a miniatura. No celular a imagem abre grande, para arrastar com o dedo e aproximar
+ * com a pinça, e há um botão para ajustá-la à tela.
+ */
+export function ImagemAmpliavel({ src, alt, largura, altura, legenda }: { src: string; alt: string; largura: number; altura: number; legenda?: string }) {
+  const [aberto, setAberto] = useState(false);
+  const [grande, setGrande] = useState(false);
+  const botao = useRef<HTMLButtonElement>(null);
+  const dialogo = useRef<HTMLDialogElement>(null);
+
+  const abrir = () => {
+    setGrande(window.matchMedia("(pointer: coarse)").matches);
+    setAberto(true);
+  };
+  const fechar = () => {
+    // fecha o diálogo antes: com ele aberto, o resto da página fica inerte e o foco não volta.
+    if (dialogo.current?.open) dialogo.current.close();
+    setAberto(false);
+    botao.current?.focus();
+  };
+
+  useEffect(() => {
+    const el = dialogo.current;
+    if (!aberto || !el) return;
+    if (!el.open) el.showModal();
+    el.querySelector<HTMLElement>(".lb-fechar")?.focus();
+    document.documentElement.classList.add("lb-aberto");
+    return () => document.documentElement.classList.remove("lb-aberto");
+  }, [aberto]);
+
+  const toque = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  return (
+    <>
+      <button ref={botao} type="button" className="ampliar" aria-label={`Ampliar: ${alt}`} aria-haspopup="dialog" onClick={abrir}>
+        <img src={src} width={largura} height={altura} loading="lazy" decoding="async" alt="" />
+        <span className="ampliar-barra" aria-hidden="true">
+          {legenda ? <span className="ampliar-legenda">{legenda}</span> : null}
+          <span className="ampliar-dica">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5 14 14M7 5v4M5 7h4" />
+            </svg>
+            {toque ? "Toque para ampliar" : "Ampliar"}
+          </span>
+        </span>
+      </button>
+      {aberto ? (
+        <dialog
+          ref={dialogo}
+          className="lb"
+          aria-label={alt}
+          onClose={fechar}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) fechar();
+          }}
+        >
+          <div className="lb-barra">
+            {toque ? (
+              <button type="button" onClick={() => setGrande((g) => !g)}>
+                {grande ? "Ajustar à tela" : "Aproximar"}
+              </button>
+            ) : null}
+            <button type="button" className="lb-fechar" aria-label="Fechar" onClick={fechar}>
+              <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M3 3l10 10M13 3 3 13" />
+              </svg>
+            </button>
+          </div>
+          <div
+            className={`lb-cena${grande ? " lb-grande" : ""}`}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) fechar();
+            }}
+          >
+            <img src={src} alt={alt} style={{ "--nat": `${Math.round(largura / 2)}px` } as React.CSSProperties} />
+          </div>
+        </dialog>
+      ) : null}
+    </>
+  );
+}

@@ -14,6 +14,9 @@ export function montarDemo(canvas: HTMLCanvasElement): DemoMontada {
   // 6 agentes e uma semente fixa: o mesmo escritório a cada abertura. O tema fica no original (o automático põe Natal no fim do ano).
   const loja = new OfficeStore({ mock: true, search: "?sessions=6&seed=7&speed=1.5" });
   const mundo = createWorld(canvas, loja);
+  // O motor põe `touch-action: none` no canvas, o que prende a rolagem da página no celular. Aqui o dedo na vertical rola a
+  // página e só o arrasto na horizontal move o mapa.
+  canvas.style.setProperty("touch-action", "pan-y", "important");
   mundo.setOptions({ theme: "none", daylight: "day", bubbles: "all", liveliness: "lively", showNames: true });
   loja.connect();
   return {

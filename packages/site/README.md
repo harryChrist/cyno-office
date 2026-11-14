@@ -55,7 +55,7 @@ Os prints são do app de laboratório com dados fabricados (`LAB_HISTORY_DAYS=21
    - Install Command: `cd ../.. && npm ci` (instala pela raiz, como o monorepo de workspaces precisa; instala também o server e o web, o que leva alguns minutos, mas só na instalação)
    - Build Command: `npm run build`
    - Output Directory: `dist`
-4. **Deploy**. Cada push no branch de produção publica de novo.
+4. **Deploy**. Depois disso, um push só publica de novo se tiver mudado algo em `packages/site`: o `ignoreCommand` do `vercel.json` compara a pasta com a última publicação e pula o build quando ela está igual. Mudanças no resto do repositório (inclusive no `@cyno/cena`) não republicam o site; para forçar, use **Redeploy** no painel da Vercel.
 
 Mudou em relação à versão anterior do site: antes o pacote era autossuficiente e o `installCommand` era `npm install` só na pasta. Agora o site depende de `@cyno/cena` (workspace), então a instalação tem de ser pela raiz. Foi conferido numa cópia limpa do repositório (`git clone` local, `npm ci` na raiz e `npm run build` dentro de `packages/site`).
 

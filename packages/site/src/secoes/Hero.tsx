@@ -25,7 +25,7 @@ export function Hero() {
           assinatura, como o Claude Code ou o Antigravity. Você acompanha tudo num escritório em pixel art e só entra quando pedem a sua aprovação.
         </p>
         <div className="acoes entra" style={{ "--i": 3 } as React.CSSProperties}>
-          <a className="btn btn-primario btn-grande" href={GITHUB} rel="noopener">
+          <a className="btn btn-primario btn-grande" href={GITHUB} target="_blank" rel="noopener noreferrer">
             <IconeGitHub /> Ver no GitHub
           </a>
           <a className="btn btn-sec btn-grande" href="#instalar">

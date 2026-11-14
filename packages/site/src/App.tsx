@@ -1,11 +1,36 @@
+import { useRef } from "react";
 import { Mapa } from "./components/Mapa";
 import { Cabecalho, GITHUB, IconeGitHub, Logo, Revela, Seta } from "./components/pequenos";
+import { Aprovacao } from "./secoes/Aprovacao";
 import { ComoFunciona } from "./secoes/ComoFunciona";
+import { Contribua } from "./secoes/Contribua";
 import { Faq } from "./secoes/Faq";
 import { Hero } from "./secoes/Hero";
 import { Instalar } from "./secoes/Instalar";
 import { OQueTem } from "./secoes/OQueTem";
 import { Rodape } from "./secoes/Rodape";
+
+function MenuCelular() {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const fechar = () => ref.current?.removeAttribute("open");
+  return (
+    <details className="menu-cel" ref={ref}>
+      <summary aria-label="Abrir o menu">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" strokeWidth="1.8" strokeLinecap="round">
+          <path d="M2 4h12M2 8h12M2 12h12" />
+        </svg>
+      </summary>
+      <nav className="menu-cel-lista" aria-label="Seções" onClick={fechar}>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#aprovacao">Aprovação</a>
+        <a href="#o-que-tem">O que tem</a>
+        <a href="#instalar">Instalar</a>
+        <a href="#faq">Dúvidas</a>
+        <a href="#contribuir">Contribuir</a>
+      </nav>
+    </details>
+  );
+}
 
 function Topo() {
   return (
@@ -22,13 +47,14 @@ function Topo() {
           <a href="#faq">Dúvidas</a>
         </nav>
         <div className="topo-acoes">
-          <a className="btn btn-fantasma btn-gh" href={GITHUB} rel="noopener">
+          <a className="btn btn-fantasma btn-gh" href={GITHUB} target="_blank" rel="noopener noreferrer">
             <IconeGitHub />
             <span>GitHub</span>
           </a>
           <a className="btn btn-primario btn-peq" href="#instalar">
             Instalar
           </a>
+          <MenuCelular />
         </div>
       </div>
     </header>
@@ -87,7 +113,7 @@ function ChamadaFinal() {
             <a className="btn btn-primario btn-grande" href="#instalar">
               Como instalar <Seta />
             </a>
-            <a className="btn btn-sec btn-grande" href={GITHUB} rel="noopener">
+            <a className="btn btn-sec btn-grande" href={GITHUB} target="_blank" rel="noopener noreferrer">
               <IconeGitHub /> Ver no GitHub
             </a>
           </div>
@@ -116,9 +142,11 @@ export function App() {
         </section>
         <Contraste />
         <ComoFunciona />
+        <Aprovacao />
         <OQueTem />
         <Instalar />
         <Faq />
+        <Contribua />
         <ChamadaFinal />
       </main>
       <Rodape />

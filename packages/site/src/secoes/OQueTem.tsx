@@ -1,4 +1,4 @@
-import { Cabecalho, Revela } from "../components/pequenos";
+import { Cabecalho, ImagemAmpliavel, Revela } from "../components/pequenos";
 
 interface Print {
   src: string;
@@ -10,7 +10,7 @@ interface Print {
 function Tela({ p }: { p: Print }) {
   return (
     <figure className="tela">
-      <img src={p.src} width={p.largura} height={p.altura} loading="lazy" decoding="async" alt={p.alt} />
+      <ImagemAmpliavel src={p.src} alt={p.alt} largura={p.largura} altura={p.altura} />
     </figure>
   );
 }
