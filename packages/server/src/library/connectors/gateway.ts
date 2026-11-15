@@ -4,7 +4,9 @@ import type { FastifyBaseLogger } from "fastify";
 import { z } from "zod";
 import type { McpTool, McpToolResult } from "../../mcp/protocol";
 import { sanitizeChildEnv } from "../../engines/terminals/env";
-import { ConnectorAuthError, HttpMcpClient, StdioMcpClient, type McpClient, type SpawnLike } from "./mcp-client";
+import { GmailApiClient } from "./gmail-api-client";
+import { ConnectorAuthError, HttpMcpClient, type HttpAuthProvider, StdioMcpClient, type McpClient, type SpawnLike } from "./mcp-client";
+import { OAuthReloginError, type OAuthManager } from "./oauth/manager";
 import type { ConnectorRegistry } from "./registry";
 import { redact, secretValues, type ConnectorPaths, type StoredConnector, type StoredConnectorTool } from "./store";
 
@@ -32,6 +34,8 @@ export type ConnectorGatewayDeps = {
   stdioIdleMs?: number;
   /** Conectores stdio liberados (CONNECTORS_STDIO=1)? Sem isso, nenhum comando é executado. */
   allowStdio?: boolean;
+  /** Login OAuth dos conectores HTTP (tokens, renovação). */
+  oauth?: OAuthManager;
   /** Ferramentas dos conectores `kind: "app"` (sem processo: o AppToolRunner roda o comando do app). */
   appTools?: () => AppToolsPort | undefined;
 };
@@ -114,6 +118,7 @@ export class ConnectorGateway {
           description: `[Connector ${record.name}] ${tool.description ?? tool.name}`.slice(0, 2000),
           input: anyArgs,
           jsonSchema: inputSchemaOf(tool),
+          ...(tool.annotations ? { annotations: tool.annotations } : {}),
           call: (args) => this.call(workspaceId, agentId, record.id, tool.name, (args ?? {}) as Record<string, unknown>),
         });
       }
@@ -155,6 +160,9 @@ export class ConnectorGateway {
       this.deps.log.warn({ connectorId, agentId, tool, state: status.state, reason: status.reason }, "chamada de conector falhou");
       await this.dropClient(connectorId);
       await this.deps.registry.setStatus(connectorId, status);
+      if (error instanceof OAuthReloginError) {
+        return { text: `Connector ${record.name} is disconnected: its OAuth login expired, was revoked or was never completed. The owner must sign in again in Cyno Office (Library > Connectors > ${record.name} > Sign in). Tell the user; retrying will not help.`, isError: true };
+      }
       const hint = status.state === "needs_auth" ? " It needs a login/credential: tell the user." : "";
       return { text: `Connector ${record.name} failed: ${status.reason}.${hint}`, isError: true };
     }
@@ -211,19 +219,31 @@ export class ConnectorGateway {
     }
     await this.dropClient(connectorId);
     if (record.kind === "stdio") await mkdir(this.deps.paths.dir(connectorId), { recursive: true });
+    let tools: StoredConnectorTool[] = [];
     try {
-      const tools = await this.client(record).listTools();
+      const client = this.client(record);
+      tools = await client.listTools();
+      // Clientes embutidos (Gmail pela API) listam sem rede: a chamada real e barata é que prova que o uso não está barrado.
+      if (client.probe && (!record.oauth || record.oauth.connection === "connected")) await client.probe();
+      // Com OAuth, "conectado" é ter entrado com a conta: há servidores que listam as ferramentas sem login (o do Gmail), então a lista vale, o estado não.
+      if (record.oauth && record.oauth.connection !== "connected") {
+        const reason = record.oauth.connection === "needs_login" ? (record.oauth.reason ?? "Precisa entrar de novo com a conta.") : "Entre com a conta (OAuth) para usar este conector.";
+        return await this.deps.registry.setStatus(connectorId, { state: "needs_auth", reason, tools });
+      }
       return await this.deps.registry.setStatus(connectorId, { state: "connected", tools });
     } catch (error) {
       const status = statusFromError(error, secretValues(record));
+      if (status.state === "needs_auth" && record.oauth && record.oauth.connection !== "connected") status.reason = record.oauth.connection === "needs_login" ? (record.oauth.reason ?? "Precisa entrar de novo com a conta.") : "Entre com a conta (OAuth) para usar este conector.";
       this.deps.log.info({ connectorId, state: status.state, reason: status.reason }, "teste de conector falhou");
       await this.dropClient(connectorId);
-      return this.deps.registry.setStatus(connectorId, status);
+      // A lista local (sem rede) continua valendo para a tela mesmo com o uso barrado.
+      return this.deps.registry.setStatus(connectorId, { ...status, ...(tools.length > 0 ? { tools } : {}) });
     }
   }
 
   private fingerprint(record: StoredConnector): string {
-    return JSON.stringify([record.kind, record.url, record.command, record.args, record.headers, record.env]);
+    // Tokens do OAuth ficam de fora: o cliente os pede a cada requisição (e renovar não refaz o cliente).
+    return JSON.stringify([record.kind, record.url, record.builtin, record.command, record.args, record.headers, record.env, record.oauth ? [record.oauth.resource, record.oauth.client?.clientId] : null]);
   }
 
   private client(record: StoredConnector): McpClient {
@@ -237,7 +257,20 @@ export class ConnectorGateway {
   }
 
   private defaultClient(record: StoredConnector): McpClient {
-    if (record.kind === "http") return new HttpMcpClient({ url: record.url ?? "", headers: record.headers, fetch: this.deps.fetch });
+    // Gmail pela API: sem servidor MCP; o cliente chama a API pública com o mesmo token OAuth. Os escopos concedidos decidem as ferramentas.
+    if (record.kind === "http" && record.builtin === "gmail-api") {
+      const id = record.id;
+      return new GmailApiClient({
+        fetch: this.deps.fetch,
+        auth: this.authProvider(id),
+        scopes: () => {
+          const oauth = this.deps.registry.record(id)?.oauth;
+          const granted = oauth?.tokens?.scope?.split(/\s+/).filter(Boolean);
+          return granted && granted.length > 0 ? granted : oauth?.scopes;
+        },
+      });
+    }
+    if (record.kind === "http") return new HttpMcpClient({ url: record.url ?? "", headers: record.headers, fetch: this.deps.fetch, ...(record.oauth ? { auth: this.authProvider(record.id) } : {}) });
     if (record.kind === "app") return new AppToolClient(record.appId ?? "", () => this.deps.appTools?.());
     if (this.deps.allowStdio === false) throw new Error("conectores stdio (comando local) estão desligados neste servidor; suba com CONNECTORS_STDIO=1 para liberar");
     // O processo herda o ambiente do server sem chaves de API, mais as variáveis do conector
@@ -254,6 +287,22 @@ export class ConnectorGateway {
       idleMs: limits ? limits.idleSec * 1000 : this.deps.stdioIdleMs,
       ...(limits ? { timeoutMs: limits.startSec * 1000, callTimeoutMs: limits.callSec * 1000 } : {}),
     });
+  }
+
+  /** O token OAuth do conector, pedido a cada requisição; num 401, renova (uma vez por conector) e tenta de novo. */
+  private authProvider(connectorId: string): HttpAuthProvider {
+    const oauth = this.deps.oauth;
+    const bare = (header: string | undefined) => header?.replace(/^Bearer\s+/i, "");
+    return {
+      header: async () => {
+        const token = await oauth?.accessToken(connectorId);
+        return token ? `Bearer ${token}` : undefined;
+      },
+      refresh: async (used, rejectedAfterRefresh) => {
+        if (!oauth) throw new OAuthReloginError();
+        return oauth.refreshAfterRejection(connectorId, bare(used), rejectedAfterRefresh);
+      },
+    };
   }
 
   private async dropClient(connectorId: string): Promise<void> {

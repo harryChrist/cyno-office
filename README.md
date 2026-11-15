@@ -101,6 +101,7 @@ data/       estado de runtime (não versionado)
 ## Documentação
 
 - [Usando o escritório](docs/usando-o-escritorio.md): a interface, tela por tela.
+- [Conectar o Gmail](docs/conectar-o-gmail.md): o passo a passo do Google Cloud ao agente lendo e-mails.
 - [Como rodar](docs/como-rodar.md): requisitos, variáveis, agentes reais, laboratório e acesso pela rede.
 - [Arquitetura](docs/arquitetura.md): servidor, dados, MCP, motores, cena e decisões de cada área.
 - [Criando agentes e workspaces](docs/como-criar-agentes-e-workspaces.md)

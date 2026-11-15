@@ -773,6 +773,9 @@ textarea.ui-input {
 }
 
 .ui-modal__body {
+  /* Segura dentro da área de rolagem os filhos de posição absoluta (ex.: textos .sr-only); soltos, eles
+     esticavam a janela inteira e criavam uma segunda rolagem com um vazio embaixo. */
+  position: relative;
   min-height: 0;
   padding: 18px 20px 20px;
   overflow-y: auto;

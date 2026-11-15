@@ -1,0 +1,462 @@
+/* Versão e atualizações: a etiqueta na linha da marca da barra lateral e a seção das Configurações. */
+
+/* ---------- Barra lateral: etiqueta pequena DENTRO do item da marca (não ocupa linha própria) ---------- */
+/* O item Cyno ocupa a linha toda e a etiqueta fica por cima, à direita: assim ela mora dentro do mesmo
+   contêiner e entra no realce quando o Cyno está selecionado (um botão não pode ficar dentro de outro). */
+.sidenav__brandrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.sidenav__brandrow .navsection--cyno {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Espaço para a etiqueta, para o nome da marca nunca passar por baixo dela. */
+.sidenav:not(.sidenav--rail) .sidenav__brandrow .navitem--cyno,
+.mdrawer .sidenav__brandrow .navitem--cyno {
+  padding-right: 86px;
+}
+
+.mdrawer .sidenav__brandrow {
+  flex: 1;
+}
+
+.navversion {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  transform: translateY(-50%);
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    color var(--ui-fast),
+    background var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.navversion:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.navversion:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.navversion[aria-current="page"] {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+}
+
+.navversion__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--ui-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--ui-accent-glow);
+}
+
+/* Cyno selecionado: a etiqueta acompanha o realce dourado do item. */
+.sidenav__brandrow:has(.navitem--cyno[aria-current="page"]) .navversion:not(.navversion--update) {
+  color: var(--cyno);
+  border-color: var(--cyno-border);
+}
+
+/* Com atualização: a etiqueta ganha a cor do app (violeta) e o ponto. */
+.navversion--update {
+  font-weight: 600;
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
+}
+
+.navversion--update:hover {
+  background: color-mix(in srgb, var(--ui-accent) 24%, transparent);
+}
+
+/* Reinício pendente: a cor de aviso (âmbar), para não confundir com "atualização disponível". */
+.navversion.navversion--restart {
+  background: var(--ui-warn-bg);
+  border-color: color-mix(in srgb, var(--ui-warn) 45%, transparent);
+}
+
+.navversion.navversion--restart:hover {
+  background: color-mix(in srgb, var(--ui-warn) 22%, transparent);
+}
+
+.navversion.navversion--restart .navversion__dot {
+  background: var(--ui-warn);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ui-warn) 55%, transparent);
+}
+
+/* Barra recolhida: a etiqueta some; havendo novidade, fica só o ponto no canto do logo. */
+.sidenav--rail .sidenav__brandrow {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.sidenav--rail .navversion {
+  display: none;
+}
+
+.sidenav--rail .navversion--update {
+  top: 0;
+  right: -4px;
+  transform: none;
+  display: inline-flex;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+}
+
+.sidenav--rail .navversion__text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Gaveta do celular: alvo de toque um pouco maior. */
+.mdrawer .navversion {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+/* ---------- Configurações ---------- */
+.version__rows {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.version__row {
+  display: grid;
+  grid-template-columns: minmax(110px, 160px) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ui-border);
+  font-size: 13px;
+}
+
+.version__row:first-child {
+  border-top: 0;
+}
+
+.version__row dt {
+  color: var(--ui-text-3);
+}
+
+.version__row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.version__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.version__when {
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.version__news {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.version__news-title,
+.version__guide-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.version__commits {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version__commit {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.version__commit-subject {
+  font-size: 13px;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.version__commit-meta {
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.version__guides {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+
+.version__guide {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.version__steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.version__step {
+  display: grid;
+  gap: 4px;
+}
+
+.version__step-note {
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.version__cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.version__code {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  overflow-x: auto;
+  white-space: pre;
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+}
+
+/* ---------- Baixar a atualização ---------- */
+.version__action {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.version__action > .ui-button {
+  justify-self: start;
+}
+
+.version__action:empty {
+  display: none;
+}
+
+.version__blocked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.version__blocked .ui-button {
+  flex: none;
+}
+
+.version__reason {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.version__failure {
+  display: grid;
+  gap: 6px;
+}
+
+.version__failure .ui-error {
+  margin: 0;
+}
+
+/* O aviso em destaque de reinício. */
+.settings__card.version__restart {
+  gap: 10px;
+  border-color: color-mix(in srgb, var(--ui-warn) 50%, transparent);
+  background: linear-gradient(180deg, var(--ui-warn-bg), transparent 140%), var(--ui-surface-2);
+}
+
+.settings__card.version__restart--error {
+  border-color: color-mix(in srgb, var(--ui-danger) 50%, transparent);
+  background: linear-gradient(180deg, var(--ui-danger-bg), transparent 140%), var(--ui-surface-2);
+}
+
+.version__restart-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.version__restart-main .version__step-note {
+  font-size: 13px;
+}
+
+.version__restart-main strong {
+  color: var(--ui-text);
+}
+
+.version__restart-main {
+  display: grid;
+  gap: 6px;
+}
+
+.version__warning {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-warn);
+}
+
+.version__details {
+  min-width: 0;
+  border-top: 1px solid var(--ui-border);
+  padding-top: 8px;
+}
+
+.version__details > summary {
+  width: fit-content;
+  padding: 4px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.version__details > summary:hover {
+  color: var(--ui-text);
+}
+
+.version__details > summary:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+.version__details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.version__details--manual {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.version__ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+}
+
+.version__way {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.version__log {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--ui-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+}
+
+.version__log:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .version__row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+/* Ponto do botão de menu do celular quando há atualização: violeta, não o coral dos avisos. */
+.navitem__dot.navitem__dot--update {
+  background: var(--ui-accent);
+  box-shadow: 0 0 8px var(--ui-accent-glow);
+}

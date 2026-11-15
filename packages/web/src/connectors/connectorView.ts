@@ -1,11 +1,18 @@
 import {
+  GMAIL_API_SCOPES,
+  GMAIL_API_URL,
+  GMAIL_MCP_URL,
+  GMAIL_READONLY_SCOPE,
   parseConnectorToolName,
   type Connector,
+  type ConnectorAuthInput,
   type ConnectorActivity,
   type ConnectorImportCandidate,
   type CreateConnectorBody,
+  type ConnectorBuiltin,
   type CreateLibraryConnectorBody,
   type LibraryConnector,
+  type OAuthRedirectMode,
   type ServerEvent,
   type UpdateConnectorBody,
   type UpdateLibraryConnectorBody,
@@ -30,8 +37,12 @@ export function applyConnectorEvent(list: ConnectorList, event: ServerEvent): Co
 export type StatusTone = "success" | "attention" | "danger" | "neutral";
 
 /** Selo do estado: cor + texto (o texto sempre aparece; a cor nunca é a única pista). */
-export function connectorStatus(connector: Pick<Connector, "enabled" | "status">): { tone: StatusTone; label: string; dot: "ok" | "warn" | "error" | "off" } {
+export function connectorStatus(connector: Pick<Connector, "enabled" | "status" | "oauth">): { tone: StatusTone; label: string; dot: "ok" | "warn" | "error" | "off" } {
   if (!connector.enabled) return { tone: "neutral", label: "Desligado", dot: "off" };
+  // Com login OAuth, "conectado" é ter entrado com a conta (há servidores que listam as ferramentas sem login).
+  if (connector.oauth?.connection === "not_connected") return { tone: "attention", label: "Não conectado", dot: "warn" };
+  if (connector.oauth?.connection === "needs_login") return { tone: "attention", label: "Precisa entrar de novo", dot: "warn" };
+  if (connector.oauth?.connection === "connected" && connector.status.state !== "error" && connector.status.state !== "disabled") return { tone: "success", label: "Conectado", dot: "ok" };
   switch (connector.status.state) {
     case "connected":
       return { tone: "success", label: "Conectado", dot: "ok" };
@@ -212,6 +223,22 @@ export type ConnectorForm = {
   origin: "manual" | "claude-code";
   /** Só na Biblioteca: o que o conector faz, em uma linha. */
   description: string;
+  /** HTTP: token fixo (o de sempre) ou entrar com a conta (OAuth). */
+  authMode: "static" | "oauth";
+  /** OAuth: escopos marcados. */
+  oauthScopes: string[];
+  /** OAuth sem cadastro automático: o ID e o segredo do cliente criado pelo dono (segredo vazio na edição = mantém). */
+  oauthClientId: string;
+  oauthClientSecret: string;
+  oauthClientSecretStored: boolean;
+  /** OAuth: endereço de retorno escolhido (null = o padrão do tipo de cliente). */
+  oauthRedirect: OAuthRedirectMode | null;
+  /** O dono já mexeu na escolha (a descoberta não troca mais o modo sozinha). */
+  authTouched: boolean;
+  /** Conector do Gmail (API ou servidor MCP oficial): mostra o seletor "Como falar com o Gmail". */
+  gmail: boolean;
+  /** "gmail-api" = fala direto com a API pública do Gmail (sem URL digitada); null = servidor MCP pela URL. */
+  builtin: ConnectorBuiltin | null;
 };
 
 export const EMPTY_FORM: ConnectorForm = {
@@ -232,6 +259,15 @@ export const EMPTY_FORM: ConnectorForm = {
   agentIds: [],
   origin: "manual",
   description: "",
+  authMode: "static",
+  oauthScopes: [],
+  oauthClientId: "",
+  oauthClientSecret: "",
+  oauthClientSecretStored: false,
+  oauthRedirect: null,
+  authTouched: false,
+  gmail: false,
+  builtin: null,
 };
 
 const isAuthorization = (name: string) => name.toLowerCase() === "authorization";
@@ -255,6 +291,8 @@ export function formFromConnector(connector: Connector): ConnectorForm {
     enabled: connector.enabled,
     agentIds: [...connector.agentIds],
     origin: connector.origin,
+    gmail: isGmailConnector(connector),
+    builtin: connector.builtin ?? null,
   };
 }
 
@@ -287,7 +325,9 @@ export function formErrors(form: ConnectorForm, editing: boolean): Partial<Recor
   if (!form.name.trim()) errors.name = "Dê um nome ao conector.";
   if (form.kind === "http") {
     const url = form.url.trim();
-    if (!url && !editing) errors.url = "Cole a URL do servidor MCP.";
+    if (form.builtin) {
+      // sem URL: o servidor fala direto com a API do serviço
+    } else if (!url && !editing) errors.url = "Cole a URL do servidor MCP.";
     else if (url && !/^https?:\/\/\S+$/i.test(url)) errors.url = "Use uma URL http:// ou https://.";
   } else if (!form.command.trim() && !editing) errors.command = "Diga o comando que sobe o servidor.";
   const names = form.secrets.filter((row) => !row.remove).map((row) => row.name.trim().toLowerCase());
@@ -365,19 +405,97 @@ const asFormConnector = (connector: LibraryConnector, agentIds: string[] = []): 
 });
 
 export function formFromLibraryConnector(connector: LibraryConnector): ConnectorForm {
-  return { ...formFromConnector(asFormConnector(connector)), description: connector.description };
+  const oauth = connector.oauth;
+  return {
+    ...formFromConnector(asFormConnector(connector)),
+    description: connector.description,
+    ...(oauth ? { authMode: "oauth" as const, oauthScopes: [...oauth.scopes], oauthClientId: oauth.clientSource === "manual" ? (oauth.clientId ?? "") : "", oauthClientSecretStored: oauth.clientSecretSet, oauthRedirect: oauth.redirect ?? null, authTouched: true } : {}),
+  };
+}
+
+/** O que o `auth` do POST leva (só em conector HTTP no modo OAuth). */
+function oauthInput(form: ConnectorForm): ConnectorAuthInput {
+  return { mode: "oauth", scopes: form.oauthScopes, ...(form.oauthRedirect ? { redirect: form.oauthRedirect } : {}), ...(form.oauthClientId.trim() ? { clientId: form.oauthClientId.trim() } : {}), ...(form.oauthClientSecret ? { clientSecret: form.oauthClientSecret } : {}) };
 }
 
 /** Corpo do POST /api/library/connectors (sem agentes: quem recebe se escolhe em "Liberar"). */
 export function libraryCreateBody(form: ConnectorForm): CreateLibraryConnectorBody {
-  const { agentIds: _agentIds, ...body } = createBody(form);
-  return { ...body, ...(form.description.trim() ? { description: form.description.trim() } : {}) };
+  const { agentIds: _agentIds, url: typedUrl, ...body } = createBody(form);
+  // Gmail pela API: sem URL (o servidor guarda a base da API) e sempre com login OAuth.
+  const address = form.kind === "http" ? (form.builtin ? { builtin: form.builtin } : { url: typedUrl }) : {};
+  return { ...body, ...address, ...(form.description.trim() ? { description: form.description.trim() } : {}), ...(form.kind === "http" && form.authMode === "oauth" ? { auth: oauthInput(form) } : {}) };
 }
 
 /** Corpo do PATCH /api/library/connectors/:id: só o que mudou. */
 export function libraryPatchBody(before: LibraryConnector, form: ConnectorForm): UpdateLibraryConnectorBody {
   const { agentIds: _agentIds, ...rest } = patchBody(asFormConnector(before, form.agentIds), form);
   const patch: UpdateLibraryConnectorBody = rest;
+  // Trocar a forma de falar com o Gmail (API <-> servidor MCP): o servidor mantém o login. A URL fica fixa em cada modo.
+  if (form.gmail && before.kind === "http" && (form.builtin ?? null) !== (before.builtin ?? null)) {
+    patch.builtin = form.builtin;
+    delete patch.url;
+  }
   if (form.description.trim() !== before.description) patch.description = form.description.trim();
+  if (before.kind === "http") {
+    const was = before.oauth;
+    if (form.authMode === "static" && was) patch.auth = { mode: "static" };
+    else if (form.authMode === "oauth") {
+      const clientChanged = form.oauthClientId.trim() !== "" && form.oauthClientId.trim() !== (was?.clientId ?? "");
+      const scopesChanged = !was || JSON.stringify([...form.oauthScopes].sort()) !== JSON.stringify([...was.scopes].sort());
+      const redirectChanged = form.oauthRedirect !== null && form.oauthRedirect !== was?.redirect;
+      if (!was || scopesChanged || clientChanged || redirectChanged || form.oauthClientSecret) patch.auth = oauthInput(form);
+    }
+  }
   return patch;
+}
+
+export { GMAIL_API_URL, GMAIL_MCP_URL };
+
+const sameServer = (url: string | undefined) => (url ?? "").trim().replace(/\/+$/, "").toLowerCase() === GMAIL_MCP_URL;
+
+/** O conector é do Gmail: embutido (API pública) ou HTTP no endereço do servidor MCP oficial? */
+export function isGmailConnector(connector: Pick<LibraryConnector, "kind" | "url" | "builtin">): boolean {
+  return connector.kind === "http" && (connector.builtin === "gmail-api" || sameServer(connector.url));
+}
+
+/** O conector do Gmail que já existe na Biblioteca (API ou servidor MCP oficial), se houver. A API ganha se houver os dois. */
+export function findGmailConnector(connectors: readonly LibraryConnector[]): LibraryConnector | undefined {
+  return connectors.find((connector) => isGmailConnector(connector) && connector.builtin === "gmail-api") ?? connectors.find(isGmailConnector);
+}
+
+/** Como o conector fala com o Gmail. */
+export type GmailMode = "api" | "mcp";
+export const gmailModeOf = (form: Pick<ConnectorForm, "gmail" | "builtin">): GmailMode | null => (form.builtin ? "api" : form.gmail ? "mcp" : null);
+
+/** Texto do alvo no cartão: "API do Gmail" no lugar da URL crua do modo embutido. */
+export function connectorTarget(connector: Pick<LibraryConnector, "kind" | "url" | "builtin" | "command" | "args">): string {
+  if (connector.builtin === "gmail-api") return "API do Gmail";
+  return connector.kind === "http" ? (connector.url ?? "") : [connector.command, ...(connector.args ?? [])].join(" ");
+}
+
+/** O servidor MCP oficial recusou por causa do programa de prévia do Google (só Workspace inscrito)? É quando vale sugerir a API. */
+export function isPreviewProgramProblem(connector: Pick<LibraryConnector, "status">): boolean {
+  return /Developer Preview Program|preview program/i.test(connector.status.reason ?? "");
+}
+
+/** Escopos do Gmail pela API que valem ao trocar de modo: o que já estava marcado e existe na API; sem nenhum, só ler. */
+export function gmailApiScopes(current: readonly string[]): string[] {
+  const kept = GMAIL_API_SCOPES.filter((scope) => current.includes(scope));
+  return kept.length > 0 ? kept : [GMAIL_READONLY_SCOPE];
+}
+
+/** O que a tela sabe do OAuth do Gmail pela API sem perguntar a ninguém (os dados do Google são fixos). */
+export const GMAIL_API_OAUTH_INFO = {
+  resource: "https://gmail.googleapis.com",
+  issuer: "https://accounts.google.com",
+  provider: "google" as const,
+  scopesSupported: [...GMAIL_API_SCOPES],
+  defaultScopes: [GMAIL_READONLY_SCOPE],
+  registration: "manual" as const,
+  usesResource: false,
+};
+
+/** Formulário de conector novo já preenchido para o Gmail: HTTP, API do Gmail (sem URL), login com a conta (OAuth) e o ícone da marca. */
+export function gmailConnectorForm(): ConnectorForm {
+  return { ...EMPTY_FORM, name: "Gmail", kind: "http", url: "", iconKind: "brand", brand: "gmail", authMode: "oauth", authTouched: true, gmail: true, builtin: "gmail-api", oauthScopes: [GMAIL_READONLY_SCOPE] };
 }

@@ -6,6 +6,7 @@ import { WorkspacePicker } from "../WorkspacePicker";
 import { useRailTip } from "./navHooks";
 import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
+import { NavVersion } from "./NavVersion";
 import { AttentionCounter } from "../AttentionCounter";
 import { CynoItem, MovedHint, NavSections, NotificationsItem, TodayItem } from "./NavItems";
 import { ResizeHandle } from "./ResizeHandle";
@@ -47,11 +48,14 @@ export function Sidebar() {
     <aside className={`sidenav${collapsed ? " sidenav--rail" : ""}${dragging ? " sidenav--dragging" : ""}`} aria-label="Navegação" data-testid="hud" {...tip.handlers}>
       <div className="sidenav__head">
         <h1 className="sr-only">Cyno</h1>
-        <ul className="navsection__list navsection--cyno">
-          <li>
-            <CynoItem />
-          </li>
-        </ul>
+        <div className="sidenav__brandrow">
+          <ul className="navsection__list navsection--cyno">
+            <li>
+              <CynoItem />
+            </li>
+          </ul>
+          <NavVersion />
+        </div>
         <div className="sidenav__ws" data-tip="Trocar de workspace">
           <WorkspacePicker />
         </div>

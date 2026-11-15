@@ -52,6 +52,8 @@ npm run pm2:restart      # depois de atualizar o código (a web recompila ao rei
 npm run pm2:stop
 pm2 save && pm2 startup  # opcional: subir junto com a máquina
 ```
+**Atualizar:** quando a etiqueta da versão na barra lateral virar **Atualizar**, rode na pasta do projeto `git pull`, `npm install` (se as dependências mudaram) e `npm run pm2:restart`. Ou clique em **Baixar atualização** em Configurações > Versão e atualizações (baixa o código e instala as dependências, mas o reinício é com você; veja "Versão e atualizações" abaixo).
+
 Para reiniciar só uma parte: `pm2 restart maestri-server` ou `pm2 restart maestri-web`. Os dados ficam em `./data` (ou `DATA_DIR`). As CLIs dos agentes (`claude` etc.) precisam estar instaladas e logadas no usuário que roda o pm2.
 
 ## Com Docker
@@ -69,7 +71,7 @@ Sem Compose: `docker build -t cyno . && docker run -d --name cyno -p 5173:5173 -
 - **Senha:** no primeiro acesso, veja o código de configuração com `docker compose exec cyno npm run auth:code` (ele também aparece em `docker compose logs cyno`); abra `http://localhost:5173` e crie a senha pela tela. Alternativas: `docker compose exec cyno npm run auth:set-password -w @cyno/server` (sem eco; precisa de terminal), `... auth:clear ...` para voltar ao primeiro acesso e `... auth:reset-2fa ...` para desligar o 2FA. O server relê o arquivo sozinho. O app nunca fica aberto sem senha; `CYNO_AUTH=off` não é para o contêiner.
 - **Login das CLIs:** nada do seu `~/.claude` do host é montado. Entre uma vez no contêiner: `docker compose exec cyno claude` (siga o login da sua assinatura e saia). O login fica no volume `cyno-home` (`/home/node`), então sobrevive a reinícios e atualizações. Confira com `docker compose exec cyno claude auth status`.
 - **Outras CLIs:** só o Claude Code vem na imagem. Para Codex e OpenCode, construa com `docker compose build --build-arg EXTRA_CLIS="@openai/codex opencode-ai"` (ou `build.args` no compose); um pacote que falhar só gera um aviso e o build segue. Quem tem instalador próprio (Antigravity `agy`, Freebuff, Hermes, OpenClaw) pode ser instalado dentro do contêiner (`docker compose exec cyno ...`, indo para o volume do home, em `~/.local/bin`; acrescente-o ao `PATH` com `PATH` no `.env`/`environment` se preciso) e logado do mesmo jeito. `GET /api/engines` mostra o que o server achou.
-- **Atualizar:** `git pull && docker compose up -d --build`. Os volumes continuam. Para atualizar só o Claude Code, `docker compose build --no-cache` refaz a camada.
+- **Atualizar:** `git pull && npm run docker:up`. Os volumes continuam. O `npm run docker:up` grava o `version.json` (commit, data, ramo e número de commits) e depois roda `docker compose up -d --build`; a imagem não leva a pasta `.git`, e é esse arquivo que faz a tela mostrar o commit e comparar com o GitHub. Sem ele (por exemplo, com `docker compose up --build` direto), a tela mostra só a versão do package.json e a verificação fica como "não foi possível verificar". Para atualizar só o Claude Code, `docker compose build --no-cache` refaz a camada.
 - **Tamanho:** cerca de 2,4 GB (Chromium e bibliotecas ~0,7 GB, Claude Code ~0,35 GB, dependências do projeto ~0,25 GB).
 
 Limitações honestas:
@@ -79,6 +81,13 @@ Limitações honestas:
 - **Ditado por voz** continua pedindo HTTPS ou `localhost` (`WEB_HTTPS=1` no `.env` liga o certificado autoassinado).
 - Os agentes só enxergam arquivos dentro do contêiner (`/data/workspaces/...`); para dar acesso a pastas do host, monte-as com um `volumes` extra no compose.
 - Os logins das CLIs ficam em texto no volume `cyno-home`; trate o volume como segredo.
+
+## Versão e atualizações
+O app mostra a versão (`v0.1.0 · build 3`: versão do package.json e número de commits) e avisa quando o ramo estável do GitHub tem novidades; veja [usando-o-escritorio.md](usando-o-escritorio.md). O botão **Baixar atualização** baixa o código com um clique (e instala as dependências se mudaram), mas **nunca reinicia nada**: a tela mostra o comando de reinício do seu jeito de rodar. Nada baixa sozinho.
+- **Com pm2 ou `npm run dev`:** a versão vem do `git` do próprio clone, sem rede. A verificação usa `git ls-remote origin refs/heads/main` (sem `fetch`, o clone não muda) e precisa de acesso ao `origin` sem digitar senha (chave ssh ou repositório público por https).
+- **Com Docker:** a imagem não leva a pasta `.git`. `npm run docker:up` grava antes o `version.json` da raiz, que a imagem leva junto; é dele que vêm o commit e o endereço do `origin`.
+- **O botão e o reinício:** o botão só vale para clone no ramo estável (`main`), com a pasta sem mudanças em arquivos versionados, e faz `git fetch` e `git merge --ff-only` (mais `npm install` se o `package-lock.json` mudou). Depois, reinicie você: com pm2, `npm run pm2:restart`; com `npm start`, pare o processo e rode de novo; com `npm run dev`, ele reinicia sozinho (se a tela não mudar, pare e rode de novo); com Docker, no computador hospedeiro, `git pull` e `npm run docker:up` (o botão não existe no Docker). Reiniciar interrompe os agentes que estiverem trabalhando.
+- **Variáveis:** `CYNO_UPDATE_CHECK=off` (ou `0`) desliga a verificação automática (a de Configurações continua); `CYNO_UPDATE_BRANCH` troca o ramo comparado (padrão `main`); `CYNO_UPDATE_APPLY=off` (ou `0`) desliga o botão **Baixar atualização** (o aviso continua).
 
 ## Seed
 - No primeiro boot, o seed roda sozinho se `data/office.json` não existir.
@@ -195,6 +204,9 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `ANTIGRAVITY_USAGE_POLL_MS` | 300000 (5 min) | intervalo da consulta da cota Google no Antigravity (`0` = desliga) |
 | `CONNECTORS_STDIO` | 0 | `1` libera conectores que rodam um comando local. É o **padrão**: o dono pode ligar ou desligar em Configurações > Conectores locais (grava em `data/platform/settings/connectors.json` e passa a valer sobre o `.env`; "Voltar ao padrão do servidor" apaga a escolha) |
 | `CYNO_IDLE_MS` | (vazio) | **só para teste**: ociosidade do Cyno em ms antes de dormir; vazio = o que está em Configurações > Cyno (padrão 10 min) |
+| `CYNO_UPDATE_CHECK` | on | `off` ou `0` desliga a verificação automática de atualização (1 min depois da subida e a cada 6 h); o botão **Verificar agora** continua. Veja "Versão e atualizações" |
+| `CYNO_UPDATE_BRANCH` | main | ramo do `origin` com que a instalação é comparada |
+| `CYNO_UPDATE_APPLY` | on | `off` ou `0` desliga o botão **Baixar atualização** (o aviso e o **Verificar agora** continuam). O app nunca reinicia sozinho |
 | `RETENTION_AUTO` | 1 | limpeza automática do histórico (boot + diária); `0` desliga |
 | `BROWSER` / `BROWSER_IDLE_MS` | 1 / 600000 | navegador compartilhado dos agentes e ociosidade até fechar (`0` = nunca) |
 | `ROUTINE_TICK_MS` | 600000 (10 min) | **só para teste**: intervalo do vigia das rotinas (mínimo 1000); a primeira passada vem depois de um intervalo |
@@ -205,4 +217,6 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `WEB_ALLOWED_HOSTS` | (vazio) | domínios extras aceitos no cabeçalho Host da UI (túnel, proxy reverso; vírgulas). Sem ela vale o padrão do Vite |
 | `WEB_HTTPS` | 0 | `1` serve HTTPS autoassinado |
 | `LAB_SERVER_PORT` / `LAB_WEB_PORT` / `LAB_DATA_DIR` / `LAB_KEEP` / `LAB_API_URL` | 3101 / 5273 / temporária / 0 / server local | só do `lab:up` e `lab:setup` |
+| `LAB_UPDATE_CHECK` | 0 | só do `lab:up`: `1` liga a verificação automática de atualização (desligada no laboratório, como as outras consultas externas) |
+| `LAB_UPDATE_APPLY` | 0 | só do `lab:up`: `1` liga o botão **Baixar atualização** (desligado: o laboratório roda a partir do repositório real, e o botão mexeria nele) |
 | `LAB_BROWSER` / `LAB_CONNECTORS_STDIO` | 0 / 0 | só do `lab:up`: `1` liga o navegador dos agentes / libera conectores stdio no app de teste |

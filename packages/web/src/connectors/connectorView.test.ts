@@ -1,4 +1,4 @@
-import type { Connector } from "@cyno/shared";
+import { GMAIL_COMPOSE_SCOPE, GMAIL_READONLY_SCOPE, type Connector, type LibraryConnector } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { CONNECTOR_BRANDS } from "./brands.generated";
 import {
@@ -9,10 +9,22 @@ import {
   createBody,
   EMPTY_FORM,
   expireActivity,
+  connectorTarget,
+  findGmailConnector,
+  gmailApiScopes,
+  gmailModeOf,
+  isGmailConnector,
+  isPreviewProgramProblem,
+  GMAIL_API_URL,
   formErrors,
+  gmailConnectorForm,
+  GMAIL_MCP_URL,
   formFromCandidate,
   formFromConnector,
+  formFromLibraryConnector,
   iconLook,
+  libraryCreateBody,
+  libraryPatchBody,
   monogram,
   patchBody,
   recordActivity,
@@ -135,5 +147,96 @@ describe("formulário do conector", () => {
     const masked = formFromCandidate({ sourceName: "x", name: "X", kind: "http", url: "https://x.com/mcp?k=•••", urlMasked: true, sourceStatus: "connected", hostedByClaudeAi: false, alreadyImported: false });
     expect(masked.url).toBe("");
     expect(masked.urlPlaceholder).toBe("https://x.com/mcp?k=•••");
+  });
+});
+
+describe("login OAuth no formulário e no estado", () => {
+  const OAUTH = { resource: "https://mcp.exemplo/mcp", issuer: "https://auth.exemplo", provider: "generic" as const, scopesSupported: ["read", "write"], defaultScopes: ["read", "write"], registration: "dynamic" as const, usesResource: true, scopes: ["read"], clientSecretSet: false, discoveredAt: "2026-11-15T00:00:00.000Z" };
+  const LIB = (connection: "not_connected" | "connected" | "needs_login", extra: Partial<LibraryConnector> = {}): LibraryConnector => ({ ...NOTION, kind: "http", description: "", warnings: [], weightTokens: 0, grants: {}, uses: [], oauth: { ...OAUTH, connection }, ...extra }) as LibraryConnector;
+
+  it("o selo mostra Não conectado, Conectado e Precisa entrar de novo (mesmo que o servidor liste ferramentas sem login)", () => {
+    expect(connectorStatus(LIB("not_connected"))).toMatchObject({ label: "Não conectado", tone: "attention" });
+    expect(connectorStatus(LIB("needs_login"))).toMatchObject({ label: "Precisa entrar de novo", tone: "attention" });
+    expect(connectorStatus(LIB("connected"))).toMatchObject({ label: "Conectado", tone: "success" });
+    expect(connectorStatus({ ...LIB("connected"), enabled: false })).toMatchObject({ label: "Desligado" });
+    expect(connectorStatus({ ...LIB("connected"), status: { state: "error", tools: [] } })).toMatchObject({ label: "Erro" });
+  });
+
+  it("criar com OAuth leva auth com os escopos e o cliente digitado; token fixo não leva auth", () => {
+    const form = { ...EMPTY_FORM, name: "Gmail", url: "https://gmailmcp.googleapis.com/mcp/v1", authMode: "oauth" as const, oauthScopes: ["a", "b"], oauthClientId: " id ", oauthClientSecret: "segredo" };
+    expect(libraryCreateBody(form)).toMatchObject({ auth: { mode: "oauth", scopes: ["a", "b"], clientId: "id", clientSecret: "segredo" } });
+    expect(libraryCreateBody({ ...form, oauthRedirect: "local" }).auth).toMatchObject({ redirect: "local" });
+    expect(libraryCreateBody({ ...form, authMode: "static" })).not.toHaveProperty("auth");
+    expect(libraryCreateBody({ ...form, oauthClientId: "", oauthClientSecret: "" }).auth).toEqual({ mode: "oauth", scopes: ["a", "b"] });
+  });
+
+  it("editar: sem mudança não manda auth; escopos novos, cliente novo ou segredo mandam; voltar ao token fixo manda static", () => {
+    const before = LIB("connected");
+    const same = formFromLibraryConnector(before);
+    expect(same).toMatchObject({ authMode: "oauth", oauthScopes: ["read"] });
+    expect(libraryPatchBody(before, same)).not.toHaveProperty("auth");
+    expect(libraryPatchBody(before, { ...same, oauthScopes: ["read", "write"] }).auth).toMatchObject({ mode: "oauth", scopes: ["read", "write"] });
+    expect(libraryPatchBody(before, { ...same, oauthClientId: "novo" }).auth).toMatchObject({ clientId: "novo" });
+    expect(libraryPatchBody(before, { ...same, oauthClientSecret: "s" }).auth).toMatchObject({ clientSecret: "s" });
+    expect(same.oauthRedirect).toBeNull();
+    expect(libraryPatchBody(before, { ...same, oauthRedirect: "local" }).auth).toMatchObject({ mode: "oauth", redirect: "local" });
+    expect(formFromLibraryConnector(LIB("connected", { oauth: { ...OAUTH, connection: "connected", redirect: "app" } })).oauthRedirect).toBe("app");
+    expect(libraryPatchBody(before, { ...same, authMode: "static" }).auth).toEqual({ mode: "static" });
+    expect(libraryPatchBody(LIB("connected", { oauth: undefined }), { ...EMPTY_FORM, name: "Notion", kind: "http", authMode: "static", enabled: true })).not.toHaveProperty("auth");
+  });
+
+  it("o formulário já vem para o Gmail: HTTP, API do Gmail (sem URL), OAuth só com leitura e ícone da marca", () => {
+    expect(gmailConnectorForm()).toMatchObject({ name: "Gmail", kind: "http", url: "", authMode: "oauth", iconKind: "brand", brand: "gmail", gmail: true, builtin: "gmail-api", oauthScopes: [GMAIL_READONLY_SCOPE] });
+    expect(CONNECTOR_BRANDS.some((brand) => brand.slug === "gmail")).toBe(true);
+    expect(formErrors(gmailConnectorForm(), false)).toEqual({});
+    expect(gmailModeOf(gmailConnectorForm())).toBe("api");
+    expect(gmailModeOf(EMPTY_FORM)).toBeNull();
+  });
+
+  it("criar no modo API: o corpo leva builtin e auth, sem URL; no modo MCP leva a URL e não leva builtin", () => {
+    const api = libraryCreateBody({ ...gmailConnectorForm(), oauthClientId: "id", oauthClientSecret: "s" });
+    expect(api).toMatchObject({ name: "Gmail", kind: "http", builtin: "gmail-api", auth: { mode: "oauth", scopes: [GMAIL_READONLY_SCOPE], clientId: "id", clientSecret: "s" } });
+    expect(api).not.toHaveProperty("url");
+    const mcp = libraryCreateBody({ ...gmailConnectorForm(), builtin: null, url: GMAIL_MCP_URL });
+    expect(mcp).toMatchObject({ url: GMAIL_MCP_URL });
+    expect(mcp).not.toHaveProperty("builtin");
+  });
+
+  it("editar o Gmail: o formulário sabe o modo; trocar só manda builtin (login fica, sem auth nem URL), voltar manda null", () => {
+    const mcp = LIB("connected", { id: "gmail", url: GMAIL_MCP_URL });
+    const mcpForm = formFromLibraryConnector(mcp);
+    expect(mcpForm).toMatchObject({ gmail: true, builtin: null });
+    expect(gmailModeOf(mcpForm)).toBe("mcp");
+    expect(libraryPatchBody(mcp, mcpForm)).not.toHaveProperty("builtin");
+    expect(libraryPatchBody(mcp, { ...mcpForm, builtin: "gmail-api" })).toEqual({ builtin: "gmail-api" });
+
+    const api = LIB("connected", { id: "gmail", url: "https://gmail.googleapis.com/gmail/v1", builtin: "gmail-api" });
+    const apiForm = formFromLibraryConnector(api);
+    expect(apiForm).toMatchObject({ gmail: true, builtin: "gmail-api" });
+    expect(libraryPatchBody(api, apiForm)).toEqual({});
+    expect(libraryPatchBody(api, { ...apiForm, builtin: null })).toEqual({ builtin: null });
+    // Conector que não é do Gmail nunca manda builtin.
+    expect(libraryPatchBody(LIB("connected"), formFromLibraryConnector(LIB("connected")))).not.toHaveProperty("builtin");
+  });
+
+  it("acha o conector do Gmail nos dois tipos (API e servidor MCP oficial, ignora barra final e caixa); a API ganha; não confunde com outros", () => {
+    const mcp = LIB("connected", { id: "gmail-mcp", url: `${GMAIL_MCP_URL.toUpperCase().replace("HTTPS", "https")}/` });
+    const api = LIB("connected", { id: "gmail-api", url: GMAIL_API_URL, builtin: "gmail-api" });
+    const notion = LIB("connected", { id: "notion", url: "https://mcp.notion.com/mcp" });
+    expect(findGmailConnector([notion, mcp])?.id).toBe("gmail-mcp");
+    expect(findGmailConnector([notion, api])?.id).toBe("gmail-api");
+    expect(findGmailConnector([notion, mcp, api])?.id).toBe("gmail-api");
+    expect(findGmailConnector([notion])).toBeUndefined();
+    expect(isGmailConnector(mcp)).toBe(true);
+    expect(isGmailConnector(notion)).toBe(false);
+  });
+
+  it("o cartão mostra 'API do Gmail' no lugar da URL; reconhece o erro do programa de prévia; troca de modo mantém só os escopos que a API tem", () => {
+    expect(connectorTarget(LIB("connected", { url: GMAIL_API_URL, builtin: "gmail-api" }))).toBe("API do Gmail");
+    expect(connectorTarget(LIB("connected", { url: "https://mcp.notion.com/mcp" }))).toBe("https://mcp.notion.com/mcp");
+    expect(isPreviewProgramProblem({ status: { state: "error", tools: [], reason: "requires that your Google Cloud project is enrolled in the Google Workspace Developer Preview Program" } })).toBe(true);
+    expect(isPreviewProgramProblem({ status: { state: "error", tools: [], reason: "outro" } })).toBe(false);
+    expect(gmailApiScopes(["https://www.googleapis.com/auth/gmail.modify", GMAIL_COMPOSE_SCOPE])).toEqual([GMAIL_COMPOSE_SCOPE]);
+    expect(gmailApiScopes(["https://www.googleapis.com/auth/gmail.modify"])).toEqual([GMAIL_READONLY_SCOPE]);
   });
 });

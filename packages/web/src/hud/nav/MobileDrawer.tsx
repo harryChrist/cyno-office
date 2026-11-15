@@ -5,6 +5,7 @@ import { NavIcon } from "../navIcons";
 import { WorkspacePicker } from "../WorkspacePicker";
 import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
+import { NavVersion } from "./NavVersion";
 import { CynoItem, MovedHint, NavSections, NotificationsItem, ShortcutsRow, TodayItem } from "./NavItems";
 
 /**
@@ -36,11 +37,14 @@ export function MobileDrawer({ onClose }: { onClose: () => void }) {
           Cyno
         </p>
         <div className="mdrawer__top">
-          <ul className="navsection__list navsection--cyno">
-            <li>
-              <CynoItem onNavigate={onClose} />
-            </li>
-          </ul>
+          <div className="sidenav__brandrow">
+            <ul className="navsection__list navsection--cyno">
+              <li>
+                <CynoItem onNavigate={onClose} />
+              </li>
+            </ul>
+            <NavVersion onNavigate={onClose} />
+          </div>
           <button type="button" className="mdrawer__close" aria-label="Fechar o menu" onClick={onClose} data-testid="nav-drawer-close">
             <NavIcon name="close" />
           </button>

@@ -3,7 +3,7 @@
 // Nunca toca em data/, nas portas 3001/5173 nem no pm2. Ctrl+C derruba tudo e apaga o DATA_DIR
 // (LAB_KEEP=1 mantém a pasta). Variáveis: LAB_SERVER_PORT (3101), LAB_WEB_PORT (5273), LAB_DATA_DIR,
 // LAB_BROWSER=1 (liga o navegador dos agentes; o perfil do Chromium nasce novo dentro do DATA_DIR de teste),
-// LAB_CONNECTORS_STDIO=1 (libera conectores stdio), ROUTINE_TICK_MS (intervalo do vigia das rotinas, só teste) e
+// LAB_CONNECTORS_STDIO=1 (libera conectores stdio), LAB_UPDATE_CHECK=1 (liga a verificação automática de atualização no GitHub; desligada por padrão), LAB_UPDATE_APPLY=1 (liga o botão que baixa a atualização; desligado por padrão), ROUTINE_TICK_MS (intervalo do vigia das rotinas, só teste) e
 // LAB_HISTORY_DAYS=21 (depois do lab:setup, para o server, semeia N dias de histórico fabricado — `source:"seed"` — e sobe de novo;
 // só vale no DATA_DIR temporário `cyno-…` do laboratório: em qualquer outro a semente se recusa e o app sobe sem ela).
 import { spawn, spawnSync } from "node:child_process";
@@ -50,6 +50,10 @@ const env = {
   SYSTEM_LOG_SAMPLE_MS: "0",
   // Laboratório descartável: sem senha o app fica aberto (sem o código de configuração do log). Só para desenvolvimento/testes.
   CYNO_AUTH: "off",
+  // O laboratório não consulta o GitHub por conta própria (a verificação manual continua valendo).
+  CYNO_UPDATE_CHECK: process.env.LAB_UPDATE_CHECK === "1" ? "on" : "off",
+  // O laboratório roda a partir do repositório real: o botão que baixa a atualização fica desligado (LAB_UPDATE_APPLY=1 liga, só com um clone descartável).
+  CYNO_UPDATE_APPLY: process.env.LAB_UPDATE_APPLY === "1" ? "on" : "off",
 };
 const children = [];
 function start(command, args, cwd) {

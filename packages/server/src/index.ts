@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "./app";
 import { loadConfig, loadRootEnvFile } from "./config";
+import { updateConfigFromEnv } from "./platform/version/checker";
+import { updateApplyFromEnv } from "./platform/version/run-mode";
 import { migrateActivity } from "./workspace/activity/migrate";
 import { startActivity, type ActivityHandle } from "./platform/activity/system";
 import { createRunner } from "./engines/runner";
@@ -54,6 +56,12 @@ async function start(): Promise<FastifyInstance> {
     // Retenção do histórico (conversas das CLIs dos nossos agentes e logs de tarefas): boot + diária.
     retention: { claudeProjectsDir: config.retention.claudeProjectsDir, autoRun: config.retention.autoRun },
     connectors: { allowStdio: config.connectorsStdio },
+    // Aviso de atualização: CYNO_UPDATE_CHECK=off|0 desliga a verificação automática; CYNO_UPDATE_BRANCH troca o ramo (padrão main);
+    // CYNO_UPDATE_APPLY=off|0 desliga o botão que baixa a atualização.
+    version: (() => {
+      const update = updateConfigFromEnv(process.env);
+      return { autoCheck: update.auto, branch: update.branch, applyEnabled: updateApplyFromEnv(process.env) };
+    })(),
     browser: config.browser,
     routineTickMs: config.routineTickMs,
     // Sem senha o app fica fechado até a configuração inicial; CYNO_AUTH=off (só dev/testes) abre como antes.

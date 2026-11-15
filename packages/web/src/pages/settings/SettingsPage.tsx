@@ -19,6 +19,7 @@ import { HistorySettings } from "./HistorySettings";
 import { GlobalModelsSettings, WorkspaceModelsSettings } from "./ModelsSettings";
 import { OfficeSettings } from "./OfficeSettings";
 import { PasswordSettings } from "./PasswordSettings";
+import { VersionSettings } from "./VersionSettings";
 import { OptionHead, Seal, StateBadge } from "./SettingsOption";
 import { SettingsSummary } from "./SettingsSummary";
 import { useSettingsLayout } from "./settingsLayout";
@@ -339,6 +340,9 @@ export function SettingsPage() {
             </SectionBlock>
             <SectionBlock id="historico" hidden={hide("historico")}>
               <HistorySettings />
+            </SectionBlock>
+            <SectionBlock id="versao" hidden={hide("versao")}>
+              <VersionSettings />
             </SectionBlock>
             <SectionBlock id="escritorio" hidden={hide("escritorio")}>
               <OfficeSettings />

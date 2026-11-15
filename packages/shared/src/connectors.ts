@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ConnectorOAuthPublic } from "./connector-oauth";
 import { MAX_ID_LENGTH, SAFE_ID_PATTERN } from "./ids";
 import { OFFICE_MCP_SERVER } from "./terminal";
 
@@ -24,6 +25,18 @@ export type ConnectorKind = (typeof CONNECTOR_KINDS)[number];
  */
 export const CONNECTOR_STATES = ["unknown", "connected", "needs_auth", "error", "disabled"] as const;
 export type ConnectorState = (typeof CONNECTOR_STATES)[number];
+
+/**
+ * Conector "embutido": o servidor não fala MCP com um terceiro, ele mesmo chama a API pública do
+ * serviço (hoje só o Gmail). O conector continua HTTP com login OAuth; só o cliente muda.
+ */
+export const CONNECTOR_BUILTINS = ["gmail-api"] as const;
+export type ConnectorBuiltin = (typeof CONNECTOR_BUILTINS)[number];
+
+/** Endereço do servidor MCP oficial do Gmail (Google): só atende projetos Google Workspace inscritos no programa de prévia. */
+export const GMAIL_MCP_URL = "https://gmailmcp.googleapis.com/mcp/v1";
+/** Base da API pública do Gmail (o que um conector "gmail-api" guarda no lugar da URL digitada). */
+export const GMAIL_API_URL = "https://gmail.googleapis.com/gmail/v1";
 
 /** De onde veio o cadastro. */
 export const CONNECTOR_ORIGINS = ["manual", "claude-code"] as const;
@@ -52,6 +65,8 @@ export type Connector = {
   kind: ConnectorKind;
   /** http: a URL, com os valores de query mascarados (podem ser chaves). */
   url?: string;
+  /** Presente = o servidor fala direto com a API pública do serviço (sem servidor MCP de terceiros). */
+  builtin?: ConnectorBuiltin;
   /** stdio: o executável e os argumentos (sem shell). */
   command?: string;
   args?: string[];
@@ -69,6 +84,8 @@ export type Connector = {
   toolPrefix: string;
   origin: ConnectorOrigin;
   status: ConnectorStatus;
+  /** Login OAuth (só nos conectores HTTP que entram com a conta): descoberta, escopos e se está conectado. Sem tokens. */
+  oauth?: ConnectorOAuthPublic;
   createdAt: string;
   updatedAt: string;
 };

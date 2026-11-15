@@ -19,6 +19,8 @@ export type McpTool = {
   input: z.ZodObject;
   /** JSON Schema pronto para o tools/list (ferramentas de conector: o do servidor externo; `input` aceita tudo). */
   jsonSchema?: Record<string, unknown>;
+  /** Dicas MCP (readOnlyHint etc.) repassadas no tools/list; só as ferramentas de conector trazem. */
+  annotations?: Record<string, boolean>;
   call: (args: unknown) => McpToolResult | Promise<McpToolResult>;
   /** false = apelido antigo: continua chamável, mas não aparece no tools/list (o modelo só vê o nome novo). */
   listed?: boolean;
@@ -96,7 +98,7 @@ async function handleOne(message: unknown, tools: () => McpTool[], instructions?
     case "ping":
       return ok({});
     case "tools/list":
-      return ok({ tools: tools().filter((tool) => tool.listed !== false).map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.jsonSchema ?? toolInputSchema(tool.input) })) });
+      return ok({ tools: tools().filter((tool) => tool.listed !== false).map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.jsonSchema ?? toolInputSchema(tool.input), ...(tool.annotations ? { annotations: tool.annotations } : {}) })) });
     case "tools/call": {
       const call = callParamsSchema.safeParse(params);
       if (!call.success) return fail(ERRORS.invalidParams, "tools/call without a tool name");

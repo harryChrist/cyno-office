@@ -1,6 +1,8 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  GMAIL_API_URL,
+  GMAIL_MCP_URL,
   connectorToolPrefix,
   uniqueSlug,
   type ConnectorIconMime,
@@ -13,6 +15,7 @@ import type { FastifyBaseLogger } from "fastify";
 import { HttpError } from "../../platform/http/errors";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import type { WriteQueue } from "../../store/write-queue";
+import { publicOAuth, type StoredOAuth } from "./oauth/stored";
 import { estimateWeightTokens, toConnectorsFile, type ConnectorLimits, type ConnectorPaths, type StoredConnector } from "./store";
 
 /**
@@ -100,7 +103,7 @@ export class ConnectorRegistry {
     return this.records.filter((record) => workspaceId in record.grants).map((record) => structuredClone(record));
   }
 
-  async create(body: Omit<CreateLibraryConnectorBody, "origin"> & { origin?: StoredConnector["origin"]; appId?: string; warnings?: string[]; limits?: ConnectorLimits }, grants?: LibraryGrantsInput): Promise<StoredConnector> {
+  async create(body: Omit<CreateLibraryConnectorBody, "origin" | "auth"> & { origin?: StoredConnector["origin"]; appId?: string; warnings?: string[]; limits?: ConnectorLimits; oauth?: StoredOAuth }, grants?: LibraryGrantsInput): Promise<StoredConnector> {
     const now = this.deps.now().toISOString();
     const id = uniqueSlug(body.name, this.records.map((record) => record.id));
     const prefixes = new Set(this.records.map((record) => record.toolPrefix));
@@ -112,7 +115,7 @@ export class ConnectorRegistry {
       id,
       name: body.name.trim(),
       kind: body.kind,
-      ...(body.kind === "http" ? { url: body.url } : { command: body.command, args: body.args ?? [] }),
+      ...(body.kind === "http" ? { url: body.builtin === "gmail-api" ? GMAIL_API_URL : body.url, ...(body.builtin ? { builtin: body.builtin } : {}) } : { command: body.command, args: body.args ?? [] }),
       headers: body.kind === "http" ? { ...body.headers } : {},
       env: body.kind === "stdio" ? { ...body.env } : {},
       icon: body.icon ?? { kind: "monogram" },
@@ -124,6 +127,7 @@ export class ConnectorRegistry {
       warnings: body.warnings ? [...body.warnings] : [],
       ...(body.appId ? { appId: body.appId } : {}),
       ...(body.limits ? { limits: { ...body.limits } } : {}),
+      ...(body.kind === "http" && body.oauth ? { oauth: structuredClone(body.oauth) } : {}),
       weightTokens: 0,
       grants: nextGrants,
       status: { state: enabled ? "unknown" : "disabled", tools: [] },
@@ -137,11 +141,19 @@ export class ConnectorRegistry {
 
   async update(id: string, body: UpdateLibraryConnectorBody): Promise<{ record: StoredConnector; change: ConnectorChange }> {
     const record = this.require(id);
-    const before = JSON.stringify([record.url, record.command, record.args, record.headers, record.env, record.enabled]);
+    const before = JSON.stringify([record.url, record.builtin, record.command, record.args, record.headers, record.env, record.enabled]);
+    const builtinBefore = record.builtin;
     if (body.name !== undefined) record.name = body.name.trim();
     if (body.description !== undefined) record.description = body.description.trim();
     if (record.kind === "http") {
-      if (body.url !== undefined) record.url = body.url;
+      if (body.builtin === "gmail-api") {
+        record.builtin = "gmail-api";
+        record.url = GMAIL_API_URL;
+      } else if (body.builtin === null && record.builtin) {
+        // Volta ao servidor MCP: o endereço novo, ou o do servidor oficial do Gmail.
+        delete record.builtin;
+        record.url = body.url ?? GMAIL_MCP_URL;
+      } else if (body.url !== undefined && !record.builtin) record.url = body.url;
       record.headers = applySecrets(record.headers, body.headers);
     } else {
       if (body.command !== undefined) record.command = body.command;
@@ -159,11 +171,27 @@ export class ConnectorRegistry {
       if (!body.enabled) record.status = { ...record.status, state: "disabled", reason: undefined };
       else if (record.status.state === "disabled") record.status = { ...record.status, state: "unknown" };
     }
-    const connectionChanged = before !== JSON.stringify([record.url, record.command, record.args, record.headers, record.env, record.enabled]);
+    const connectionChanged = before !== JSON.stringify([record.url, record.builtin, record.command, record.args, record.headers, record.env, record.enabled]);
     if (connectionChanged && record.enabled) record.status = { ...record.status, state: "unknown", reason: undefined };
+    // Trocar de cliente (API <-> MCP): as ferramentas em cache e o estado eram do outro; o login (oauth) fica.
+    if (record.builtin !== builtinBefore) record.status = { state: record.enabled ? "unknown" : "disabled", tools: [] };
     record.updatedAt = this.deps.now().toISOString();
     await this.commit(record, []);
     return { record: structuredClone(record), change: { connectionChanged } };
+  }
+
+  /** Troca o OAuth guardado (undefined = volta ao token fixo). Só a mudança visível avisa a tela; a regravação é sempre feita (tokens novos). */
+  async setOAuth(id: string, oauth: StoredOAuth | undefined): Promise<StoredConnector | undefined> {
+    const record = this.records.find((candidate) => candidate.id === id);
+    if (!record) return undefined;
+    const seen = (value: StoredOAuth | undefined) => JSON.stringify(value ? publicOAuth(value) : null);
+    const changed = seen(record.oauth) !== seen(oauth);
+    if (oauth) record.oauth = structuredClone(oauth);
+    else delete record.oauth;
+    record.updatedAt = this.deps.now().toISOString();
+    if (changed) await this.commit(record, []);
+    else await this.save();
+    return structuredClone(record);
   }
 
   /** Conector que veio de um app instalado (o `appId` é o dono: some junto com ele). */

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import {
+  CONNECTOR_BUILTINS,
   CONNECTOR_KINDS,
   CONNECTOR_ORIGINS,
   CONNECTOR_STATES,
@@ -14,18 +15,21 @@ import {
 } from "@cyno/shared";
 import { z } from "zod";
 import { DataFileError } from "../../store/files";
+import { storedOAuthSchema, publicOAuth, oauthSecretValues, type StoredOAuth } from "./oauth/stored";
 
 export type ConnectorLimits = { idleSec: number; startSec: number; callSec: number };
 
 /** Ferramenta guardada no cache (com o JSON Schema de entrada, que só o gateway usa). */
-export type StoredConnectorTool = { name: string; description?: string; inputSchema?: Record<string, unknown> };
+export type StoredConnectorTool = { name: string; description?: string; inputSchema?: Record<string, unknown>; annotations?: Record<string, boolean> };
 
 /** Conector da Biblioteca como fica no disco: com os segredos (cabeçalhos e variáveis), que nunca saem do server. */
-export type StoredConnector = Omit<LibraryConnector, "secretHeaders" | "secretEnv" | "status" | "uses"> & {
+export type StoredConnector = Omit<LibraryConnector, "secretHeaders" | "secretEnv" | "status" | "uses" | "oauth"> & {
   /** Tempos do processo stdio (segundos): parada por ociosidade, espera para subir e por chamada (apps pesados pedem mais). */
   limits?: ConnectorLimits;
   headers: Record<string, string>;
   env: Record<string, string>;
+  /** Login OAuth (HTTP): descoberta, escopos, cliente e tokens. Só o server lê; a API mostra `publicOAuth`. */
+  oauth?: StoredOAuth;
   status: Omit<ConnectorStatus, "tools"> & { tools: StoredConnectorTool[] };
 };
 
@@ -39,6 +43,7 @@ const storedToolSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(4000).optional(),
   inputSchema: z.record(z.string(), z.unknown()).optional(),
+  annotations: z.record(z.string(), z.boolean()).optional(),
 });
 
 const statusSchema = z.object({
@@ -55,6 +60,7 @@ export const storedConnectorSchema = z.object({
   name: z.string().min(1).max(60),
   kind: z.enum(LIBRARY_CONNECTOR_KINDS),
   url: z.string().max(2000).optional(),
+  builtin: z.enum(CONNECTOR_BUILTINS).optional(),
   command: z.string().max(300).optional(),
   args: z.array(z.string()).optional(),
   headers: z.record(z.string(), z.string()).default({}),
@@ -68,6 +74,7 @@ export const storedConnectorSchema = z.object({
   warnings: z.array(z.string().max(300)).default([]),
   appId: z.string().optional(),
   limits: z.object({ idleSec: z.number(), startSec: z.number(), callSec: z.number() }).optional(),
+  oauth: storedOAuthSchema.optional(),
   weightTokens: z.number().int().default(0),
   grants: grantsSchema,
   status: statusSchema,
@@ -195,8 +202,8 @@ export function maskUrl(raw: string): string {
 }
 
 /** Todos os valores secretos de um conector (para apagar de mensagens de erro e do log). */
-export function secretValues(record: Pick<StoredConnector, "headers" | "env" | "url">): string[] {
-  const values = [...Object.values(record.headers), ...Object.values(record.env)];
+export function secretValues(record: Pick<StoredConnector, "headers" | "env" | "url"> & { oauth?: StoredOAuth }): string[] {
+  const values = [...Object.values(record.headers), ...Object.values(record.env), ...(record.oauth ? oauthSecretValues(record.oauth) : [])];
   for (const value of Object.values(record.headers)) {
     // "Bearer xyz": o token sozinho também.
     const token = /^\S+\s+(\S{6,})$/.exec(value)?.[1];
@@ -239,13 +246,14 @@ function publicStatus(status: StoredConnector["status"]): ConnectorStatus {
 
 /** Visão pública da Biblioteca: sem os valores dos segredos, URL mascarada e ferramentas sem o schema. */
 export function publicLibraryConnector(record: StoredConnector, uses: LibraryUse[]): LibraryConnector {
-  const { headers, env, status, url, ...rest } = record;
+  const { headers, env, status, url, oauth, ...rest } = record;
   return {
     ...structuredClone(rest),
     ...(url ? { url: maskUrl(url) } : {}),
     secretHeaders: Object.keys(headers).sort(),
     secretEnv: Object.keys(env).sort(),
     status: publicStatus(status),
+    ...(oauth ? { oauth: publicOAuth(oauth) } : {}),
     uses,
   };
 }
@@ -255,7 +263,7 @@ export function publicLibraryConnector(record: StoredConnector, uses: LibraryUse
  * `agentIds` são os agentes DESTE workspace que receberam o conector.
  */
 export function workspaceConnector(record: StoredConnector, workspaceId: string): Connector {
-  const { headers, env, status, url, grants, description: _d, warnings: _w, appId: _a, weightTokens: _t, ...rest } = record;
+  const { headers, env, status, url, grants, oauth, description: _d, warnings: _w, appId: _a, weightTokens: _t, ...rest } = record;
   return {
     ...structuredClone(rest),
     kind: record.kind === "app" ? "stdio" : record.kind,
@@ -265,5 +273,6 @@ export function workspaceConnector(record: StoredConnector, workspaceId: string)
     secretEnv: Object.keys(env).sort(),
     agentIds: [...(grants[workspaceId]?.agentIds ?? [])],
     status: publicStatus(status),
+    ...(oauth ? { oauth: publicOAuth(oauth) } : {}),
   };
 }

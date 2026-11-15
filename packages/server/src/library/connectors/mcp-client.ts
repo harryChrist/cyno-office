@@ -9,7 +9,7 @@ import type { StoredConnectorTool } from "./store";
  *   Mcp-Session-Id). O transporte antigo "HTTP+SSE" (GET /sse + POST /messages) não é suportado.
  * - stdio: um processo por conector (sem shell), JSON-RPC em linhas no stdin/stdout; para sozinho
  *   depois de um tempo ocioso e sobe de novo na próxima chamada.
- * Erros de credencial (HTTP 401/403) viram ConnectorAuthError (o estado "precisa de login").
+ * 401 vira ConnectorAuthError (o estado "precisa de login"); 403 vira ConnectorError com o motivo que o servidor deu.
  */
 
 export class ConnectorError extends Error {
@@ -19,7 +19,7 @@ export class ConnectorError extends Error {
   }
 }
 
-/** O servidor pediu login/credencial (HTTP 401/403). */
+/** O servidor pediu login/credencial (HTTP 401). */
 export class ConnectorAuthError extends ConnectorError {
   constructor(message: string) {
     super(message);
@@ -32,6 +32,8 @@ export type ConnectorCallResult = { content: unknown[]; isError: boolean };
 
 export interface McpClient {
   listTools(): Promise<StoredConnectorTool[]>;
+  /** Chamada real e barata que o "Testar" faz além de listar as ferramentas (só os clientes que têm uma). Lança se o uso está barrado. */
+  probe?(): Promise<void>;
   callTool(name: string, args: Record<string, unknown>): Promise<ConnectorCallResult>;
   close(): Promise<void>;
 }
@@ -53,7 +55,8 @@ function readTools(result: unknown): { tools: StoredConnectorTool[]; nextCursor?
     if (!isObject(raw) || typeof raw.name !== "string" || raw.name.length === 0 || raw.name.length > 200) continue;
     const description = typeof raw.description === "string" ? raw.description.slice(0, 4000) : undefined;
     const inputSchema = isObject(raw.inputSchema) ? raw.inputSchema : undefined;
-    tools.push({ name: raw.name, ...(description ? { description } : {}), ...(inputSchema ? { inputSchema } : {}) });
+    const hints = isObject(raw.annotations) ? Object.fromEntries(Object.entries(raw.annotations).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean" && /Hint$/.test(entry[0]))) : {};
+    tools.push({ name: raw.name, ...(description ? { description } : {}), ...(inputSchema ? { inputSchema } : {}), ...(Object.keys(hints).length > 0 ? { annotations: hints } : {}) });
   }
   return { tools, ...(typeof result.nextCursor === "string" && result.nextCursor ? { nextCursor: result.nextCursor } : {}) };
 }
@@ -85,12 +88,103 @@ function rpcError(message: JsonRpcMessage): ConnectorError {
   return new ConnectorError(`o servidor respondeu erro${message.error?.code !== undefined ? ` ${message.error.code}` : ""}: ${text.slice(0, 300)}`);
 }
 
+const FORBIDDEN_BODY_BYTES = 16 * 1024;
+const FORBIDDEN_MESSAGE_CHARS = 300;
+/** Só estes endereços do servidor entram no texto do motivo (onde o Google manda ativar a API). */
+const ACTIVATION_HOSTS = new Set(["console.developers.google.com", "console.cloud.google.com"]);
+
+/** Lê no máximo `limit` bytes do corpo (o resto é descartado). */
+export async function readLimitedText(response: Response, limit: number): Promise<string> {
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let bytes = 0;
+  try {
+    while (bytes < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch {
+    // corpo interrompido: usa o que veio
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return text.slice(0, limit);
+}
+
+/** Texto de erro dentro de um objeto JSON: JSON-RPC (`error.message`), Google (`error.message`) ou resultado de ferramenta com `isError`. */
+function messageFromJson(value: unknown): string | undefined {
+  for (const item of Array.isArray(value) ? value : [value]) {
+    if (!isObject(item)) continue;
+    if (isObject(item.error) && typeof item.error.message === "string" && item.error.message.trim()) return item.error.message;
+    if (typeof item.error === "string" && item.error.trim()) return item.error;
+    if (isObject(item.result) && item.result.isError === true && Array.isArray(item.result.content)) {
+      const text = item.result.content
+        .map((part) => (isObject(part) && part.type === "text" && typeof part.text === "string" ? part.text : ""))
+        .filter(Boolean)
+        .join(" ");
+      if (text.trim()) return text;
+    }
+  }
+  return undefined;
+}
+
+/** Mensagem legível do corpo de um 403 (JSON ou SSE); undefined quando não há. Dado não confiável: só vira texto. */
+export function extractForbiddenMessage(body: string): string | undefined {
+  const candidates = [body.trim(), ...body.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim())];
+  for (const candidate of candidates) {
+    if (!candidate.startsWith("{") && !candidate.startsWith("[")) continue;
+    try {
+      const found = messageFromJson(JSON.parse(candidate));
+      if (found) return found.replace(/\s+/g, " ").trim();
+    } catch {
+      // não é JSON
+    }
+  }
+  return undefined;
+}
+
+/** O motivo (em português) de um 403, a partir do corpo da resposta. */
+export function forbiddenReason(body: string): string {
+  const message = extractForbiddenMessage(body);
+  if (!message) return "o servidor recusou o acesso (HTTP 403)";
+  if (/has not been used in project .*(before )?or it is disabled/i.test(message)) {
+    const found = /https:\/\/[^\s"'<>)\]]+/i.exec(message)?.[0].replace(/[.,;]+$/, "");
+    let url: string | undefined;
+    try {
+      const parsed = found ? new URL(found) : undefined;
+      if (parsed && parsed.protocol === "https:" && ACTIVATION_HOSTS.has(parsed.hostname) && !parsed.username && !parsed.password) url = parsed.href;
+    } catch {
+      // endereço inválido: fica de fora
+    }
+    return `a API deste servidor não está ativada no projeto do Google Cloud. Ative-a${url ? ` em ${url}` : ""} e teste de novo em alguns minutos (HTTP 403)`;
+  }
+  return `o servidor recusou a chamada (HTTP 403): ${message.slice(0, FORBIDDEN_MESSAGE_CHARS)}`;
+}
+
 // ---------- HTTP ----------
+
+/**
+ * Login OAuth do conector: o cliente pede o token a cada requisição (renovado antes de vencer) e,
+ * num 401, pede renovação e tenta uma vez de novo. `refresh` lança erro de "precisa entrar de novo"
+ * quando a autorização acabou.
+ */
+export interface HttpAuthProvider {
+  /** Valor do cabeçalho Authorization (ex.: "Bearer …"), ou undefined se ainda não entrou. */
+  header(): Promise<string | undefined>;
+  /** O servidor recusou `usedHeader`: renova. Devolve true se há token novo para tentar. */
+  refresh(usedHeader: string | undefined, rejectedAfterRefresh?: boolean): Promise<boolean>;
+}
 
 export type HttpClientOptions = {
   url: string;
   /** Cabeçalhos secretos (ex.: Authorization), só no pedido; nunca no log. */
   headers: Record<string, string>;
+  /** Login OAuth (no lugar do Authorization fixo quando há token). */
+  auth?: HttpAuthProvider;
   fetch?: typeof fetch;
   timeoutMs?: number;
   /** Tempo de uma chamada de ferramenta (padrão: 2 min). */
@@ -185,9 +279,10 @@ export class HttpMcpClient implements McpClient {
     await this.post({ jsonrpc: "2.0", method: "notifications/initialized" }, this.options.timeoutMs ?? 15_000);
   }
 
-  private headers(): Record<string, string> {
+  private headers(authorization?: string): Record<string, string> {
     return {
       ...this.options.headers,
+      ...(authorization ? { authorization } : {}),
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       ...(this.sessionId ? { "mcp-session-id": this.sessionId } : {}),
@@ -195,19 +290,29 @@ export class HttpMcpClient implements McpClient {
     };
   }
 
-  private async post(body: unknown, timeoutMs: number): Promise<Response> {
+  private async post(body: unknown, timeoutMs: number, retried = false): Promise<Response> {
     let response: Response;
+    const authorization = await this.options.auth?.header();
     try {
-      response = await this.fetch(this.options.url, { method: "POST", headers: this.headers(), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
+      response = await this.fetch(this.options.url, { method: "POST", headers: this.headers(authorization), body: JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs), redirect: "error" });
     } catch (error) {
       const name = (error as Error).name;
       if (name === "TimeoutError" || name === "AbortError") throw new ConnectorError(`sem resposta em ${Math.round(timeoutMs / 1000)} s`);
       const cause = (error as { cause?: { code?: string } }).cause?.code;
       throw new ConnectorError(cause ? `não conectou (${cause})` : "não conectou ao servidor");
     }
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401 && this.options.auth) {
+      await response.body?.cancel().catch(() => undefined);
+      // Renova (lança "precisa entrar de novo" se não der) e repete uma vez com o token novo; recusado de novo = entrar de novo.
+      if (await this.options.auth.refresh(authorization, retried)) return this.post(body, timeoutMs, true);
+    }
+    if (response.status === 401) {
       await response.body?.cancel().catch(() => undefined);
       throw new ConnectorAuthError(`o servidor pediu login/credencial (HTTP ${response.status})`);
+    }
+    if (response.status === 403) {
+      // 403 não é "entre de novo": o login pode estar certo e o servidor recusar por outro motivo (ex.: API não ativada no projeto). Vira erro comum, com o motivo do servidor.
+      throw new ConnectorError(forbiddenReason(await readLimitedText(response, FORBIDDEN_BODY_BYTES)));
     }
     return response;
   }

@@ -126,6 +126,8 @@ export type TestAppOptions = {
   activity?: AppDeps["activity"];
   /** OpenClaw e Hermes (passo a passo da tela Motores): receita, download, OpenRouter e turno falsos. */
   oneShot?: AppDeps["oneShot"];
+  /** Versão do app e verificação de atualização (os testes passam um repositório temporário em `rootDir`). */
+  version?: AppDeps["version"];
   /** Freebuff: nos testes, nunca o de verdade (executável que não existe e uma pasta de dados vazia); os testes do motor passam a TUI falsa. */
   freebuff?: AppDeps["freebuff"];
 };
@@ -183,6 +185,7 @@ export function useTestApp(): (options?: TestAppOptions) => Promise<TestApp> {
       ...(options.pushBatchMs !== undefined ? { pushBatchMs: options.pushBatchMs } : {}),
       ...(options.engineTools ? { engineTools: options.engineTools } : {}),
       ...(options.oneShot ? { oneShot: options.oneShot } : {}),
+      ...(options.version ? { version: options.version } : {}),
       ...(options.activity ? { activity: options.activity } : {}),
       freebuff: { command: "/nao-existe/freebuff-nunca-nos-testes", manicodeDir: path.join(dataDir, "fake-manicode"), ...options.freebuff },
       terminals: {

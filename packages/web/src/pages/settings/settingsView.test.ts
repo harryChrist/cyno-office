@@ -71,7 +71,7 @@ describe("seção das Configurações no endereço", () => {
 
 describe("áreas das Configurações", () => {
   it("Da plataforma: acesso, motores, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
-    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "modelos-padrao", "cyno-ajustes", "avisos", "conectores-locais", "historico", "escritorio"]);
+    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "modelos-padrao", "cyno-ajustes", "avisos", "conectores-locais", "historico", "versao", "escritorio"]);
     expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "acesso", "pastas", "seguranca", "distribuicao", "relatorios", "aprovacoes", "conectores"]);
     // As áreas vêm em ordem na página (toda a plataforma antes do workspace).
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id));

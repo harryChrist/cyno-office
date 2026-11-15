@@ -9,6 +9,8 @@ import { SocketIndicator } from "../SocketIndicator";
 import { useOverlayInsets } from "../useOverlayInsets";
 import { MobileDrawer } from "./MobileDrawer";
 import { openPanel } from "./NavItems";
+import { useVersionTone } from "./NavVersion";
+import { menuButtonLabel } from "../../version/versionView";
 
 /** Barra curta do celular: menu, a página atual (e o workspace) e o sino. */
 export function MobileBar() {
@@ -20,6 +22,7 @@ export function MobileBar() {
   const setDrawerOpen = useNavLayoutStore((state) => state.setDrawerOpen);
   const panel = useNavLayoutStore((state) => state.panel);
   const { unread, label } = useNotificationsSummary();
+  const versionTone = useVersionTone();
   const ref = useRef<HTMLElement>(null);
   useOverlayInsets("topbar", ref, "top", true);
   const closeDrawer = useCallback(() => setDrawerOpen(false), [setDrawerOpen]);
@@ -30,7 +33,7 @@ export function MobileBar() {
         <button
           type="button"
           className="mbar__button"
-          aria-label="Abrir o menu"
+          aria-label={menuButtonLabel(versionTone)}
           aria-expanded={drawerOpen}
           onClick={() => {
             useNavLayoutStore.getState().closePanel();
@@ -39,6 +42,7 @@ export function MobileBar() {
           data-testid="nav-menu"
         >
           <NavIcon name="menu" />
+          {versionTone !== "normal" && <span className="navitem__dot navitem__dot--update" aria-hidden="true" data-testid="menu-update-dot" />}
         </button>
         <div className="mbar__titles">
           <h1 className="sr-only">Cyno</h1>

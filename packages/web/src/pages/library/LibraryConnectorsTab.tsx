@@ -1,14 +1,18 @@
-import type { ConnectorImportCandidate, LibraryConnector } from "@cyno/shared";
+import { effectiveRedirectMode, needsPasteBack, type ConnectorImportCandidate, type LibraryConnector } from "@cyno/shared";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api/client";
 import { ConnectorFormDialog, EMPTY_FORM, formFromCandidate, ImportDialog, type ConnectorEditing } from "../../connectors/ConnectorFormDialog";
-import { ConnectorBadgeIcon } from "../../connectors/ConnectorIcon";
-import { connectorStatus, KIND_LABELS, toolsLabel } from "../../connectors/connectorView";
+import { ConnectorBadgeIcon, ConnectorIcon } from "../../connectors/ConnectorIcon";
+import { GmailGuide } from "../../connectors/GmailGuide";
+import { PasteBack, useOAuthSignIn } from "../../connectors/OAuthSection";
+import { connectorStatus, connectorTarget, findGmailConnector, gmailConnectorForm, isGmailConnector, isPreviewProgramProblem, KIND_LABELS, toolsLabel } from "../../connectors/connectorView";
 import { useLibraryStore } from "../../store/libraryStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { AvatarSprite } from "../../ui/AvatarSprite";
+import { Linkify } from "../../ui/Linkify";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { AsyncSwitch, ConfirmDialog, ErrorText } from "../../ui/widgets";
+import "../../connectors/gmailGuide.css";
 import { GrantDialog } from "./GrantDialog";
 import { filterConnectors, filterCounts, LIBRARY_FILTERS, ORIGIN_LABELS, openLibrary, usageLabel, type LibraryFilterId } from "./libraryView";
 
@@ -42,10 +46,13 @@ export function WhoUses({ connector }: { connector: Pick<LibraryConnector, "id" 
 }
 
 /** Um conector da Biblioteca: o que é, estado, ferramentas (recolhíveis), quem usa e as ações. */
-function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connector: LibraryConnector; onGrant: () => void; onEdit: () => void; onRemove: () => void }) {
+function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove, onGuide }: { connector: LibraryConnector; onGrant: () => void; onEdit: () => void; onRemove: () => void; onGuide?: () => void }) {
   const status = connectorStatus(connector);
   const test = useAsyncAction();
-  const target = connector.kind === "http" ? connector.url : [connector.command, ...(connector.args ?? [])].join(" ");
+  const sign = useOAuthSignIn(connector.oauth ? connector.id : undefined);
+  const target = connectorTarget(connector);
+  // Gmail pelo servidor MCP oficial: o programa de prévia do Google não aceita Gmail comum; a API do Gmail resolve.
+  const suggestApi = isGmailConnector(connector) && connector.builtin !== "gmail-api" && connector.enabled;
   const secrets = connector.kind === "http" ? connector.secretHeaders : connector.secretEnv;
   return (
     <li className="lib-card" data-testid={`library-card-${connector.id}`} data-state={connector.status.state}>
@@ -55,6 +62,11 @@ function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connec
           <h3 className="lib-card__name">{connector.name}</h3>
           <p className="lib-card__target" title={target}>
             <span className="lib-chip">{KIND_LABELS[connector.kind]}</span>
+            {connector.oauth && (
+              <span className="lib-chip" data-testid={`library-oauth-chip-${connector.id}`}>
+                OAuth
+              </span>
+            )}
             <span className="lib-chip">{ORIGIN_LABELS[connector.origin]}</span>
             <span className="lib-card__url">{target}</span>
           </p>
@@ -66,7 +78,25 @@ function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connec
       {connector.description && <p className="lib-card__desc">{connector.description}</p>}
       {connector.status.reason && connector.enabled && (
         <p className={`lib-card__reason lib-card__reason--${status.tone}`} role="note">
-          {connector.status.reason}
+          <Linkify text={connector.status.reason} />
+
+          {onGuide && connector.status.state === "error" && (
+            <>
+              {" "}
+              <button type="button" className="oauth-link" onClick={onGuide} data-testid={`library-guide-link-${connector.id}`}>
+                Ver o guia
+              </button>
+            </>
+          )}
+        </p>
+      )}
+
+      {suggestApi && (
+        <p className="lib-card__reason lib-card__reason--attention" role="note" data-testid={`library-api-hint-${connector.id}`}>
+          {isPreviewProgramProblem(connector) ? "O Google recusou: este servidor só atende projetos Workspace inscritos no programa de prévia." : "Este é o servidor MCP oficial do Google: só funciona com conta Google Workspace inscrita no programa de prévia."} Com um Gmail comum, use a API do Gmail.{" "}
+          <button type="button" className="oauth-link" onClick={onEdit} data-testid={`library-use-api-${connector.id}`}>
+            Usar a API do Gmail
+          </button>
         </p>
       )}
 
@@ -94,7 +124,9 @@ function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connec
             <span className="ui-muted">{connector.status.state === "connected" ? "nenhuma" : "teste a conexão para ver"}</span>
           )}
           <h4 className="lib-card__label">Credenciais</h4>
-          <span className={secrets.length > 0 ? "" : "ui-muted"}>{secrets.length > 0 ? secrets.map((name) => `${name} (definido)`).join(", ") : "nenhuma"}</span>
+          <span className={secrets.length > 0 || connector.oauth ? "" : "ui-muted"}>
+            {connector.oauth ? `Login OAuth (${connector.oauth.connection === "connected" ? "conectado" : connector.oauth.connection === "needs_login" ? "precisa entrar de novo" : "não conectado"})` : secrets.length > 0 ? secrets.map((name) => `${name} (definido)`).join(", ") : "nenhuma"}
+          </span>
         </section>
         <section className="lib-card__col lib-card__col--uses" aria-label="Quem usa">
           <h4 className="lib-card__label">
@@ -110,6 +142,18 @@ function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connec
           <button type="button" className="ui-button ui-button--small" onClick={onGrant} data-testid={`library-grant-${connector.id}`}>
             Liberar…
           </button>
+          {connector.oauth && (
+            <button
+              type="button"
+              className={`ui-button ui-button--small${connector.oauth.connection === "connected" ? " ui-button--secondary" : ""}`}
+              disabled={sign.pending || sign.waiting || !connector.enabled}
+              aria-busy={sign.pending}
+              onClick={() => void sign.signIn()}
+              data-testid={`library-sign-in-${connector.id}`}
+            >
+              {sign.waiting ? "Esperando o login…" : connector.oauth.connection === "not_connected" ? "Entrar" : "Entrar de novo"}
+            </button>
+          )}
           <button
             type="button"
             className="ui-button ui-button--secondary ui-button--small"
@@ -135,7 +179,8 @@ function LibraryConnectorCard({ connector, onGrant, onEdit, onRemove }: { connec
           )}
         </div>
       </footer>
-      <ErrorText>{test.error}</ErrorText>
+      {sign.waiting && connector.oauth && needsPasteBack(effectiveRedirectMode(connector.oauth.redirect, connector.oauth.registration), window.location.origin) && <PasteBack pending={sign.finishPending} error={sign.finishError} onFinish={(url) => void sign.finish(url)} />}
+      <ErrorText>{test.error ?? sign.error}</ErrorText>
     </li>
   );
 }
@@ -155,6 +200,7 @@ export function LibraryConnectorsTab({ workspaceId }: { workspaceId: string | nu
   const [importing, setImporting] = useState(false);
   const [granting, setGranting] = useState<string | null>(null);
   const [removing, setRemoving] = useState<LibraryConnector | null>(null);
+  const [guide, setGuide] = useState(false);
 
   useEffect(() => {
     void useLibraryStore.getState().load();
@@ -163,11 +209,22 @@ export function LibraryConnectorsTab({ workspaceId }: { workspaceId: string | nu
   const all = useMemo(() => connectors ?? [], [connectors]);
   const counts = useMemo(() => filterCounts(all, workspaceId), [all, workspaceId]);
   const shown = useMemo(() => filterConnectors(all, { filter, query, workspaceId }), [all, filter, query, workspaceId]);
+  const gmail = useMemo(() => findGmailConnector(all), [all]);
+  /** O botão do guia: cria o conector do Gmail já preenchido (o formulário verifica sozinho) ou abre o que já existe. */
+  const guideAction = connectors === null ? undefined : gmail ? { label: "Abrir o conector do Gmail", onClick: () => { setGuide(false); setEditing({ mode: "edit", connector: gmail }); } } : { label: "Criar conector do Gmail", onClick: () => { setGuide(false); setEditing({ mode: "create", form: gmailConnectorForm() }); } };
   const grantingItem = granting ? all.find((item) => item.id === granting) : undefined;
 
   return (
     <div className="lib-tab" data-testid="library-connectors">
       <p className="lib__intro">Conectores (MCP) são as ferramentas externas que os agentes podem usar. Cada um é guardado uma vez aqui e você libera a workspaces e, dentro deles, a agentes.</p>
+      <div className="lib-guides" role="group" aria-label="Guias" data-testid="library-guides">
+        <span className="lib-guides__label">Guias</span>
+        <button type="button" className="lib-guides__button" onClick={() => setGuide(true)} data-testid="library-guide-gmail">
+          <ConnectorIcon connector={{ id: "gmail", name: "Gmail", icon: { kind: "brand", slug: "gmail" } }} size={20} />
+          Conectar o Gmail
+        </button>
+        <span className="lib-guides__hint">Passo a passo com o Google Cloud, o login e o que fazer se der erro.</span>
+      </div>
       <div className="lib-toolbar">
         <input className="ui-input lib-toolbar__search" type="search" placeholder="Buscar conector, ferramenta, workspace ou agente" value={query} onChange={(event) => setQuery(event.currentTarget.value)} aria-label="Buscar" data-testid="library-search" />
         <div className="ui-actions lib-toolbar__actions">
@@ -220,11 +277,12 @@ export function LibraryConnectorsTab({ workspaceId }: { workspaceId: string | nu
       ) : (
         <ul className="lib-list" data-testid="library-list">
           {shown.map((connector) => (
-            <LibraryConnectorCard key={connector.id} connector={connector} onGrant={() => setGranting(connector.id)} onEdit={() => setEditing({ mode: "edit", connector })} onRemove={() => setRemoving(connector)} />
+            <LibraryConnectorCard key={connector.id} connector={connector} onGrant={() => setGranting(connector.id)} onEdit={() => setEditing({ mode: "edit", connector })} onRemove={() => setRemoving(connector)} onGuide={connector.id === gmail?.id ? () => setGuide(true) : undefined} />
           ))}
         </ul>
       )}
 
+      {guide && <GmailGuide onClose={() => setGuide(false)} action={guideAction} />}
       {editing && <ConnectorFormDialog key={editing.mode === "edit" ? editing.connector.id : "novo"} editing={editing} onClose={() => setEditing(null)} onSaved={(saved) => editing.mode === "create" && setGranting(saved.id)} />}
       {importing && (
         <ImportDialog

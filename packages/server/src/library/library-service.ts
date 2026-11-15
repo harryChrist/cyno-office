@@ -2,6 +2,7 @@ import path from "node:path";
 import {
   ACTIVITY_SYSTEM,
   ACTIVITY_USER,
+  GMAIL_MCP_URL,
   type Connector,
   type ConnectorIconMime,
   type CreateLibraryConnectorBody,
@@ -27,6 +28,8 @@ import { ConnectorGateway, type AppToolsPort, type ConnectorGatewayDeps } from "
 import type { AppToolRunner } from "./apps/tool-runner";
 import type { MediaService } from "../workspace/media/media-service";
 import { claudeImportCandidates, type ClaudeMcpListOptions } from "./connectors/import-claude";
+import { OAuthManager } from "./connectors/oauth/manager";
+import type { StoredOAuth } from "./connectors/oauth/stored";
 import { ConnectorRegistry, type RegistryChange } from "./connectors/registry";
 import { SkillLibrary, type SkillChange } from "./skills/skill-library";
 import { librarySkillPaths, type StoredSkill } from "./skills/store";
@@ -86,6 +89,8 @@ export const libraryDirOf = (dataDir: string) => path.join(platformPaths(dataDir
 export class LibraryService {
   readonly registry: ConnectorRegistry;
   readonly gateway: ConnectorGateway;
+  /** Login OAuth dos conectores HTTP (tokens ficam no registro, 0600). */
+  readonly oauth: OAuthManager;
   readonly paths: ConnectorPaths;
   /** As skills da plataforma (pasta própria em `skills/`, liberação igual à dos conectores). */
   skills!: SkillLibrary;
@@ -106,7 +111,19 @@ export class LibraryService {
       log: options.log,
       now: options.now,
     });
+    this.oauth = new OAuthManager({
+      store: this.registry,
+      fetch: options.gateway?.fetch,
+      now: options.now,
+      log: options.log,
+      onConnected: (id) => {
+        const record = this.registry.record(id);
+        if (record) this.record("conector-entrou", ACTIVITY_USER, `Conector ${record.name}: entrou com a conta (OAuth)`, record);
+        void this.gateway.invalidate(id).then(() => this.autoTest(id));
+      },
+    });
     this.gateway = new ConnectorGateway({
+      oauth: this.oauth,
       registry: this.registry,
       paths: this.paths,
       publish: (workspaceId, event) => this.workspaces.get(workspaceId)?.publish(event),
@@ -223,7 +240,20 @@ export class LibraryService {
 
   async create(body: CreateLibraryConnectorBody, actor: string = ACTIVITY_USER): Promise<LibraryConnector> {
     if (body.kind === "stdio") this.assertStdioAllowed();
-    const record = await this.registry.create(body);
+    const { auth, ...rest } = body;
+    if (body.builtin && (body.kind !== "http" || auth?.mode !== "oauth")) throw new HttpError(400, "O modo embutido só vale para conector HTTP com login OAuth.");
+    let oauth: StoredOAuth | undefined;
+    if (auth?.mode === "oauth") {
+      if (body.builtin) {
+        // Gmail pela API: sem servidor MCP para descobrir; o login é o do Google.
+        if (body.kind !== "http") throw new HttpError(400, "O modo embutido só vale para conector HTTP.");
+        oauth = await this.oauth.buildGmailApi(auth);
+      } else {
+        if (body.kind !== "http" || !body.url) throw new HttpError(400, "O login OAuth só vale para conector HTTP com URL.");
+        oauth = await this.oauth.build(body.url, auth);
+      }
+    }
+    const record = await this.registry.create({ ...rest, ...(oauth ? { oauth } : {}) });
     this.record("conector-criado", actor, `Conector ${record.name} adicionado à Biblioteca`, record);
     if (record.enabled) this.autoTest(record.id);
     this.noteGrants(record, {}, actor);
@@ -233,12 +263,92 @@ export class LibraryService {
   async update(id: string, body: UpdateLibraryConnectorBody): Promise<LibraryConnector> {
     const current = this.registry.get(id);
     if (current.kind === "stdio" && (body.enabled === true || "command" in body || "args" in body)) this.assertStdioAllowed();
-    const { record, change } = await this.registry.update(id, body);
+    const { auth, ...rest } = body;
+    // Primeiro a descoberta (pode recusar) e só depois grava: falhar não deixa o conector pela metade.
+    let nextOAuth: { value: StoredOAuth | undefined } | undefined;
+    // Trocar de cliente (API do Gmail <-> servidor MCP oficial) mantém o login: o OAuth guardado só é remendado (endereço do recurso e lista de permissões).
+    let base = current.oauth;
+    if (rest.builtin !== undefined) {
+      if (current.kind !== "http") throw new HttpError(400, "O modo embutido só vale para conector HTTP.");
+      if (rest.builtin === "gmail-api" && !current.builtin) {
+        if (!current.oauth) throw new HttpError(400, "A API do Gmail precisa do login com a conta (OAuth).");
+        const found = this.oauth.gmailApiFor(current.oauth);
+        if (!found) throw new HttpError(400, "A API do Gmail só vale com o login do Google.");
+        base = this.oauth.rebase(current.oauth, found);
+        nextOAuth = { value: base };
+      } else if (rest.builtin === null && current.builtin && current.oauth) {
+        base = this.oauth.rebase(current.oauth, await this.oauth.tryDiscover(rest.url ?? GMAIL_MCP_URL));
+        nextOAuth = { value: base };
+      }
+    }
+    const builtinAfter = rest.builtin === undefined ? current.builtin : (rest.builtin ?? undefined);
+    if (auth) {
+      if (current.kind !== "http") throw new HttpError(400, "O login OAuth só vale para conector HTTP.");
+      if (auth.mode === "static") {
+        if (builtinAfter) throw new HttpError(400, "A API do Gmail precisa do login com a conta (OAuth).");
+        nextOAuth = current.oauth ? { value: undefined } : undefined;
+      } else nextOAuth = { value: builtinAfter ? await this.oauth.buildGmailApi(auth, base) : await this.oauth.build(rest.url ?? current.url ?? "", auth, base) };
+    } else if (!builtinAfter && rest.url && rest.url !== current.url && current.oauth && rest.builtin === undefined) {
+      // URL nova num conector OAuth: descobre de novo; se o servidor novo não anuncia OAuth, o OAuth antigo fica como está.
+      nextOAuth = await this.oauth.build(rest.url, { mode: "oauth" }, current.oauth).then(
+        (value) => ({ value }),
+        () => undefined,
+      );
+    }
+    let { record, change } = await this.registry.update(id, rest);
+    if (nextOAuth) {
+      record = (await this.registry.setOAuth(id, nextOAuth.value)) ?? record;
+      change = { connectionChanged: true };
+    }
     if (change.connectionChanged) {
       await this.gateway.invalidate(id);
       if (record.enabled) this.autoTest(id);
     }
     return this.publicOf(record);
+  }
+
+  // ---------- Login OAuth ----------
+
+  /** Só descobre (nada é guardado): o formulário ("Verificar") mostra escopos e se o cadastro é automático. */
+  discoverOAuth(url: string) {
+    return this.oauth.discover(url);
+  }
+
+  /** O mesmo para o corpo da rota: a URL, o conector (se for "gmail-api", o login do Google) ou o modo embutido. */
+  discoverOAuthFor(body: { url?: string; connectorId?: string; builtin?: "gmail-api" }) {
+    if (body.builtin || (body.connectorId && this.registry.get(body.connectorId).builtin)) return this.oauth.discoverGmailApi();
+    return this.oauth.discover(body.url ?? this.urlOf(body.connectorId!));
+  }
+
+  /** A URL guardada de um conector HTTP (só o servidor a conhece inteira; a API mostra mascarada). */
+  urlOf(id: string): string {
+    const record = this.registry.get(id);
+    if (record.kind !== "http" || !record.url) throw new HttpError(400, "O login OAuth só vale para conector HTTP.");
+    return record.url;
+  }
+
+  startOAuth(id: string, origin: string) {
+    return this.oauth.start(id, origin);
+  }
+
+  /** Termina o login com o endereço colado pelo dono; devolve o conector atualizado. */
+  async finishOAuth(id: string, callbackUrl: string): Promise<LibraryConnector> {
+    await this.oauth.finish(id, callbackUrl);
+    return this.get(id);
+  }
+
+  /** O retorno do login (rota `/api/library/oauth/callback`): termina o fluxo ou lança `OAuthCallbackError`. */
+  completeOAuth(query: Parameters<OAuthManager["complete"]>[0]) {
+    return this.oauth.complete(query);
+  }
+
+  async disconnectOAuth(id: string): Promise<LibraryConnector> {
+    const record = this.registry.get(id);
+    await this.oauth.disconnect(id);
+    this.record("conector-desconectado", ACTIVITY_USER, `Conector ${record.name}: desconectado da conta (OAuth)`, record);
+    await this.gateway.invalidate(id);
+    if (record.enabled) await this.gateway.test(id);
+    return this.get(id);
   }
 
   /** Exclusão pedida por uma pessoa (aba Conectores): o conector de um app só sai desinstalando o app. */

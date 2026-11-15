@@ -12,6 +12,9 @@ data/
 data-*/
 *.legacy.json
 
+# Versão gravada para o build do Docker (scripts/write-version.mjs)
+version.json
+
 # Segredos e configuração local
 .env
 .env.*

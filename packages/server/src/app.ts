@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import websocket from "@fastify/websocket";
-import { ENGINE_RETRY_PATH, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EnginesResponse, type ModelDefaults, type OneShotEngineId, type ServerEvent } from "@cyno/shared";
+import { ENGINE_RETRY_PATH, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EnginesResponse, type ModelDefaults, type OneShotEngineId, type RunMode, type ServerEvent } from "@cyno/shared";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 import { AgendaService } from "./platform/agenda/agenda-service";
@@ -25,6 +25,11 @@ import { registerAuth, type AuthOptions } from "./platform/auth/routes";
 import { AuthStore } from "./platform/auth/store";
 import { installErrorHandlers } from "./platform/http/errors";
 import { registerHealthRoutes } from "./routes/health";
+import { registerVersionRoutes } from "./routes/version";
+import { VersionService } from "./platform/version/service";
+import type { NpmRunner } from "./platform/version/updater";
+import { updateConfigFromEnv } from "./platform/version/checker";
+import { REPO_ROOT } from "./config";
 import { registerWorkspaceScopedRoutes } from "./routes/scope";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
 import { registerWsRoute } from "./routes/ws";
@@ -159,6 +164,13 @@ export type AppDeps = {
    * (padrão: desligado; o index.ts liga).
    */
   retention?: { claudeProjectsDir?: string; autoRun?: boolean };
+  /**
+   * Versão do app e aviso de atualização. `autoCheck`: liga a verificação automática (1 min depois da subida e a cada 6 h;
+   * padrão: desligada, o index.ts liga conforme `CYNO_UPDATE_CHECK`). `applyEnabled`: liga o botão "Baixar atualização"
+   * (padrão: desligado; o index.ts liga conforme `CYNO_UPDATE_APPLY`). Os testes passam `rootDir` (um repositório temporário),
+   * `fetch` falso, `runMode` e `npm` (executor falso do `npm install`).
+   */
+  version?: { rootDir?: string; autoCheck?: boolean; branch?: string; fetch?: typeof fetch; applyEnabled?: boolean; runMode?: RunMode; npm?: NpmRunner };
   /** Conectores (servidores MCP externos): teste automático e clientes falsos nos testes. */
   connectors?: { autoTest?: boolean; gateway?: LibraryServiceOptions["gateway"]; allowStdio?: boolean };
   /** Skills da Biblioteca: onde procurar o `~/.claude` do dono para importar por cópia (padrão: o home do servidor; os testes passam uma pasta falsa). */
@@ -526,6 +538,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await retention.load();
 
   registerHealthRoutes(app);
+  const versionService = new VersionService({
+    startDir: REPO_ROOT,
+    ...(deps.version?.rootDir ? { rootDir: deps.version.rootDir } : {}),
+    config: { ...updateConfigFromEnv({}), auto: deps.version?.autoCheck === true, ...(deps.version?.branch ? { branch: deps.version.branch } : {}) },
+    ...(deps.version?.fetch ? { fetch: deps.version.fetch } : {}),
+    applyEnabled: deps.version?.applyEnabled === true,
+    ...(deps.version?.runMode ? { runMode: deps.version.runMode } : {}),
+    ...(deps.version?.npm ? { npm: deps.version.npm } : {}),
+  });
+  registerVersionRoutes(app, versionService);
   app.get("/api/engines", async (request): Promise<EnginesResponse> => {
     const refresh = (request.query as { refresh?: string } | undefined)?.refresh;
     return { engines: await engines.list(refresh === "1" || refresh === "true"), simulated };
@@ -667,10 +689,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     accountUsage?.start();
     antigravityUsage?.start();
     if (deps.retention?.autoRun) retention.start();
+    if (deps.version?.autoCheck) versionService.start();
   });
   app.addHook("onClose", async () => {
     await engineSettings.flush();
     await retention.stop();
+    versionService.stop();
     unsubscribeSystemActivity?.();
     accountUsage?.stop();
     antigravityUsage?.stop();

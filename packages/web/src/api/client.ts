@@ -12,6 +12,11 @@ import type {
   CreateLibrarySkillBody,
   ImportLibrarySkillsResponse,
   LibraryConnector,
+  OAuthDiscoverBody,
+  OAuthDiscoveryResult,
+  OAuthFinishBody,
+  OAuthStartBody,
+  OAuthStartResponse,
   LibraryImportResponse,
   LibrarySkillDetail,
   LibrarySkillView,
@@ -83,6 +88,7 @@ import type {
   OpenRouterKeyInfo,
   OpenRouterModelsResponse,
   RetentionResponse,
+  VersionResponse,
   UpdateRetentionBody,
   Workspace,
   AgentEngine,
@@ -109,7 +115,7 @@ import { CONFIRMATIONS_PATH, PROPOSALS_PATH, type Confirmation, type Confirmatio
 import { JOINT_PATH, type JointsResponse, type JointView } from "@cyno/shared";
 import { MURAL_PATH, type MuralEntry, type MuralResponse, type MuralShareBody, type MuralUseResponse } from "@cyno/shared";
 import { FREEBUFF_MODELS_REFRESH_PATH, FREEBUFF_SETTINGS_PATH, FREEBUFF_TEST_PATH, type FreebuffSettingsBody } from "@cyno/shared";
-import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
+import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, VERSION_CHECK_PATH, VERSION_PATH, VERSION_UPDATE_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
@@ -317,6 +323,12 @@ export const api = {
   getRetention: () => requestJson<RetentionResponse>(RETENTION_PATH),
   updateRetention: (body: UpdateRetentionBody) => requestJson<RetentionResponse>(RETENTION_PATH, { method: "PATCH", body }),
   cleanupRetention: () => requestJson<RetentionResponse>(RETENTION_CLEANUP_PATH, { method: "POST" }),
+  /** Versão instalada e último resultado da verificação de atualização (sem rede no servidor). */
+  getVersion: () => requestJson<VersionResponse>(VERSION_PATH),
+  /** Verifica agora se há atualização no GitHub. */
+  checkVersion: () => requestJson<VersionResponse>(VERSION_CHECK_PATH, { method: "POST" }),
+  /** Começa a baixar a atualização (segundo plano); o andamento vem em `update.job` do GET. Nunca reinicia nada. */
+  updateVersion: () => requestJson<VersionResponse>(VERSION_UPDATE_PATH, { method: "POST" }),
 
   /** Atividade do workspace atual (o que foi feito), mais nova primeiro e paginada por `cursor`. */
   activity: (query: ActivityQueryInput = {}) => requestJson<ActivityResponse>(`${ws()}/activity${queryString(query)}`),
@@ -492,6 +504,12 @@ export const api = {
   /** Liberações nos dois níveis: o mapa inteiro de workspace -> agentes (o que não estiver nele é retirado). */
   setLibraryGrants: (id: string, body: SetLibraryGrantsBody) => requestJson<LibraryConnector>(`/api/library/connectors/${segment(id)}/grants`, { method: "PUT", body }),
   uploadLibraryConnectorIcon: (id: string, body: UploadConnectorIconBody) => requestJson<LibraryConnector>(`/api/library/connectors/${segment(id)}/icon`, { method: "POST", body }),
+  getLibraryConnector: (id: string) => requestJson<LibraryConnector>(`/api/library/connectors/${segment(id)}`),
+  /** Login OAuth: "Verificar" (só descobre; nada é guardado), começar o login (devolve a URL da tela do serviço) e desconectar. */
+  discoverLibraryOAuth: (body: OAuthDiscoverBody) => requestJson<OAuthDiscoveryResult>("/api/library/connectors/oauth/discover", { method: "POST", body }),
+  startLibraryOAuth: (id: string, body: OAuthStartBody) => requestJson<OAuthStartResponse>(`/api/library/connectors/${segment(id)}/oauth/start`, { method: "POST", body }),
+  finishLibraryOAuth: (id: string, body: OAuthFinishBody) => requestJson<LibraryConnector>(`/api/library/connectors/${segment(id)}/oauth/finish`, { method: "POST", body }),
+  disconnectLibraryOAuth: (id: string) => requestJson<LibraryConnector>(`/api/library/connectors/${segment(id)}/oauth/disconnect`, { method: "POST" }),
   importLibraryConnectorsFromClaude: () => requestJson<LibraryImportResponse>("/api/library/connectors/import/claude"),
 
   /** Skills da Biblioteca: pastas com SKILL.md guardadas na plataforma e liberadas a workspaces e agentes. */

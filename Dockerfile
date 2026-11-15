@@ -21,7 +21,8 @@ COPY packages/web/package.json packages/web/
 COPY packages/site/package.json packages/site/
 RUN npm ci --no-audit --no-fund
 
-COPY tsconfig.base.json tsconfig.json ./
+# version.json (opcional) vem de `npm run docker:up`: o .git não entra na imagem, e é por ele que o app mostra o commit e compara com o GitHub
+COPY tsconfig.base.json tsconfig.json version.json* ./
 COPY packages packages
 RUN npm run build -w @cyno/web
 

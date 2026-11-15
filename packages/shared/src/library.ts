@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  CONNECTOR_BUILTINS,
   CONNECTOR_ORIGINS,
   connectorColorSchema,
   connectorEnvNameSchema,
@@ -11,6 +12,7 @@ import {
   type ConnectorImportCandidate,
   type ConnectorStatus,
 } from "./connectors";
+import { connectorAuthInputSchema } from "./connector-oauth";
 import type { Avatar } from "./types";
 
 /**
@@ -85,6 +87,8 @@ export const createLibraryConnectorBodySchema = z
     name: nameSchema,
     kind: z.enum(["http", "stdio"]),
     url: z.string().trim().max(2000).optional(),
+    /** Só HTTP com OAuth: fala direto com a API pública (a URL não é digitada; o servidor guarda a base da API). */
+    builtin: z.enum(CONNECTOR_BUILTINS).optional(),
     command: z.string().trim().min(1).max(300).optional(),
     args: z.array(z.string().max(1000)).max(40).optional(),
     headers: z.record(connectorHeaderNameSchema, z.string().min(1).max(8000)).optional(),
@@ -95,10 +99,13 @@ export const createLibraryConnectorBodySchema = z
     description: descriptionSchema.optional(),
     origin: z.enum(["manual", "claude-code"]).optional(),
     grants: libraryGrantsInputSchema.optional(),
+    /** Só HTTP: "oauth" entra com a conta (a descoberta roda ao criar); sem isso, vale o token fixo de sempre. */
+    auth: connectorAuthInputSchema.optional(),
   })
   .superRefine((body, ctx) => {
-    if (body.kind === "http" && !body.url) ctx.addIssue({ code: "custom", path: ["url"], message: "conector HTTP precisa da URL" });
+    if (body.kind === "http" && !body.url && !body.builtin) ctx.addIssue({ code: "custom", path: ["url"], message: "conector HTTP precisa da URL" });
     if (body.kind === "stdio" && !body.command) ctx.addIssue({ code: "custom", path: ["command"], message: "conector stdio precisa do comando" });
+    if (body.builtin && (body.kind !== "http" || body.auth?.mode !== "oauth")) ctx.addIssue({ code: "custom", path: ["builtin"], message: "o modo embutido só vale para conector HTTP com login OAuth" });
   });
 export type CreateLibraryConnectorBody = z.input<typeof createLibraryConnectorBodySchema>;
 
@@ -106,6 +113,8 @@ export type CreateLibraryConnectorBody = z.input<typeof createLibraryConnectorBo
 export const updateLibraryConnectorBodySchema = z.object({
   name: nameSchema.optional(),
   url: z.string().trim().max(2000).optional(),
+  /** Liga (valor) ou desliga (null) o modo embutido; o login OAuth e os tokens ficam como estão. */
+  builtin: z.enum(CONNECTOR_BUILTINS).nullable().optional(),
   command: z.string().trim().min(1).max(300).optional(),
   args: z.array(z.string().max(1000)).max(40).optional(),
   headers: z.record(connectorHeaderNameSchema, z.string().min(1).max(8000).nullable()).optional(),
@@ -114,6 +123,8 @@ export const updateLibraryConnectorBodySchema = z.object({
   color: connectorColorSchema.nullable().optional(),
   enabled: z.boolean().optional(),
   description: descriptionSchema.optional(),
+  /** Só HTTP: troca o modo (token fixo ou OAuth) ou ajusta escopos e cliente do OAuth. */
+  auth: connectorAuthInputSchema.optional(),
 });
 export type UpdateLibraryConnectorBody = z.input<typeof updateLibraryConnectorBodySchema>;
 

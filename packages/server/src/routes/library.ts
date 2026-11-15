@@ -1,5 +1,6 @@
 import {
   CONNECTOR_ICON_MAX_BYTES,
+  OAUTH_CALLBACK_PATH,
   createLibraryConnectorBodySchema,
   createLibrarySkillBodySchema,
   importLibrarySkillsBodySchema,
@@ -12,14 +13,21 @@ import {
   type LibrarySkillView,
   type SkillImportResponse,
   libraryConnectorParamsSchema,
+  oauthDiscoverBodySchema,
+  oauthFinishBodySchema,
+  oauthStartBodySchema,
   setLibraryGrantsBodySchema,
   updateLibraryConnectorBodySchema,
   uploadConnectorIconBodySchema,
   type LibraryConnector,
   type LibraryImportResponse,
   type LibraryWorkspaceInfo,
+  type OAuthDiscoveryResult,
+  type OAuthStartResponse,
 } from "@cyno/shared";
 import type { FastifyInstance } from "fastify";
+import { OAuthCallbackError } from "../library/connectors/oauth/manager";
+import { oauthResultPage } from "../library/connectors/oauth/page";
 import type { LibraryService } from "../library/library-service";
 import { HttpError } from "../platform/http/errors";
 
@@ -37,6 +45,8 @@ export function registerLibraryRoutes(app: FastifyInstance, library: LibraryServ
   app.get("/api/library/connectors", async (): Promise<LibraryConnector[]> => library.list());
 
   app.get("/api/library/connectors/import/claude", async (): Promise<LibraryImportResponse> => library.importFromClaude());
+
+  registerOAuthRoutes(app, library);
 
   app.get("/api/library/connectors/:connectorId", async (request): Promise<LibraryConnector> => {
     const { connectorId } = libraryConnectorParamsSchema.parse(request.params);
@@ -156,5 +166,59 @@ function registerSkillRoutes(app: FastifyInstance, library: LibraryService): voi
     const { skillId } = librarySkillParamsSchema.parse(request.params);
     const { grants } = setLibraryGrantsBodySchema.parse(request.body);
     return library.skillView(await library.skills.setGrants(skillId, grants));
+  });
+}
+
+/**
+ * Login OAuth dos conectores HTTP. Atrás da senha como todo o `/api`. Nenhuma resposta traz token,
+ * código nem segredo do cliente. O retorno do login é um GET que o navegador do dono faz (o cookie
+ * da sessão vai junto) e termina numa página simples de "Conectado" ou de erro.
+ */
+function registerOAuthRoutes(app: FastifyInstance, library: LibraryService): void {
+  /** Só descobre (nada é guardado): o formulário mostra escopos e se o cadastro é automático. */
+  app.post("/api/library/connectors/oauth/discover", async (request): Promise<OAuthDiscoveryResult> => {
+    const body = oauthDiscoverBodySchema.parse(request.body);
+    return library.discoverOAuthFor(body);
+  });
+
+  /** Começa o login: devolve a URL da tela do serviço e o endereço de retorno usado. */
+  app.post("/api/library/connectors/:connectorId/oauth/start", async (request): Promise<OAuthStartResponse> => {
+    const { connectorId } = libraryConnectorParamsSchema.parse(request.params);
+    return library.startOAuth(connectorId, oauthStartBodySchema.parse(request.body).origin);
+  });
+
+  /**
+   * Termina o login com o endereço colado (retorno em `localhost` quando o navegador não está na máquina
+   * do servidor). Nada da URL, do código nem dos tokens vai para o log.
+   */
+  app.post("/api/library/connectors/:connectorId/oauth/finish", async (request): Promise<LibraryConnector> => {
+    const { connectorId } = libraryConnectorParamsSchema.parse(request.params);
+    const { callbackUrl } = oauthFinishBodySchema.parse(request.body);
+    try {
+      return await library.finishOAuth(connectorId, callbackUrl);
+    } catch (error) {
+      if (error instanceof OAuthCallbackError) throw new HttpError(400, error.message);
+      throw error;
+    }
+  });
+
+  app.post("/api/library/connectors/:connectorId/oauth/disconnect", async (request): Promise<LibraryConnector> => {
+    const { connectorId } = libraryConnectorParamsSchema.parse(request.params);
+    return library.disconnectOAuth(connectorId);
+  });
+
+  /** Retorno do login (o endereço que o dono cadastra no Google). */
+  app.get(OAUTH_CALLBACK_PATH, async (request, reply) => {
+    const query = (request.query ?? {}) as Record<string, unknown>;
+    const text = (key: string) => (typeof query[key] === "string" ? (query[key] as string).slice(0, 4000) : undefined);
+    reply.header("content-type", "text/html; charset=utf-8").header("cache-control", "no-store").header("referrer-policy", "no-referrer").header("x-content-type-options", "nosniff");
+    try {
+      const done = await library.completeOAuth({ state: text("state"), code: text("code"), error: text("error"), errorDescription: text("error_description"), iss: text("iss") });
+      return reply.send(oauthResultPage({ ok: true, name: done.name }));
+    } catch (error) {
+      if (error instanceof OAuthCallbackError) return reply.code(400).send(oauthResultPage({ ok: false, message: error.message }));
+      app.log.warn({ err: error }, "retorno do login OAuth falhou");
+      return reply.code(500).send(oauthResultPage({ ok: false, message: "Algo deu errado ao terminar o login. Tente de novo." }));
+    }
   });
 }
