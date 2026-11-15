@@ -34,6 +34,7 @@ export * from "./library-skills";
 export * from "./library-apps";
 export * from "./browser";
 export * from "./access";
+export * from "./folders";
 export * from "./activity";
 export * from "./usage-history";
 export * from "./usage-sanity";

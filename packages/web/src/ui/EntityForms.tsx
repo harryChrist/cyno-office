@@ -1,7 +1,7 @@
 import { isMaestroRoom, type OfficeState } from "@cyno/shared";
 import { useState, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from "react";
 import { AvatarEditor } from "./AvatarEditor";
-import { AgentAccessFields } from "./AgentAccess";
+import { AgentAccessFields, AgentFolderFields } from "./AgentAccess";
 import { EngineFields } from "./EngineFields";
 import type { AgentFormValues, FormMode, RoomFormValues, TeamFormValues } from "./formModels";
 import { teamsByRoom } from "./selectors";
@@ -170,6 +170,7 @@ export function AgentForm({ initial, onSubmit, office, locked = false, teamFixed
         <EngineFields values={{ engine: values.engine, model: values.model, effort: values.effort }} onChange={(engine) => set(engine)} locked={locked} />
       </div>
       {values.engine !== "mock" && <AgentAccessFields values={{ internet: values.internet, browser: values.browser, terminal: values.terminal }} onChange={(access) => set(access)} />}
+      {values.engine !== "mock" && <AgentFolderFields values={values.folders} onChange={(folders) => set({ folders })} engine={values.engine} terminal={values.terminal} />}
       <AvatarEditor value={values.avatar} onChange={(avatar) => set({ avatar })} />
       {errors.avatar && <p className="ui-field__error">{errors.avatar}</p>}
     </FormShell>

@@ -1,4 +1,4 @@
-import { agentAddress, agentEngine, isMaestroAgent, EFFORT_LABELS, effectiveAccess, workspaceAccess, type EffectiveAccess, type WorkspaceAccess, findMaestroRoom, type Agent, type BrainContext, type OfficeState, type SubagentChoice, type Task } from "@cyno/shared";
+import { agentAddress, agentEngine, isMaestroAgent, EFFORT_LABELS, effectiveAccess, workspaceAccess, type EffectiveAccess, type EffectiveFolder, type WorkspaceAccess, findMaestroRoom, type Agent, type BrainContext, type OfficeState, type SubagentChoice, type Task } from "@cyno/shared";
 
 /**
  * Textos (pt-BR) que os agentes de CLI recebem: as instruções fixas (CLAUDE.md da pasta do agente,
@@ -56,9 +56,10 @@ function webRules(policy: WorkspaceAccess): string[] {
 }
 
 /** Terminal (só com ele ligado): roda na máquina do usuário. */
-function terminalRules(agent: Agent): string[] {
+function terminalRules(agent: Agent, folders: readonly EffectiveFolder[] = []): string[] {
+  const where = folders.length > 0 ? "da sua pasta e das pastas de trabalho listadas abaixo (nas marcadas como SÓ LEITURA, nunca crie, altere, mova nem apague nada, nem por comando)" : "da sua pasta";
   return [
-    `- Terminal (${terminalToolLabel(agent)}): os comandos rodam NO SERVIDOR do usuário (a máquina dele). Trabalhe só dentro da sua pasta: nada de apagar, mover ou sobrescrever fora dela, instalar programas, mexer em configurações do sistema, em processos ou em arquivos de outros. Nada destrutivo; na dúvida, pergunte ao usuário antes.`,
+    `- Terminal (${terminalToolLabel(agent)}): os comandos rodam NO SERVIDOR do usuário (a máquina dele). Trabalhe só dentro ${where}: nada de apagar, mover ou sobrescrever fora dela, instalar programas, mexer em configurações do sistema, em processos ou em arquivos de outros. Nada destrutivo; na dúvida, pergunte ao usuário antes.`,
   ];
 }
 
@@ -79,9 +80,29 @@ function conversationEngineRules(agent: Agent, access: EffectiveAccess): string[
 }
 
 /** Regras de ferramentas do agente (o que usar, segurança na web e no terminal, e as do motor). */
-export function toolRules(agent: Agent, policy: WorkspaceAccess, conversation = false): string[] {
+export function toolRules(agent: Agent, policy: WorkspaceAccess, conversation = false, folders: readonly EffectiveFolder[] = []): string[] {
   const access = effectiveAccess(policy, agent);
-  return [toolsRule(agent, access), ...COMMON_RULES, ...(access.internet ? webRules(policy) : []), ...(access.terminal ? terminalRules(agent) : []), ...engineRules(agent, access, conversation)];
+  return [toolsRule(agent, access), ...COMMON_RULES, ...(access.internet ? webRules(policy) : []), ...(access.terminal ? terminalRules(agent, folders) : []), ...engineRules(agent, access, conversation)];
+}
+
+/**
+ * Pastas de trabalho do agente (as do workspace E dele, `effectiveFolders`): pastas reais do computador do usuário onde
+ * o trabalho de projeto acontece. Cada uma tem nome, caminho, se pode escrever e "para que serve" (é o que diz como
+ * usá-la: código, vault de notas…). Sem pastas, nada entra nas instruções.
+ */
+export function folderRules(folders: readonly EffectiveFolder[] | undefined): string[] {
+  if (!folders || folders.length === 0) return [];
+  const lines = folders.map((folder) => {
+    const mode = folder.write ? "leitura e escrita" : "SÓ LEITURA";
+    return `- ${folder.name}: \`${folder.path}\` (${mode}).${folder.purpose ? ` Para que serve: ${folder.purpose}` : ""}`;
+  });
+  return [
+    "## Pastas de trabalho",
+    "O trabalho de projeto (ler, criar e editar arquivos do usuário) acontece nestas pastas do computador dele, com os caminhos completos abaixo. A sua própria pasta (onde você roda) é só rascunho: anotações e arquivos temporários, nunca o lugar do entregável do projeto. Use cada pasta do jeito que o \"para que serve\" indica.",
+    ...lines,
+    ...(folders.some((folder) => !folder.write) ? ["- Pasta SÓ LEITURA: leia à vontade, mas nunca crie, edite, mova nem apague nada nela. Precisa mudar algo ali? Diga ao usuário em vez de tentar."] : []),
+    "- Mexa só no que a tarefa pede, sem apagar nada que o usuário não pediu, e conte no resultado o que leu e o que alterou (caminhos). Se uma pasta não abrir ou der erro de permissão, avise o usuário em vez de procurar outro jeito.",
+  ];
 }
 
 /**
@@ -139,7 +160,7 @@ const BRAIN_RULES = [
  * Opções das instruções que dependem do workspace: a política de acesso dos agentes (`access`;
  * ausente = os padrões) e se o navegador compartilhado está de fato ligado para o agente (`browser`).
  */
-export type PromptOptions = { browser?: boolean; access?: WorkspaceAccess; /** Id do workspace (o endereço "workspace/agente" dos colegas). */ workspaceId?: string; /** Tipos de aprovação que o workspace tem (id e nome). */ approvalTypes?: { id: string; name: string }[] };
+export type PromptOptions = { browser?: boolean; access?: WorkspaceAccess; /** Id do workspace (o endereço "workspace/agente" dos colegas). */ workspaceId?: string; /** Tipos de aprovação que o workspace tem (id e nome). */ approvalTypes?: { id: string; name: string }[]; /** Pastas de trabalho deste agente (workspace E agente): entram nas instruções. */ folders?: EffectiveFolder[] };
 
 /** Como usar o navegador compartilhado (só quem tem as ferramentas `browser_*`). */
 export const BROWSER_RULES = [
@@ -209,8 +230,9 @@ export function maestroPrompt(agent: Agent, workspaceName: string, options: Prom
       "- Mensagens \"Pedido <id>: …\" são pedidos que já chegaram abertos (pela página de Tarefas ou pela API): trabalhe neles direto, sem `open_request`.",
       "- A ficha do workspace (o cartão que o Cyno, o agente da plataforma, lê sem acordar ninguém) tem uma frase \"o que este workspace faz\". Se o `get_team` disser que ela está vazia, ou se o escopo do workspace mudar, escreva-a com `set_workspace_summary(text)` (até 280 caracteres, concreta). Se o usuário já escreveu a dele, a sua vira só uma sugestão: não insista.",
       "- Mudar a estrutura (criar, editar ou remover sala, time ou agente, definir líder, trocar modelo, acesso ou conectores) e mexer no calendário não precisa de pedido: siga as regras abaixo (confirmação do usuário quando pedem).",
-      ...toolRules(agent, policy, true),
+      ...toolRules(agent, policy, true, options.folders),
     ],
+    folderRules(options.folders),
     [
       "## Como trabalhar num pedido",
       "- `get_team`: lista os times e agentes (foco, motor, status). Comece por aqui se não souber quem faz o quê.",
@@ -383,8 +405,9 @@ export function workerPrompt(agent: Agent, office: Structure, workspaceName: str
       ...colleagueRules(agent, office, options.workspaceId),
       AGENDA_RULE,
       MURAL_RULE,
-      ...toolRules(agent, policy),
+      ...toolRules(agent, policy, false, options.folders),
     ],
+    folderRules(options.folders),
     [
       "## Conversa direta com o usuário",
       "- Mensagens \"Mensagem direta do usuário (conversa…)\" são CONVERSA, não tarefa: responda, tire dúvidas, discuta ideias e opine. Nada vira pedido sozinho, e sem tarefa você não chama `submit_result`, `report_progress` nem `request_approval`.",

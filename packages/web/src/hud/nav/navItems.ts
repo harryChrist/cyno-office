@@ -1,3 +1,4 @@
+import type { WorkFolder } from "@cyno/shared";
 import type { PageId } from "../../store/navStore";
 import type { NavIconName } from "../navIcons";
 
@@ -141,3 +142,36 @@ export function railGroupSub(item: NavItemDef, empty: boolean, workspaceId: stri
 export const SETTINGS_ITEM: NavItemDef = { page: "configuracoes", icon: "configuracoes", testId: "settings-button" };
 
 export type Badge = { count: number; singular: string; plural: string; testId: string; tone?: "danger" };
+
+/** O que o indicador de pastas de trabalho da barra mostra (função pura, para testar). */
+export type FoldersSummary = {
+  /** Quantas pastas o workspace tem. */
+  count: number;
+  /** Quantas delas os agentes podem alterar (leitura e escrita). */
+  writable: number;
+  /** Linha da barra: "Sem pasta de trabalho", o nome da pasta ou "Nome +N". */
+  label: string;
+  /** Dica (barra recolhida e `title`) e nome do botão para leitor de tela. */
+  tip: string;
+  aria: string;
+};
+
+export function foldersSummary(folders: readonly WorkFolder[] | undefined): FoldersSummary {
+  const list = folders ?? [];
+  const count = list.length;
+  const writable = list.filter((folder) => folder.mode === "write").length;
+  if (count === 0) {
+    return { count, writable, label: "Sem pasta de trabalho", tip: "Sem pasta de trabalho. Clique para cadastrar", aria: "Pastas de trabalho: nenhuma cadastrada. Abrir para cadastrar" };
+  }
+  const first = list[0]!.name;
+  const label = count === 1 ? first : `${first} +${count - 1}`;
+  const plural = count === 1 ? "pasta" : "pastas";
+  const access = writable === 0 ? "todas só de leitura" : writable === count ? (count === 1 ? "com escrita" : "todas com escrita") : `${writable} com escrita`;
+  return {
+    count,
+    writable,
+    label,
+    tip: `${count} ${plural} de trabalho: ${list.map((folder) => folder.name).join(", ")}`,
+    aria: `Pastas de trabalho: ${count} ${plural}, ${access}. Abrir para ver e editar`,
+  };
+}

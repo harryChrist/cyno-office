@@ -6,6 +6,7 @@ import { applyPaletteCssVars } from "./theme/paletteCss";
 import { instalarDemo } from "./demo/instalar";
 import { pedeDemo } from "./demo/modoDemo";
 import { SeloDemo } from "./demo/SeloDemo";
+import "@fontsource/silkscreen/700.css";
 import "./styles.css";
 import "./theme/tokens.css";
 

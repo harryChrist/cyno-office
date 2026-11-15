@@ -3,6 +3,7 @@ import type { RoomPurpose, RoomSize } from "./room-spec";
 /** Modelo de dados do Cyno (compartilhado entre server e web). */
 
 import type { WorkspaceAccess } from "./access";
+import type { AgentFolders, WorkFolder } from "./folders";
 import type { ModelChoice, ModelDefaults } from "./models";
 import type { AgentEffort, AgentEngine } from "./terminal";
 
@@ -28,6 +29,8 @@ export type Workspace = {
   gestao?: { dailyAt?: string | null; weekly?: string; ai?: { daily?: boolean; weekly?: boolean } };
   /** Acesso dos agentes (internet, navegador, terminal, domínios). Ausente = os padrões (veja access.ts). */
   access?: WorkspaceAccess;
+  /** Pastas de trabalho: pastas reais do computador que os agentes usam (veja folders.ts). Ausente = nenhuma. */
+  folders?: WorkFolder[];
 };
 
 /**
@@ -137,6 +140,11 @@ export type Agent = {
   internet?: boolean;
   browser?: boolean;
   terminal?: boolean;
+  /**
+   * Ajuste por pasta de trabalho do workspace (id da pasta -> "off" sem acesso | "read" só leitura), só
+   * para restringir: ausente = como no workspace. Veja effectiveFolders em folders.ts.
+   */
+  folders?: AgentFolders;
 };
 
 /**

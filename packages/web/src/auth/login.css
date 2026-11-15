@@ -39,6 +39,15 @@
   letter-spacing: -0.01em;
 }
 
+/* Só o nome da marca usa a fonte de pixel da página de apresentação. */
+.login__title--marca {
+  font-family: "Silkscreen", ui-monospace, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
 .login__hint {
   margin: 0 0 14px;
   text-align: center;

@@ -45,6 +45,7 @@ import {
   workspaceAccess,
   type WorkspaceAccess,
   type WorkspaceAccessInput,
+  type WorkFolder,
   type TodayView,
   type DayStats,
   workDayStart,
@@ -164,6 +165,8 @@ export type RuntimeOptions = {
   maestro: MaestroTimings;
   /** Política de acesso dos agentes do workspace (internet, navegador, rede local, domínios…). */
   workspaceAccess?: (workspaceId: string) => WorkspaceAccessInput | undefined;
+  /** Pastas de trabalho do workspace (veja folders.ts em shared). */
+  workspaceFolders?: (workspaceId: string) => readonly WorkFolder[] | undefined;
   /** Navegador compartilhado (Chromium com perfil por workspace). Ausente = ligado com os padrões. */
   browser?: BrowserConfig;
   /** Intervalo do vigia das rotinas em ms (padrão ROUTINE_TICK_MS = 10 min; só os testes e o app de teste mudam). */
@@ -348,6 +351,7 @@ export class WorkspaceRuntime {
       maestroKeepAlive: () => maestroKeepAlive(options.workspaceMaestro?.(id)),
       maestroSessionName: () => maestroSessionName(options.workspaceMaestro?.(id), options.workspaceName?.(id) ?? id),
       access: () => workspaceAccess(options.workspaceAccess?.(id)),
+      folders: () => options.workspaceFolders?.(id) ?? [],
       browserFor: (agent) => this.browser !== undefined && effectiveAccess(this.access(), agent).browser,
       skillsFor: (agentId) => this.skills.forAgent(agentId),
       onTerminalEvent: (agentId, provider, event) => {

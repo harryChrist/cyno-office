@@ -4,7 +4,7 @@ import path from "node:path";
 import { DEFAULT_ONE_SHOT_ACCOUNT, maskSecrets, OFFICE_MCP_SERVER, type AgentEffort, type OneShotAccount, type TurnUsage, type UsageWindow } from "@cyno/shared";
 import { shorten } from "../../util/text";
 import { minimalChildEnv, sanitizeChildEnv } from "./env";
-import { detectFence, enclosingNodeModules, fencePolicy, realPathOf, resolveExecutable, type FencePolicy, type FenceSupport } from "./fence";
+import { detectFence, enclosingNodeModules, fencePolicy, readOnlyFolders, realPathOf, resolveExecutable, writableFolders, type FencePolicy, type FenceSupport } from "./fence";
 import type { OneShotAdapter, OneShotParser } from "./one-shot-terminal";
 import type { AgentFile, TerminalEvent, TerminalSpec } from "./types";
 
@@ -121,15 +121,17 @@ export function openclawDeniedTools(spec: Pick<TerminalSpec, "access">): string[
 }
 
 /** A configuração do agente: a base do Cyno (sem o que o dono não escolheu) + o MCP "office" + a política de ferramentas. */
-export function openclawAgentConfig(base: Record<string, unknown>, input: { mcpUrl: string; token: string; denied: string[] }): Record<string, unknown> {
+export function openclawAgentConfig(base: Record<string, unknown>, input: { mcpUrl: string; token: string; denied: string[]; /** Arquivos só dentro da pasta de trabalho (padrão: sim). Falso só quando a cerca (Landlock) já prende o agente às pastas de trabalho. */ workspaceOnly?: boolean }): Record<string, unknown> {
   // `toolSearch: false`: sem isso o programa esconde as ferramentas do MCP atrás de tool_search/dispatch_action (visto de verdade:
   // só 10 ferramentas chegam ao modelo e `office__submit_result` não aparece), e o agente teria de procurar para entregar a tarefa.
   const tools = (base.tools ?? {}) as { deny?: unknown; fs?: Record<string, unknown>; exec?: Record<string, unknown> & { applyPatch?: Record<string, unknown> } };
   const deny = [...new Set([...(Array.isArray(tools.deny) ? tools.deny.filter((item): item is string => typeof item === "string") : []), ...input.denied])];
   // Alcance dos arquivos (revisão 2, G1): `read`/`write`/`edit`/`apply_patch` só dentro da pasta de trabalho (`--cwd`). O `agent exec` já faz isso por
   // padrão quando a configuração não diz nada (provado com o programa: caminho absoluto, `..`, /proc/self/environ e links para fora são recusados),
-  // mas aqui fica EXPLÍCITO e vence qualquer `tools.fs` da configuração do dono.
-  const confined = { ...tools, toolSearch: false, deny, fs: { ...(tools.fs ?? {}), workspaceOnly: true }, exec: { ...(tools.exec ?? {}), applyPatch: { ...(tools.exec?.applyPatch ?? {}), workspaceOnly: true } } };
+  // mas aqui fica EXPLÍCITO e vence qualquer `tools.fs` da configuração do dono. Pastas de trabalho: o `workspaceOnly` não tem como apontar pastas extras, então só
+  // sai (false) quando a cerca de arquivos está valendo e lista as pastas (a cerca passa a ser o limite); sem a cerca, o agente fica preso à pasta dele e as pastas de trabalho não abrem.
+  const only = input.workspaceOnly !== false;
+  const confined = { ...tools, toolSearch: false, deny, fs: { ...(tools.fs ?? {}), workspaceOnly: only }, exec: { ...(tools.exec ?? {}), applyPatch: { ...(tools.exec?.applyPatch ?? {}), workspaceOnly: only } } };
   if (!input.mcpUrl) return { ...base, tools: confined };
   const mcp = (base.mcp ?? {}) as { servers?: Record<string, unknown> };
   return {
@@ -201,7 +203,7 @@ export class OpenClawAdapter implements OneShotAdapter {
     // Na pasta pessoal do dono o Cyno não lê a configuração dela: o arquivo do agente leva só o MCP "office" e a política de ferramentas.
     const account = this.account();
     const base = account.mode === "program" && account.location === "personal" ? {} : this.readBase();
-    const config = openclawAgentConfig(base, { mcpUrl, token, denied: openclawDeniedTools(spec) });
+    const config = openclawAgentConfig(base, { mcpUrl, token, denied: openclawDeniedTools(spec), workspaceOnly: !((spec.folders?.length ?? 0) > 0 && this.fenced(spec)) });
     const file = openclawAgentConfigPath(this.options.homeDir, spec.cwd);
     return [
       { path: file, content: `${JSON.stringify(config, null, 2)}\n`, secret: true },
@@ -245,8 +247,8 @@ export class OpenClawAdapter implements OneShotAdapter {
     const nodePrefix = node.filter((file) => !file.startsWith("/usr/")).map((file) => path.dirname(path.dirname(file)));
     return fencePolicy({
       // `/proc/{pid}`: o PID do lançador não muda no `exec`, então estes arquivos do PRÓPRIO processo (o Node lê o `stat` dele para medir a memória) entram um a um; o `environ` não.
-      readOnly: [path.dirname(openclawAgentConfigPath(this.options.homeDir, spec.cwd)), ...exe, ...(exe.map((file) => enclosingNodeModules(file)).filter((dir): dir is string => Boolean(dir))), ...node, ...nodePrefix, ...OPENCLAW_PROC_FILES.map((name) => `/proc/{pid}/${name}`)],
-      readWrite: [spec.cwd, paths.home, paths.stateDir, openclawAgentTmpOf(this.options.homeDir, spec.cwd)],
+      readOnly: [path.dirname(openclawAgentConfigPath(this.options.homeDir, spec.cwd)), ...readOnlyFolders(spec), ...exe, ...(exe.map((file) => enclosingNodeModules(file)).filter((dir): dir is string => Boolean(dir))), ...node, ...nodePrefix, ...OPENCLAW_PROC_FILES.map((name) => `/proc/{pid}/${name}`)],
+      readWrite: [spec.cwd, paths.home, paths.stateDir, openclawAgentTmpOf(this.options.homeDir, spec.cwd), ...writableFolders(spec)],
     });
   }
 

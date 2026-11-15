@@ -33,10 +33,13 @@ export function webFetchDomainRules(domains: readonly string[]): string[] {
  * - internet: WebSearch e WebFetch; com domínios permitidos, o WebFetch só vale para eles (o resto é
  *   negado na hora pelo dontAsk) e os bloqueados vão em --disallowedTools. A busca (WebSearch) não
  *   tem regra por domínio: aí só as instruções;
- * - terminal: Bash liberado; desligado, Bash vai em --disallowedTools.
+ * - terminal: Bash liberado; desligado, Bash vai em --disallowedTools;
+ * - pastas de trabalho SÓ LEITURA: `Edit(//<pasta>/**)` em --disallowedTools (no Claude Code 2.1.325 só a regra Edit vale
+ *   para caminhos e ela cobre Edit, Write e NotebookEdit; `Write(caminho)` é recusado pela CLI). O acesso às pastas em si
+ *   vai por --add-dir (veja `claudeFolderArgs`).
  * Sem `spec.access`, nada além de arquivos e do escritório.
  */
-export function claudePermissions(spec: Pick<TerminalSpec, "tools" | "access">): { tools: string[]; allowed: string[]; disallowed: string[] } {
+export function claudePermissions(spec: Pick<TerminalSpec, "tools" | "access" | "folders">): { tools: string[]; allowed: string[]; disallowed: string[] } {
   const extra: readonly string[] = [...CLAUDE_WEB_TOOLS, CLAUDE_TERMINAL_TOOL];
   const base = spec.tools.filter((tool) => !extra.includes(tool));
   const access = spec.access;
@@ -54,8 +57,19 @@ export function claudePermissions(spec: Pick<TerminalSpec, "tools" | "access">):
   } else {
     disallowed.push(CLAUDE_TERMINAL_TOOL);
   }
+  for (const folder of spec.folders ?? []) if (!folder.write) disallowed.push(claudeReadOnlyRule(folder.path));
   allowed.push(`mcp__${OFFICE_MCP_SERVER}`);
   return { tools, allowed, disallowed };
+}
+
+/** Regra de permissão que nega editar/escrever dentro da pasta (`//` = caminho absoluto a partir da raiz do sistema). */
+export function claudeReadOnlyRule(folderPath: string): string {
+  return `Edit(/${folderPath}/**)`;
+}
+
+/** `--add-dir <pasta>` de cada pasta de trabalho (o --restricted prende as ferramentas de arquivo ao cwd e a estas pastas). */
+export function claudeFolderArgs(spec: Pick<TerminalSpec, "folders">): string[] {
+  return (spec.folders ?? []).flatMap((folder) => ["--add-dir", folder.path]);
 }
 
 /**
@@ -190,6 +204,7 @@ export class ClaudeCliAdapter implements CliAdapter, InteractiveCliAdapter {
       "--strict-mcp-config",
       "--mcp-config",
       spec.mcpConfigFile,
+      ...claudeFolderArgs(spec),
       "--tools",
       permissions.tools.join(","),
       "--allowedTools",
@@ -231,6 +246,7 @@ export class ClaudeCliAdapter implements CliAdapter, InteractiveCliAdapter {
       "--mcp-config",
       spec.mcpConfigFile,
       "--disable-slash-commands",
+      ...claudeFolderArgs(spec),
       "--tools",
       permissions.tools.join(","),
       "--allowedTools",

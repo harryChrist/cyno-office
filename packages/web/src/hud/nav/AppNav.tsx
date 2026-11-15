@@ -5,6 +5,7 @@ import { MOBILE_NAV_QUERY, useNavLayoutStore } from "../../store/navLayoutStore"
 import { useWorkspaceView } from "../../store/workspaceStore";
 import { CommandShortcut } from "../CommandBar";
 import { useMediaQuery, useNavToggleShortcut } from "./navHooks";
+import { FoldersPanelHost } from "./FoldersNav";
 import { MobileBar } from "./MobileBar";
 import { NavPanelHost } from "./NavPanelHost";
 import { Sidebar } from "./Sidebar";
@@ -28,6 +29,7 @@ export function AppNav() {
       {!empty && <CommandShortcut />}
       {mobile ? <MobileBar /> : <Sidebar />}
       <NavPanelHost />
+      <FoldersPanelHost />
       {/* A tela de trabalho aberta (Maestro ou um agente): dialog por cima de tudo. */}
       <WorkPanelHost />
       {/* Detalhe de um conector (status, ferramentas, quem usa). */}

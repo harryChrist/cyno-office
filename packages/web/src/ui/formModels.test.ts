@@ -90,6 +90,20 @@ describe("formulário do agente (criar = editar)", () => {
     expect(agentPatch(initial, { ...initial, internet: true })).toEqual({ internet: true });
   });
 
+  it("pastas de trabalho: agente novo segue o workspace (nada no corpo); o ajuste vai no corpo e no PATCH, e voltar ao padrão manda {}", () => {
+    const values = { ...newAgentValues("t1", DEFAULT_AVATAR), name: "Zoe", role: "Ilustradora", engine: "claude" as const };
+    expect(values.folders).toEqual({});
+    expect(agentCreateBody(values)).not.toHaveProperty("folders");
+    const body = agentCreateBody({ ...values, folders: { "vault-1a2b": "off" } });
+    expect(body).toMatchObject({ folders: { "vault-1a2b": "off" } });
+    expect(createAgentBodySchema.safeParse(body).success).toBe(true);
+    const initial = agentValues({ ...agent, engine: "claude", folders: { "vault-1a2b": "off", "app-3c4d": "read" } });
+    expect(initial.folders).toEqual({ "vault-1a2b": "off", "app-3c4d": "read" });
+    expect(isEmptyPatch(agentPatch(initial, { ...initial }))).toBe(true);
+    expect(agentPatch(initial, { ...initial, folders: { "vault-1a2b": "off" } })).toEqual({ folders: { "vault-1a2b": "off" } });
+    expect(agentPatch(initial, { ...initial, folders: {} })).toEqual({ folders: {} });
+  });
+
   it("agente novo nasce com o padrão de agentes do workspace (só o valor inicial)", () => {
     const values = newAgentValues("t1", DEFAULT_AVATAR, { engine: "claude", model: "sonnet", effort: "medium" });
     expect(values).toMatchObject({ engine: "claude", model: "sonnet", effort: "medium" });

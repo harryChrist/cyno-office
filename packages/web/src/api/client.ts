@@ -37,6 +37,8 @@ import type {
   CreateTeamBody,
   CreateWorkspaceBody,
   UpdateWorkspaceAccessBody,
+  AddWorkFolderBody,
+  UpdateWorkFolderBody,
   EnginesResponse,
   ListBrainsResponse,
   CreateRoomBody,
@@ -107,7 +109,7 @@ import { CONFIRMATIONS_PATH, PROPOSALS_PATH, type Confirmation, type Confirmatio
 import { JOINT_PATH, type JointsResponse, type JointView } from "@cyno/shared";
 import { MURAL_PATH, type MuralEntry, type MuralResponse, type MuralShareBody, type MuralUseResponse } from "@cyno/shared";
 import { FREEBUFF_MODELS_REFRESH_PATH, FREEBUFF_SETTINGS_PATH, FREEBUFF_TEST_PATH, type FreebuffSettingsBody } from "@cyno/shared";
-import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath } from "@cyno/shared";
+import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
@@ -256,6 +258,10 @@ export const api = {
   updateWorkspaceMaestro: (id: string, maestro: { keepAlive?: boolean; sessionName?: string }) => requestJson<Workspace>(`/api/workspaces/${segment(id)}`, { method: "PATCH", body: { maestro } }),
   /** Acesso dos agentes do workspace (só os campos enviados mudam; os terminais reiniciam quando livres). */
   updateWorkspaceAccess: (id: string, access: UpdateWorkspaceAccessBody) => requestJson<Workspace>(workspaceAccessPath(id), { method: "PUT", body: access }),
+  /** Pastas de trabalho do workspace: cadastrar (o servidor confere o caminho), mudar nome/uso/modo e tirar (nada é apagado do disco). */
+  addWorkFolder: (id: string, body: AddWorkFolderBody) => requestJson<Workspace>(workFoldersPath(id), { method: "POST", body }),
+  updateWorkFolder: (id: string, folderId: string, body: UpdateWorkFolderBody) => requestJson<Workspace>(workFolderPath(id, folderId), { method: "PATCH", body }),
+  removeWorkFolder: (id: string, folderId: string) => requestJson<Workspace>(workFolderPath(id, folderId), { method: "DELETE" }),
 
   /** Modelos padrão globais (preenchem os padrões de cada workspace novo). */
   getModelDefaults: () => requestJson<ModelDefaultsResponse>(MODEL_DEFAULTS_PATH),

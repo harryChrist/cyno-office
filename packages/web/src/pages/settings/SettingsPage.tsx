@@ -7,6 +7,7 @@ import { useNavStore } from "../../store/navStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { workspaceColor } from "../../ui/workspaceColor";
 import { AccessSettings, SecuritySettings } from "./AccessSettings";
+import { FoldersSettings } from "./FoldersSettings";
 import { AttentionSettings } from "./AttentionSettings";
 import { ConnectorsSettings } from "./ConnectorsSettings";
 import { CynoSettings } from "./CynoSettings";
@@ -383,6 +384,9 @@ export function SettingsPage() {
                 </SectionBlock>
                 <SectionBlock id="acesso" hidden={hide("acesso")}>
                   <AccessSettings key={workspace.id} workspace={workspace} />
+                </SectionBlock>
+                <SectionBlock id="pastas" hidden={hide("pastas")}>
+                  <FoldersSettings key={workspace.id} workspace={workspace} />
                 </SectionBlock>
                 <SectionBlock id="seguranca" hidden={hide("seguranca")}>
                   <SecuritySettings key={workspace.id} workspace={workspace} />

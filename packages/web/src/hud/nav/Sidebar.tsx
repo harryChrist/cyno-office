@@ -4,6 +4,7 @@ import { NO_INSETS, useViewStore } from "../../store/viewStore";
 import { useWorkspaceView } from "../../store/workspaceStore";
 import { WorkspacePicker } from "../WorkspacePicker";
 import { useRailTip } from "./navHooks";
+import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
 import { AttentionCounter } from "../AttentionCounter";
 import { CynoItem, MovedHint, NavSections, NotificationsItem, TodayItem } from "./NavItems";
@@ -54,6 +55,7 @@ export function Sidebar() {
         <div className="sidenav__ws" data-tip="Trocar de workspace">
           <WorkspacePicker />
         </div>
+        {!empty && <FoldersItem />}
       </div>
       <div className="sidenav__scroll">
         <MovedHint />

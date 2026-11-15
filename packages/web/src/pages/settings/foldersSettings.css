@@ -1,0 +1,265 @@
+/* Configurações › Pastas de trabalho */
+.folders__empty {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  background: var(--ui-surface-2);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+}
+
+.folders__empty-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.folders__examples {
+  display: grid;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.folders__examples li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.folders__examples code,
+.folder-row__path code {
+  font-family: var(--ui-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 12.5px;
+  color: var(--ui-text);
+}
+
+.folders__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folder-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.folder-row__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.folder-row__field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folder-row__field--name {
+  flex: 1 1 200px;
+}
+
+.folder-row__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.folder-row__path {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-row__remove {
+  flex: 0 0 auto;
+}
+
+/* "Só leitura" | "Leitura e escrita" */
+.folder-mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+}
+
+.folder-mode__option {
+  min-height: 30px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--ui-radius-sm) - 2px);
+  cursor: pointer;
+  transition:
+    background var(--ui-fast),
+    color var(--ui-fast);
+}
+
+.folder-mode__option:hover:not(:disabled):not(.folder-mode__option--on) {
+  color: var(--ui-text);
+}
+
+.folder-mode__option:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.folder-mode__option--on {
+  color: var(--ui-text);
+  font-weight: 600;
+  background: var(--ui-accent-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent) 55%, transparent);
+}
+
+.folder-mode__option--write {
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-warn) 45%, transparent);
+}
+
+.folder-mode__option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.folder-add {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.folder-add__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--ui-text);
+}
+
+.folder-add__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 10px;
+}
+
+.folder-add__path {
+  font-family: var(--ui-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: 13px;
+}
+
+.folder-add__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Painel do agente: uma pasta do workspace e a escolha dele */
+.agent-folders {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.agent-folders__legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ui-text-2);
+}
+
+.agent-folder {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+
+.agent-folder__info {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.agent-folder__name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.agent-folder__meta {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-folders__note {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 40%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+@media (max-width: 640px) {
+  .folder-add__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folder-mode {
+    width: 100%;
+  }
+
+  .folder-mode__option {
+    flex: 1 1 0;
+    padding-inline: 6px;
+  }
+
+  .folder-row__remove {
+    margin-left: auto;
+  }
+}
+
+/* O mesmo conteúdo dentro do painel aberto pela barra: sem o cartão em volta (a janela já é o cartão). */
+.folders--panel .settings__card {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}

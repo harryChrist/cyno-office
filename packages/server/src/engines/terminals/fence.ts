@@ -160,6 +160,16 @@ export function fencePolicy(parts: { readOnly?: (string | undefined)[]; readWrit
   return { readOnly: clean([...FENCE_SYSTEM_READ_ONLY, ...(parts.readOnly ?? [])]), readWrite: clean([...FENCE_DEVICES_READ_WRITE, ...(parts.readWrite ?? [])]), listOnly: clean([...FENCE_LIST_ONLY, ...(parts.listOnly ?? [])]) };
 }
 
+/** Pastas de trabalho com escrita (entram em `readWrite` da cerca). */
+export function writableFolders(spec: { folders?: readonly { path: string; write: boolean }[] }): string[] {
+  return (spec.folders ?? []).filter((folder) => folder.write).map((folder) => folder.path);
+}
+
+/** Pastas de trabalho SÓ LEITURA (entram em `readOnly` da cerca: aqui "só leitura" é trava do sistema, vale até para comandos do terminal). */
+export function readOnlyFolders(spec: { folders?: readonly { path: string; write: boolean }[] }): string[] {
+  return (spec.folders ?? []).filter((folder) => !folder.write).map((folder) => folder.path);
+}
+
 /** Os argumentos do lançador (sem o comando). */
 export function fenceArgs(policy: FencePolicy): string[] {
   return [...policy.readOnly.flatMap((item) => ["--ro", item]), ...policy.readWrite.flatMap((item) => ["--rw", item]), ...policy.listOnly.flatMap((item) => ["--ls", item])];

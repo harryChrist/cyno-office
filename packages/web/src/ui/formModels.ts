@@ -2,6 +2,7 @@ import {
   agentEngine,
   isCliEngine,
   type Agent,
+  type AgentFolders,
   type AgentEffort,
   type AgentEngine,
   type ModelChoice,
@@ -83,6 +84,8 @@ export type AgentFormValues = {
   internet: boolean;
   browser: boolean;
   terminal: boolean;
+  /** Ajuste por pasta de trabalho do workspace (id -> "off" | "read"); ausente = como no workspace. */
+  folders: AgentFolders;
 };
 
 /**
@@ -103,6 +106,7 @@ export function newAgentValues(teamId: string, avatar: AvatarInput, defaults?: M
     internet: true,
     browser: true,
     terminal: true,
+    folders: {},
   };
 }
 
@@ -119,6 +123,7 @@ export function agentValues(agent: Agent): AgentFormValues {
     internet: agent.internet !== false,
     browser: agent.browser !== false,
     terminal: agent.terminal !== false,
+    folders: { ...(agent.folders ?? {}) },
   };
 }
 
@@ -138,6 +143,7 @@ export function agentCreateBody(values: AgentFormValues): CreateAgentBody {
     ...(values.internet ? {} : { internet: false }),
     ...(values.browser ? {} : { browser: false }),
     ...(values.terminal ? {} : { terminal: false }),
+    ...(Object.keys(values.folders).length > 0 ? { folders: values.folders } : {}),
   };
 }
 

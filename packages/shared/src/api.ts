@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { workspaceAccessInputSchema, workspaceAccessSchema } from "./access";
+import { agentFoldersSchema, workFolderSchema } from "./folders";
 import { AVATAR_OPTIONS, SCENE_AVATAR_OPTIONS } from "./avatar";
 import { isReservedRoomId, MAX_ID_LENGTH, SAFE_ID_PATTERN } from "./ids";
 import { ROOM_THEME_IDS } from "./themes";
@@ -127,6 +128,7 @@ export const workspaceSchema = z.object({
   dispatch: z.object({ maxRunning: z.number().int().optional(), perAgent: z.number().int().optional() }).optional(),
   gestao: z.object({ dailyAt: z.string().nullable().optional(), weekly: z.string().optional(), ai: z.object({ daily: z.boolean().optional(), weekly: z.boolean().optional() }).optional() }).optional(),
   access: workspaceAccessSchema.optional(),
+  folders: z.array(workFolderSchema).optional(),
 }) satisfies z.ZodType<Workspace>;
 
 /** data/workspaces.json: a lista de workspaces. */
@@ -171,6 +173,8 @@ export const agentSchema = z.object({
   internet: z.boolean().optional(),
   browser: z.boolean().optional(),
   terminal: z.boolean().optional(),
+  /** Ajuste por pasta de trabalho (id -> "off" | "read"): ausente = como no workspace. */
+  folders: agentFoldersSchema.optional(),
 }) satisfies z.ZodType<Agent>;
 
 export const taskSchema = z.object({
@@ -247,6 +251,8 @@ export const createAgentBodySchema = z.strictObject({
   internet: z.boolean().optional(),
   browser: z.boolean().optional(),
   terminal: z.boolean().optional(),
+  /** Ajuste por pasta de trabalho (id -> "off" | "read"); no PATCH, `{}` volta a seguir o workspace em todas. */
+  folders: agentFoldersSchema.optional(),
 });
 /** No PATCH, `model: null`/`effort: null` voltam ao padrão (tiram o campo). */
 export const updateAgentBodySchema = createAgentBodySchema.partial().extend({

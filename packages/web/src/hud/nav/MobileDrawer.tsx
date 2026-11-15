@@ -3,6 +3,7 @@ import { useWorkspaceView } from "../../store/workspaceStore";
 import { useModalDialog } from "../../ui/widgets";
 import { NavIcon } from "../navIcons";
 import { WorkspacePicker } from "../WorkspacePicker";
+import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
 import { CynoItem, MovedHint, NavSections, NotificationsItem, ShortcutsRow, TodayItem } from "./NavItems";
 
@@ -47,6 +48,7 @@ export function MobileDrawer({ onClose }: { onClose: () => void }) {
         <div className="sidenav__ws">
           <WorkspacePicker />
         </div>
+        {!empty && <FoldersItem onBeforeOpen={onClose} />}
       </div>
       <div className="sidenav__scroll">
         <MovedHint />

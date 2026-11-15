@@ -169,6 +169,7 @@ Regras das portas:
 - O índice destes avisos fica em [`THIRD_PARTY/README.md`](THIRD_PARTY/README.md).
 
 ## Limitações conhecidas
+- **Pastas de trabalho: "só leitura" nem sempre é trava.** Vale como trava nas ferramentas de arquivo do Claude Code e do Antigravity, e no Hermes e no OpenClaw só com a cerca de arquivos (Landlock) ligada. Com o terminal do agente ligado, um comando ainda pode alterar a pasta (nos motores sem cerca), e no Freebuff é só orientação nas instruções. O OpenClaw só alcança as pastas com a cerca ligada e sem terminal. O caminho das pastas é digitado (não há navegador de pastas) e não pode ter `, * ? [ ] { } ( )`. Veja "Pastas de trabalho" em `docs/usando-o-escritorio.md` e `docs/arquitetura.md`.
 - **Motores:** os agentes reais rodam no Claude Code (`engine: "claude"`) e no Google Antigravity (`engine: "gemini"`). Codex e OpenCode ainda não têm adaptador. O `MockRunner` só simula narração, ferramentas, subagentes, progresso, aprovação e um resultado de exemplo (agentes sem motor real).
 - **O app só abre com senha** (veja "Senha de acesso"): na primeira instalação ele fica fechado até alguém criar a senha com o código do log. Só `CYNO_AUTH=off` (desenvolvimento/testes) o deixa aberto.
 - **Cada aba tem a sua simulação.** O status é o mesmo em todas, mas a posição de um agente ocioso, as conversas e o caminho podem ser diferentes entre duas abas. Recarregar a página reposiciona todo mundo.

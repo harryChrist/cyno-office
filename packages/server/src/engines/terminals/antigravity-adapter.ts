@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { AGENT_LOG_LIMITS, clampLogText, OFFICE_MCP_SERVER, type TurnUsage, ENGINE_FALLBACK_MODELS, modelUsesEffort } from "@cyno/shared";
+import { AGENT_LOG_LIMITS, clampLogText, OFFICE_MCP_SERVER, type EffectiveFolder, type TurnUsage, ENGINE_FALLBACK_MODELS, modelUsesEffort } from "@cyno/shared";
 import { sanitizeChildEnv } from "./env";
 import type { AgentFile, CliAdapter, CliEventParser, TerminalAccess, TerminalEvent, TerminalSpec } from "./types";
 
@@ -75,6 +75,18 @@ export function antigravityAccessRules(access: TerminalAccess | undefined): { al
 }
 
 /**
+ * Regras das pastas de trabalho (conferidas no agy 1.5.9, Gemini 3.8 Flash): ler e escrever em cada pasta com
+ * `read_file(<pasta>)` e `write_file(<pasta>)`; numa pasta SÓ LEITURA a escrita não é liberada e ainda leva
+ * `write_file(<pasta>)` no deny (deny vence tudo). As pastas também entram no workspace do agy por `--add-dir`.
+ * Só vale para as ferramentas de arquivo: com o terminal ligado, `command` roda no sandbox do agy e não é travado por pasta.
+ */
+export function antigravityFolderRules(folders: readonly EffectiveFolder[]): { allow: string[]; deny: string[] } {
+  const allow = folders.flatMap((folder) => [`read_file(${folder.path})`, ...(folder.write ? [`write_file(${folder.path})`] : [])]);
+  const deny = folders.filter((folder) => !folder.write).map((folder) => `write_file(${folder.path})`);
+  return { allow, deny };
+}
+
+/**
  * Configuração da sessão (`--settings`, por cima do ~/.gemini/antigravity-cli/settings.json, sem
  * gravar nada lá):
  * - toolPermission "request-review": o que não está liberado precisaria de um "permitir?", que no
@@ -89,8 +101,9 @@ export function antigravityAccessRules(access: TerminalAccess | undefined): { al
  *   revisão de artefato), enableTerminalSandbox, sem dicas/pesquisas/notificações,
  *   disableSlashCommands e trustedWorkspaces = a pasta do agente.
  */
-export function antigravitySessionSettings(cwd: string, access?: TerminalAccess): Record<string, unknown> {
+export function antigravitySessionSettings(cwd: string, access?: TerminalAccess, folders: readonly EffectiveFolder[] = []): Record<string, unknown> {
   const rules = antigravityAccessRules(access);
+  const folderRules = antigravityFolderRules(folders);
   return {
     toolPermission: "request-review",
     agentMode: "",
@@ -105,8 +118,8 @@ export function antigravitySessionSettings(cwd: string, access?: TerminalAccess)
     showFeedbackSurvey: false,
     trustedWorkspaces: [cwd],
     permissions: {
-      allow: [`mcp(${OFFICE_MCP_SERVER}/*)`, `read_file(${cwd})`, `write_file(${cwd})`, ...rules.allow],
-      deny: rules.deny,
+      allow: [`mcp(${OFFICE_MCP_SERVER}/*)`, `read_file(${cwd})`, `write_file(${cwd})`, ...folderRules.allow, ...rules.allow],
+      deny: [...rules.deny, ...folderRules.deny],
     },
   };
 }
@@ -135,7 +148,8 @@ export class AntigravityCliAdapter implements CliAdapter {
       "stream-json",
       "--disable-slash-commands",
       "--settings",
-      JSON.stringify(antigravitySessionSettings(spec.cwd, spec.access)),
+      JSON.stringify(antigravitySessionSettings(spec.cwd, spec.access, spec.folders)),
+      ...(spec.folders ?? []).flatMap((folder) => ["--add-dir", folder.path]),
       ...(session.resume ? ["--conversation", session.sessionId] : []),
     ];
     // Sem modelo no agente: o padrão da plataforma para o motor, nunca o padrão da CLI.

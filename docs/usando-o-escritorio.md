@@ -324,7 +324,7 @@ Uma **rotina** é um combinado que o servidor vigia sem gastar IA. Tudo fica na 
 O item **Configurações** (rodapé da barra lateral) tem **duas áreas na mesma página**, cada uma com o seu título:
 
 - **Da plataforma**: vale para tudo (todos os workspaces, o Cyno e o servidor). Acesso e senha, Motores (todos os que o Cyno conhece, com o estado detectado, Testar, caminho do executável e "Usar como padrão"), Modelos padrão (Maestro, agentes, subagentes e o do Cyno), Histórico guardado (por quanto tempo ficam as conversas das CLIs e os logs) e Aparência (os bichos do escritório, que valem só neste navegador).
-- **Do workspace: <nome>**: vale só para o workspace escolhido no **seletor** da área (trocar ali troca o workspace aberto no app). Modelos e Maestro, O que os agentes acessam (internet, navegador compartilhado, terminal), Segurança na web (aprovação antes de publicar/enviar/comprar, rede local, domínios), Trabalho em paralelo, Tipos de aprovação (abre a lista em Aprovações) e Conectores (por enquanto continuam aqui; vão para a Biblioteca).
+- **Do workspace: <nome>**: vale só para o workspace escolhido no **seletor** da área (trocar ali troca o workspace aberto no app). Modelos e Maestro, O que os agentes acessam (internet, navegador compartilhado, terminal), Pastas de trabalho (projetos e vaults do seu computador que os agentes usam), Segurança na web (aprovação antes de publicar/enviar/comprar, rede local, domínios), Trabalho em paralelo, Tipos de aprovação (abre a lista em Aprovações) e Conectores (por enquanto continuam aqui; vão para a Biblioteca).
 
 Cada opção mostra o **título**, **uma linha** dizendo o que ela faz e o efeito de ligar ou desligar, o **selo** (`Toda a plataforma`, `Só este workspace` ou `Só neste navegador`) e o **estado** (Ligado, Desligado ou o valor atual), sem precisar abrir nada. Quando o workspace nunca mexeu numa opção, aparece "Usando o padrão da plataforma"; ao mexer, vale só para aquele workspace. Em Trabalho em paralelo, o botão **Mudar só aqui** abre os campos.
 
@@ -335,6 +335,31 @@ No topo, um **resumo** com o que mais se confere (Senha, Motores, Modelo padrão
 **Motores, de relance.** No topo da seção há **uma linha por motor** com o estado (cor e símbolo: ✓ funcionando, ! precisa de atenção, ✕ com problema, ● instalado, ○ não instalado), a conta, o modelo, para quem é o padrão (Maestro, Agentes, Subagentes) e o gasto (OpenClaw e Hermes) ou as horas do dia (Freebuff). **Clique na linha** (ou Enter/Espaço) para abrir o detalhe do motor; em tela larga abre sozinho o motor que pede atenção. No passo a passo de OpenClaw e Hermes a etapa da vez fica aberta, as feitas viram uma linha com ✓ e o resumo (clique para reabrir) e as próximas ficam esmaecidas. O **Verificar** mostra primeiro o que falhou, com o "o que fazer" logo abaixo, e deixa as conferências que passaram recolhidas. O plano de instalação mostra o comando (com **Copiar**), o sudo e o que mexe fora da pasta; o resto fica em "Ver o que acontece…". No Freebuff as horas do dia vêm logo depois da escolha do modelo.
 
 Os **modelos padrão** só preenchem o que nasce: o global vale para workspaces novos, o do workspace para agentes novos dele; nada muda sozinho em quem já existe.
+
+## Pastas de trabalho
+
+Cada agente roda numa pasta própria (`data/workspaces/<workspace>/agents/<agente>/`), que é só rascunho dele. Para os agentes trabalharem em coisas reais do seu computador, como o código de um projeto ou um vault do Obsidian, cadastre **pastas de trabalho** no workspace: **Configurações, Do workspace, Pastas de trabalho**.
+
+- **Adicionar:** escreva o **nome**, o **caminho completo** (digitado, por exemplo `/home/voce/projetos/meu-app`), **para que serve** e o modo. O servidor confere na hora e mostra o erro no lugar: o caminho precisa ser absoluto, existir, ser uma pasta, não ser a raiz `/` e não ser (nem conter, nem ficar dentro de) a pasta de dados do próprio Cyno, e a mesma pasta não entra duas vezes. São até 12 pastas por workspace. Caminhos com vírgula, asterisco, interrogação, colchetes, chaves ou parênteses são recusados (quebrariam as regras de acesso dos motores): renomeie a pasta.
+- **Só leitura ou leitura e escrita:** cada pasta tem o seu modo. Em leitura e escrita os agentes criam, alteram e apagam arquivos de verdade (vale ter o Git ou uma cópia antes).
+- **Para que serve:** nenhuma pasta é especial. O vault do Obsidian é uma pasta como outra qualquer: o texto de "para que serve" (por exemplo "minhas notas pessoais, consultar antes de responder" ou "código do app, pode editar") vai nas instruções de cada agente e é ele que diz como usá-la.
+- **Vale para todos os agentes do workspace**, o Maestro também. Nome, "para que serve" e modo se editam na própria linha (salvam ao sair do campo). **Tirar** só descadastra: nada é apagado do disco. Mudar as pastas reinicia o terminal de cada agente quando ele estiver livre, como na mudança de acesso.
+- **Ajuste por agente:** no editor do agente (Editar, "Pastas de trabalho") cada pasta do workspace tem **Como no workspace** (padrão), **Só leitura** (só aparece onde o workspace dá escrita) ou **Sem acesso**. O agente só reduz, nunca ganha mais do que o workspace deu. Sem pastas no workspace, o editor aponta para as Configurações.
+- **Na barra lateral:** logo abaixo do seletor de workspace há um indicador das pastas (o nome da pasta, ou o nome da primeira e "+N", ou "Sem pasta de trabalho"; um ponto âmbar avisa que alguma tem escrita). Recolhida, a barra mostra só o ícone de pasta com a contagem; no celular ele aparece na gaveta. Clicar abre o painel "Pastas de trabalho", com as mesmas ações das Configurações (adicionar, editar nome e "para que serve", trocar o modo, tirar).
+- **O que os agentes recebem:** uma seção "Pastas de trabalho" nas instruções, com nome, caminho, se pode escrever e para que serve, dizendo que o trabalho de projeto acontece ali e que a pasta própria do agente é só rascunho. Sem pastas, as instruções ficam como eram.
+- **Pasta que sumiu do disco:** o agente sobe sem ela e aparece um aviso na tela ("A pasta de trabalho ... não existe mais"). Cadastre de novo ou tire a pasta.
+
+**O que é trava de verdade e o que é só orientação** (o editor do agente mostra um aviso curto onde "só leitura" não é trava):
+
+| Motor | Só leitura |
+| --- | --- |
+| Claude Code | Trava nas ferramentas de arquivo (Edit, Write e NotebookEdit são negados na pasta). Com o terminal ligado, um comando ainda pode alterar a pasta. |
+| Antigravity | Trava nas ferramentas de arquivo (`write_file` negado na pasta). Com o terminal ligado, um comando ainda pode alterar a pasta. |
+| Hermes | Trava só com a **cerca de arquivos** ligada (Configurações, Motores; vale até para comandos). Sem a cerca, é só orientação nas instruções. |
+| OpenClaw | As pastas só abrem com a cerca de arquivos ligada e o terminal desligado; aí "só leitura" é trava do sistema. Sem a cerca (ou com terminal), as ferramentas de arquivo ficam presas à pasta do agente e as pastas de trabalho não abrem. |
+| Freebuff | O motor não limita por pasta: "só leitura" é só orientação nas instruções (o agente é mandado a não alterar). |
+
+Com o **terminal** ligado, "só leitura" nunca é trava completa nos motores sem cerca: um comando de shell escreve em qualquer lugar que o seu usuário escreve. Se isso importa, deixe o terminal desligado ou use Hermes com a cerca.
 
 ## O uso do plano e a tela Motores
 

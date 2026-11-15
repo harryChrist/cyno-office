@@ -60,6 +60,8 @@ export class AgentService {
       ...(input.internet !== undefined ? { internet: input.internet } : {}),
       ...(input.browser !== undefined ? { browser: input.browser } : {}),
       ...(input.terminal !== undefined ? { terminal: input.terminal } : {}),
+      // Ajuste por pasta de trabalho: vazio não fica gravado (= como no workspace).
+      ...(input.folders && Object.keys(input.folders).length > 0 ? { folders: { ...input.folders } } : {}),
     };
     state.agents.push(agent);
     await this.deps.state.commit({ office: officeStructure(state), events: [{ type: "agent:upserted", agent }] });
@@ -108,6 +110,7 @@ export class AgentService {
     // O esforço só fica onde o motor e o modelo o aceitam (nos Gemini o nível vai no nome do modelo).
     if (agent.effort !== undefined && !modelUsesEffort(agent.engine, agent.model)) delete agent.effort;
     if (agent.engine === "mock") delete agent.engine;
+    if (agent.folders && Object.keys(agent.folders).length === 0) delete agent.folders;
     // Quem muda de time deixa de liderar o time antigo.
     const unled = agent.teamId !== previousTeamId ? clearLeadership(state.teams, id) : [];
     await this.deps.state.commit({ office: officeStructure(state), events: [{ type: "agent:upserted", agent }, ...unled] });

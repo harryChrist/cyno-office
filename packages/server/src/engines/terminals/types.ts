@@ -1,5 +1,5 @@
 import type { ToolsWait } from "../../mcp/tokens";
-import type { AgentEffort, EffectiveAccess, WorkspaceAccess, AgentProvider, RemoteControlInfo, SubagentChoice, TerminalStatus, TurnUsage, UsageWindow } from "@cyno/shared";
+import type { AgentEffort, EffectiveAccess, EffectiveFolder, WorkspaceAccess, AgentProvider, RemoteControlInfo, SubagentChoice, TerminalStatus, TurnUsage, UsageWindow } from "@cyno/shared";
 
 /**
  * Evento neutro de provedor que um terminal emite (o adaptador de cada CLI traduz as linhas do
@@ -119,7 +119,14 @@ export type TerminalSpec = {
    * escritório. Claude Code: internet = WebSearch/WebFetch, terminal = Bash; Antigravity: internet =
    * ler URL (`read_url`), terminal = `command`. O navegador embutido das CLIs nunca.
    */
-  access?: TerminalAccess;  /**
+  access?: TerminalAccess;
+  /**
+   * Pastas de trabalho desta subida (as do workspace E do agente que existem no disco; veja `effectiveFolders`
+   * em shared). O cwd continua sendo a pasta do agente: estas são pastas EXTRAS que o motor libera (ou só
+   * descreve nas instruções, onde não consegue limitar). Ausente = nenhuma.
+   */
+  folders?: EffectiveFolder[];
+  /**
    * Padrão dos subagentes internos da CLI (do workspace do agente, `subagentes`): no Claude Code vai
    * em CLAUDE_CODE_SUBAGENT_MODEL/EFFORT; no Antigravity, nas instruções (o agy não tem flag para isso).
    */

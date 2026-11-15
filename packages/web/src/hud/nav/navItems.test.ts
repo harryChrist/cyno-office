@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeChild, APP_WIDE_SECTIONS, childSub, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, railGroupSub, SHORTCUTS, visibleChildren, visibleShortcuts } from "./navItems";
+import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, railGroupSub, SHORTCUTS, visibleChildren, visibleShortcuts } from "./navItems";
 
 describe("menu de seis páginas", () => {
   it("Office, Trabalho, Para você, Gestão e Biblioteca (mais o Cyno no topo)", () => {
@@ -94,5 +94,22 @@ describe("barra recolhida: itens com sublinks", () => {
     expect(activeChild(gestao, "gestao", "gastos")?.label).toBe("Gastos");
     expect(activeChild(biblioteca, "biblioteca", "skills")?.label).toBe("Skills");
     expect(activeChild(biblioteca, "office", "skills")).toBeNull();
+  });
+});
+
+describe("resumo do indicador de pastas de trabalho", () => {
+  const folder = (name: string, mode: "read" | "write") => ({ id: name, name, path: `/x/${name}`, mode });
+
+  it("sem pastas", () => {
+    expect(foldersSummary(undefined)).toMatchObject({ count: 0, writable: 0, label: "Sem pasta de trabalho" });
+    expect(foldersSummary([]).aria).toContain("nenhuma");
+  });
+
+  it("uma pasta mostra o nome; mais de uma, o nome da primeira e +N", () => {
+    expect(foldersSummary([folder("App", "read")])).toMatchObject({ count: 1, writable: 0, label: "App" });
+    const two = foldersSummary([folder("App", "write"), folder("Notas", "read")]);
+    expect(two).toMatchObject({ count: 2, writable: 1, label: "App +1" });
+    expect(two.aria).toContain("1 com escrita");
+    expect(two.tip).toContain("App, Notas");
   });
 });

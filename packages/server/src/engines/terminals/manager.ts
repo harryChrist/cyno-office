@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   agentEngine,
   defaultMaestroSessionName,
   effectiveAccess,
+  effectiveFolders,
   ENGINE_LABELS,
   workspaceAccess,
   IMPLEMENTED_CLI_ENGINES,
@@ -18,6 +19,8 @@ import {
   type ModelDefaults,
   type OfficeState,
   type ServerEvent,
+  type EffectiveFolder,
+  type WorkFolder,
   type WorkspaceAccess,
 } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
@@ -136,6 +139,8 @@ export type TerminalManagerDeps = {
   maestroSessionName?: () => string;
   /** Acesso dos agentes do workspace (lido a cada subida; ausente = os padrões). */
   access?: () => WorkspaceAccess;
+  /** Pastas de trabalho do workspace (lidas a cada subida; ausente = nenhuma). Cada agente recebe as dele (`effectiveFolders`). */
+  folders?: () => readonly WorkFolder[];
   /** O agente tem o navegador compartilhado (ferramentas `browser_*`)? Entra nas instruções. */
   browserFor?: (agent: Agent) => boolean;
   /**
@@ -187,8 +192,8 @@ export function terminalAccess(workspace: WorkspaceAccess, agent: Agent): Termin
 }
 
 /** Assinatura do que só vale numa subida nova do processo: modelo, esforço e o acesso (internet, terminal, domínios…). */
-export function runConfigOf(agent: Agent, workspace: WorkspaceAccess): string {
-  return JSON.stringify([agent.model ?? "", agent.effort ?? "", terminalAccess(workspace, agent)]);
+export function runConfigOf(agent: Agent, workspace: WorkspaceAccess, folders: readonly WorkFolder[] = []): string {
+  return JSON.stringify([agent.model ?? "", agent.effort ?? "", terminalAccess(workspace, agent), effectiveFolders(folders, agent).map((folder) => [folder.path, folder.write])]);
 }
 
 /**
@@ -532,7 +537,7 @@ export class TerminalManager {
       void this.dispose(agent.id);
       return;
     }
-    if (entry.runConfig !== undefined && entry.runConfig !== runConfigOf(agent, this.workspaceAccess())) this.restartWhenFree(entry);
+    if (entry.runConfig !== undefined && entry.runConfig !== runConfigOf(agent, this.workspaceAccess(), this.workspaceFolders())) this.restartWhenFree(entry);
   }
 
   /** O acesso do workspace mudou: cada terminal vivo cuja configuração mudou reinicia quando estiver livre. */
@@ -542,6 +547,33 @@ export class TerminalManager {
 
   private workspaceAccess(): WorkspaceAccess {
     return workspaceAccess(this.deps.access?.());
+  }
+
+  private workspaceFolders(): readonly WorkFolder[] {
+    return this.deps.folders?.() ?? [];
+  }
+
+  /** Pastas que já foram avisadas como sumidas (agente + caminho): o aviso sai uma vez, não a cada subida. */
+  private readonly missingWarned = new Set<string>();
+
+  /**
+   * As pastas de trabalho desta subida: as do workspace E do agente que ainda existem no disco. Uma que sumiu (apagada,
+   * desmontada) é pulada e vira um aviso visível (`system:warning`); a subida do agente nunca quebra por isso.
+   */
+  private async usableFolders(agent: Agent): Promise<EffectiveFolder[]> {
+    const usable: EffectiveFolder[] = [];
+    for (const folder of effectiveFolders(this.workspaceFolders(), agent)) {
+      const info = await stat(folder.path).catch(() => undefined);
+      if (info?.isDirectory()) {
+        usable.push(folder);
+        continue;
+      }
+      const key = `${agent.id}\0${folder.path}`;
+      if (this.missingWarned.has(key)) continue;
+      this.missingWarned.add(key);
+      this.deps.publish({ type: "system:warning", message: `A pasta de trabalho "${folder.name}" (${folder.path}) não existe mais no computador. ${agent.name} sobe sem ela. Confira em Configurações, Pastas de trabalho.`, at: this.deps.now().toISOString() });
+    }
+    return usable;
   }
 
   private restartWhenFree(entry: Entry): void {
@@ -658,13 +690,14 @@ export class TerminalManager {
     const tools = subagents && adapter.provider === "claude" && !base.tools.includes(CLAUDE_SUBAGENT_TOOL) ? [...base.tools, CLAUDE_SUBAGENT_TOOL] : base.tools;
     const entry = this.entries.get(agentId);
     const access = this.workspaceAccess();
+    const folders = await this.usableFolders(agent);
     const basePrompt = this.deps.promptFor
       ? this.deps.promptFor(agent, state)
-      : agentPrompt(agent, state, this.deps.workspaceName(), subagent, { access, workspaceId: this.deps.workspaceId, browser: this.deps.browserFor?.(agent) === true, approvalTypes: this.deps.approvalTypes?.() });
+      : agentPrompt(agent, state, this.deps.workspaceName(), subagent, { access, workspaceId: this.deps.workspaceId, browser: this.deps.browserFor?.(agent) === true, approvalTypes: this.deps.approvalTypes?.(), folders });
     // Skills da Biblioteca: cópia na pasta do agente + uma linha de índice no fim das instruções.
     const skills = this.deps.skillsFor?.(agentId) ?? [];
     const systemPrompt = withSkillsIndex(basePrompt, skills);
-    if (entry) entry.runConfig = runConfigOf(agent, access);
+    if (entry) entry.runConfig = runConfigOf(agent, access, this.workspaceFolders());
     const spec: TerminalSpec = {
       ...base,
       tools,
@@ -672,6 +705,7 @@ export class TerminalManager {
       ...(agent.model ? { model: agent.model } : {}),
       ...(agent.effort ? { effort: agent.effort } : {}),
       access: terminalAccess(access, agent),
+      ...(folders.length > 0 ? { folders } : {}),
       ...(subagent ? { subagent } : {}),
       mcp: { url: this.deps.config.mcpUrl, token },
     };

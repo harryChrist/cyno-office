@@ -1,7 +1,8 @@
-import { ACCESS_LABELS, effectiveAccess, workspaceAccess, type Agent, type EffectiveAccess, type WorkspaceAccess } from "@cyno/shared";
+import { ACCESS_LABELS, effectiveAccess, effectiveFolders, folderEngineNote, workspaceAccess, type Agent, type AgentFolderAccess, type AgentFolders, type AgentEngine, type EffectiveAccess, type WorkFolder, type WorkspaceAccess } from "@cyno/shared";
 import { useNavStore } from "../store/navStore";
 import { useWorkspaceStore } from "../store/workspaceStore";
 import { Switch } from "./widgets";
+import "../pages/settings/foldersSettings.css";
 
 /** A política de acesso do workspace aberto (com os padrões; workspace antigo = os padrões). */
 export function useWorkspaceAccess(): WorkspaceAccess {
@@ -85,6 +86,73 @@ export function AgentAccessFields({ values, onChange, testIdPrefix = "agent-edit
         onChange={(terminal) => onChange({ ...values, terminal })}
         testId={`${testIdPrefix}-terminal`}
       />
+    </fieldset>
+  );
+}
+
+const NO_FOLDERS: WorkFolder[] = [];
+
+/** As pastas de trabalho do workspace aberto (lista vazia = nenhuma; workspace antigo, sem o campo, também). */
+export function useWorkspaceFolders(): WorkFolder[] {
+  const id = useNavStore((state) => state.workspaceId);
+  return useWorkspaceStore((state) => state.workspaces?.find((ws) => ws.id === id)?.folders) ?? NO_FOLDERS;
+}
+
+type FolderChoice = "" | AgentFolderAccess;
+
+/**
+ * Ajuste por pasta de trabalho de um agente: para cada pasta do workspace, "Como no workspace" (padrão), "Só leitura" (só
+ * faz diferença onde o workspace dá escrita) ou "Sem acesso". Só reduz, nunca dá mais que o workspace. Sem pastas no
+ * workspace: uma linha apontando para as Configurações. `engine` e `terminal` (o efetivo do agente) escolhem o aviso de
+ * onde "só leitura" não é trava.
+ */
+export function AgentFolderFields({ values, onChange, engine, terminal, testIdPrefix = "agent-edit" }: { values: AgentFolders; onChange: (values: AgentFolders) => void; engine: AgentEngine; terminal: boolean; testIdPrefix?: string }) {
+  const folders = useWorkspaceFolders();
+  const ws = useWorkspaceAccess();
+  const readOnlySomewhere = effectiveFolders(folders, { folders: values }).some((folder) => !folder.write);
+  const note = readOnlySomewhere ? folderEngineNote(engine, terminal && ws.terminal) : null;
+  const choose = (folder: WorkFolder, choice: FolderChoice) => {
+    const next: AgentFolders = { ...values };
+    if (choice === "") delete next[folder.id];
+    else next[folder.id] = choice;
+    onChange(next);
+  };
+  return (
+    <fieldset className="agent-folders" data-testid={`${testIdPrefix}-folders`}>
+      <legend className="agent-folders__legend">Pastas de trabalho</legend>
+      {folders.length === 0 ? (
+        <p className="ui-muted" data-testid={`${testIdPrefix}-folders-empty`}>
+          O workspace ainda não tem pastas de trabalho. Cadastre em Configurações, Pastas de trabalho.
+        </p>
+      ) : (
+        <>
+          {folders.map((folder) => {
+            const current: FolderChoice = values[folder.id] ?? "";
+            const label = `Pasta ${folder.name}`;
+            return (
+              <div className="agent-folder" key={folder.id} data-testid={`${testIdPrefix}-folder`}>
+                <div className="agent-folder__info">
+                  <span className="agent-folder__name">{folder.name}</span>
+                  <span className="agent-folder__meta" title={folder.path}>
+                    {folder.mode === "write" ? "Leitura e escrita no workspace" : "Só leitura no workspace"} · {folder.path}
+                  </span>
+                </div>
+                <select className="ui-input ui-input--compact" aria-label={label} value={current} onChange={(event) => choose(folder, event.currentTarget.value as FolderChoice)} data-testid={`${testIdPrefix}-folder-choice`}>
+                  <option value="">Como no workspace</option>
+                  {(folder.mode === "write" || current === "read") && <option value="read">Só leitura</option>}
+                  <option value="off">Sem acesso</option>
+                </select>
+              </div>
+            );
+          })}
+          <p className="ui-muted">Só reduz o que o workspace dá. Trocar reinicia o terminal do agente quando ele estiver livre.</p>
+          {note && (
+            <p className="agent-folders__note" role="note" data-testid={`${testIdPrefix}-folders-note`}>
+              {note}
+            </p>
+          )}
+        </>
+      )}
     </fieldset>
   );
 }

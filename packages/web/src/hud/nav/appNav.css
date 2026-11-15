@@ -902,9 +902,12 @@ html .taskbox {
 
 .navitem--cyno .navitem__label {
   flex: none;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  /* A mesma fonte de pixel da página de apresentação, só no nome da marca. */
+  font-family: "Silkscreen", ui-monospace, monospace;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
   color: var(--ui-text);
 }
 
@@ -1574,4 +1577,75 @@ html .taskbox {
 :root.is-mapa-cheio:has(.sidenav),
 :root.is-mapa-cheio:has(.mbar) {
   --nav-w: 0px;
+}
+
+/* ---------- Pastas de trabalho: indicador logo abaixo do seletor de workspace ---------- */
+.sidenav__head .navitem--folders {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.navitem--folders .nav-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.navitem__label--folders {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navitem--folders-empty {
+  color: var(--ui-text-3);
+}
+
+/* Ponto âmbar: algum agente pode escrever (a mesma cor de "Leitura e escrita" nas Configurações). */
+.navitem__write {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: var(--ui-warn);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--ui-warn-bg);
+}
+
+.navitem__badge--folders {
+  min-width: 18px;
+  height: 18px;
+  font-size: 11px;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+}
+
+.sidenav--rail .navitem--folders {
+  min-height: 38px;
+}
+
+.sidenav--rail .navitem__write {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  box-shadow: none;
+  outline: 2px solid var(--ui-surface-solid);
+}
+
+.sidenav--rail .navitem__badge--folders {
+  top: auto;
+  bottom: 1px;
+  left: 22px;
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+}
+
+.folders-panel__ws {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.folders-panel__ws strong {
+  color: var(--ui-text);
 }

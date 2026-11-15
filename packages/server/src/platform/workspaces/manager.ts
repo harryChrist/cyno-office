@@ -6,12 +6,16 @@ import {
   isSafeId,
   maestroSessionName,
   uniqueSlug,
+  WORK_FOLDER_LIMITS,
   withoutUnusedEffort,
   workspaceAccess,
+  type AddWorkFolderBody,
   type MaestroSettings,
   type ModelDefaults,
   type NewWorkspaceMaestro,
   type ServerEvent,
+  type UpdateWorkFolderBody,
+  type WorkFolder,
   type Workspace,
   type WorkspaceAccess,
   type WorkspaceResettableField,
@@ -26,6 +30,7 @@ import { platformPaths, rootPaths, type RootPaths } from "../../store/paths";
 import { PlatformReports } from "../reports/platform-reports";
 import { readWorkspaceList, WorkspaceRegistry } from "../../store/workspace-registry";
 import { SubscriptionUsageTracker } from "../../engines/usage/subscription-usage";
+import { checkWorkFolderPath, FOLDER_ERRORS, newFolderId } from "./folders";
 import { emptyOffice, welcomeNotes, writeWorkspaceData } from "./init";
 import { WorkspaceRuntime, type RuntimeOptions } from "../../workspace/runtime";
 import { activeActivity } from "../../workspace/activity/log";
@@ -100,6 +105,7 @@ export class WorkspaceManager {
       workspaceGestao: (id) => registry.list().find((ws) => ws.id === id)?.gestao,
       reportsWeekSettled: (id, period) => platform.settled?.(id, period),
       workspaceAccess: (id) => registry.list().find((ws) => ws.id === id)?.access,
+      workspaceFolders: (id) => registry.list().find((ws) => ws.id === id)?.folders,
     };
     const manager = new WorkspaceManager(paths, registry, withNames, options.now);
     platform.settled = (workspace, period) => manager.platformReports.settled(workspace, period);
@@ -230,6 +236,59 @@ export class WorkspaceManager {
     // "Manter o Maestro sempre rodando" mudou: sobe agora ou volta a contar a ociosidade.
     if (change.maestro !== undefined || resetOf("maestro").length > 0) runtime.terminals.refreshMaestro();
     if (maestroSessionName(workspace.maestro, workspace.name) !== sessionBefore) runtime.terminals.renameMaestroSession();
+    return workspace;
+  }
+
+  /**
+   * Pastas de trabalho (veja folders.ts em shared): cadastra uma pasta real do computador. O caminho é conferido
+   * (absoluto, existe, é pasta, fora do DATA_DIR, sem duplicata) e gravado já normalizado. Os terminais dos agentes
+   * reiniciam quando livres, como numa mudança de acesso.
+   */
+  async addFolder(id: string, input: AddWorkFolderBody & { mode?: WorkFolder["mode"] }): Promise<Workspace> {
+    const runtime = this.get(id);
+    const list = this.registry.list();
+    const workspace = list.find((ws) => ws.id === id)!;
+    const folders = workspace.folders ?? [];
+    if (folders.length >= WORK_FOLDER_LIMITS.max) throw new HttpError(400, FOLDER_ERRORS.limit(WORK_FOLDER_LIMITS.max));
+    const real = await checkWorkFolderPath(input.path, { dataDir: this.paths.root, existing: folders });
+    const purpose = input.purpose?.trim();
+    const folder: WorkFolder = { id: newFolderId(input.name, folders.map((item) => item.id)), name: input.name.trim(), path: real, ...(purpose ? { purpose } : {}), mode: input.mode ?? "read" };
+    workspace.folders = [...folders, folder];
+    await this.commit(list);
+    runtime.terminals.syncAll();
+    return workspace;
+  }
+
+  /** Muda nome, "para que serve" e/ou o modo de uma pasta (o caminho não muda). `purpose` vazio tira o texto. */
+  async updateFolder(id: string, folderId: string, change: UpdateWorkFolderBody): Promise<Workspace> {
+    const runtime = this.get(id);
+    const list = this.registry.list();
+    const workspace = list.find((ws) => ws.id === id)!;
+    const folder = workspace.folders?.find((item) => item.id === folderId);
+    if (!folder) throw new HttpError(404, "Pasta de trabalho não encontrada");
+    if (change.name !== undefined) folder.name = change.name.trim();
+    if (change.mode !== undefined) folder.mode = change.mode;
+    if (change.purpose !== undefined) {
+      const purpose = change.purpose.trim();
+      if (purpose) folder.purpose = purpose;
+      else delete folder.purpose;
+    }
+    await this.commit(list);
+    runtime.terminals.syncAll();
+    return workspace;
+  }
+
+  /** Tira a pasta do workspace (nada é apagado do disco). Os ajustes que agentes tinham para ela deixam de valer. */
+  async removeFolder(id: string, folderId: string): Promise<Workspace> {
+    const runtime = this.get(id);
+    const list = this.registry.list();
+    const workspace = list.find((ws) => ws.id === id)!;
+    if (!workspace.folders?.some((item) => item.id === folderId)) throw new HttpError(404, "Pasta de trabalho não encontrada");
+    const rest = workspace.folders.filter((item) => item.id !== folderId);
+    if (rest.length > 0) workspace.folders = rest;
+    else delete workspace.folders;
+    await this.commit(list);
+    runtime.terminals.syncAll();
     return workspace;
   }
 

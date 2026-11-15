@@ -83,7 +83,7 @@ export function LoginScreen() {
     <main className="login" data-testid="login-screen">
       <form className="login__card" onSubmit={(event) => void submit(event)} aria-labelledby="login-title">
         <img className="login__logo" src="/cyno-tile.svg" alt="" width={64} height={64} />
-        <h1 id="login-title" className="login__title">
+        <h1 id="login-title" className={secondStep ? "login__title" : "login__title login__title--marca"}>
           {secondStep ? "Verificação em duas etapas" : "Cyno"}
         </h1>
         <p className="login__hint">{hint}</p>

@@ -5,7 +5,7 @@ import path from "node:path";
 import { DEFAULT_ONE_SHOT_ACCOUNT, maskSecrets, OFFICE_MCP_SERVER, splitModelRef, type OneShotAccount, type TurnUsage } from "@cyno/shared";
 import { shorten } from "../../util/text";
 import { minimalChildEnv } from "./env";
-import { detectFence, fencePolicy, hermesInstallWritables, realPathOf, resolveExecutable, type FencePolicy, type FenceSupport } from "./fence";
+import { detectFence, fencePolicy, hermesInstallWritables, readOnlyFolders, realPathOf, resolveExecutable, writableFolders, type FencePolicy, type FenceSupport } from "./fence";
 import type { GatewaySlots } from "./gateway-slots";
 import { classifyOpenClawFailure, userNotFoundText, normalizeToolName, openclawQuotaWindow } from "./openclaw-adapter";
 import type { OneShotAdapter, OneShotParser } from "./one-shot-terminal";
@@ -264,8 +264,8 @@ export class HermesAdapter implements OneShotAdapter {
     const writable = hermesInstallWritables(installs);
     const credentials = this.account().mode === "program" ? [".env", "auth.json"].map((name) => path.join(source, name)).filter((file) => existsSync(file)) : [];
     return fencePolicy({
-      readOnly: [...roots.flatMap((root) => [path.join(root, "hermes-agent"), path.join(root, "tools")]), installs, ...resolveExecutable(this.options.command ?? "hermes", process.env.PATH), ...credentials],
-      readWrite: [spec.cwd, this.agentHome(spec), ...writable.files, ...writable.dirs],
+      readOnly: [...readOnlyFolders(spec), ...roots.flatMap((root) => [path.join(root, "hermes-agent"), path.join(root, "tools")]), installs, ...resolveExecutable(this.options.command ?? "hermes", process.env.PATH), ...credentials],
+      readWrite: [spec.cwd, this.agentHome(spec), ...writable.files, ...writable.dirs, ...writableFolders(spec)],
     });
   }
 
