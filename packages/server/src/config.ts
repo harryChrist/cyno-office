@@ -36,7 +36,7 @@ export const AGENT_RUNNERS = ["mock"] as const;
 export type AgentRunnerKind = (typeof AGENT_RUNNERS)[number];
 
 const envSchema = z.object({
-  PORT: optionalInt(3001, 1, 65535),
+  PORT: optionalInt(3068, 1, 65535),
   HOST: z.preprocess(emptyToUndefined, z.string().default("127.0.0.1")),
   DATA_DIR: z.preprocess(emptyToUndefined, z.string().optional()),
   LOG_LEVEL: z.preprocess(emptyToUndefined, z.enum(LOG_LEVELS).default("info")),

@@ -4,13 +4,14 @@ import { parametrosDemo } from "./chave";
 import { SoundBoard, type WorldApi } from "@cyno/cena";
 import type { CenaStore } from "./cenaStore";
 import type { LigacaoDoRetrato } from "./ligarRetrato";
-import { aoSuspenderCena, registrarCena } from "./replay/replayStore";
+import { aoSuspenderCena, registrarCena, useReplayStore } from "./replay/replayStore";
+import { ligarAoVivo, servidorTemCenaAoVivo, urlDaCenaAoVivo, type LigacaoAoVivo, type SocketLike } from "./ligarAoVivo";
 import { ligarInterface } from "./ligarInterface";
 import { ligarSom } from "./ligarSom";
 import { definirMundoAtual } from "./mundoAtual";
 import { alimentarComOCyno, depsDoCyno, montarCena, type CenaMontada } from "./montarCena";
 
-type Janela = { __cena?: unknown };
+type Janela = { __cena?: unknown; __cenaAoVivo?: unknown };
 
 function expor(cena: CenaMontada): () => void {
   // Só no dev: o mundo (com a API de depuração do motor) fica à mão para os testes de tela.
@@ -59,6 +60,7 @@ export function CenaCanvas({ search }: { search: string }) {
 export function CenaDoEscritorio({ workspaceId, workspaceName, suspensa }: { workspaceId: string; workspaceName: string; suspensa: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cenaRef = useRef<CenaMontada | null>(null);
+  const aoVivoRef = useRef<LigacaoAoVivo | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -89,7 +91,30 @@ export function CenaDoEscritorio({ workspaceId, workspaceName, suspensa }: { wor
     definirMundoAtual(cena.mundo);
     const desligarInterface = ligarInterface(cena.mundo);
     const desligarSom = ligarSom(cena.mundo, new SoundBoard());
+    // A cena ao vivo: o servidor simula e esta tela só desenha (se o servidor tem a chave ligada; senão, tudo como antes).
+    const aoVivo = ligarAoVivo({
+      workspaceId,
+      mundo: () => {
+        const sonda = cena.mundo.probe?.();
+        return sonda ? { sim: sonda.sim, replay: sonda.playback } : null;
+      },
+      disponivel: servidorTemCenaAoVivo,
+      criarSocket: (url) => new WebSocket(url) as unknown as SocketLike,
+      url: urlDaCenaAoVivo,
+    });
+    aoVivoRef.current = aoVivo;
+    aoVivo.definirAbaVisivel(!document.hidden);
+    const aoMudarAba = () => aoVivo.definirAbaVisivel(!document.hidden);
+    document.addEventListener("visibilitychange", aoMudarAba);
+    const desassinarReplay = useReplayStore.subscribe((estado) => aoVivo.definirReplay(estado.situacao !== "fechado"));
+    aoVivo.definirReplay(useReplayStore.getState().situacao !== "fechado");
+    if (import.meta.env.DEV) (window as unknown as Janela).__cenaAoVivo = aoVivo;
     return () => {
+      desassinarReplay();
+      document.removeEventListener("visibilitychange", aoMudarAba);
+      aoVivo.desligar();
+      aoVivoRef.current = null;
+      if (import.meta.env.DEV) delete (window as unknown as Janela).__cenaAoVivo;
       registrarCena(null);
       desligarSom();
       desligarInterface();
@@ -103,6 +128,7 @@ export function CenaDoEscritorio({ workspaceId, workspaceName, suspensa }: { wor
   // Declarado depois do efeito que monta: roda também na montagem (e a cena nova já nasce suspensa se for o caso).
   useEffect(() => {
     cenaRef.current?.suspender(suspensa);
+    aoVivoRef.current?.definirEscritorioVisivel(!suspensa);
     aoSuspenderCena(suspensa);
   }, [suspensa, workspaceId, workspaceName]);
 

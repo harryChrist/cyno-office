@@ -1,8 +1,8 @@
 // O quadro gravado -> a entrada do adaptador `montarRetrato` (a reprodução passa pelo mesmo adaptador do ao vivo).
 // O quadro tem só o que o adaptador usa; aqui ele vira os objetos do Cyno que o adaptador espera, com o que não
 // foi gravado vazio (texto da tarefa além do título, log, tokens).
-import type { Agent, AgentLogThread, AgentTerminalInfo, ForYouItem, OfficeState, Project, Room, SceneAgent, SceneFrame, SceneTask, Task, Team } from "@cyno/shared";
-import { tipoDaFerramenta, type EntradaDoRetrato, type FerramentaEmUso } from "../adaptador/retrato";
+import type { Agent, AgentLogThread, AgentTerminalInfo, ForYouItem, OfficeState, Project, Room, SceneAgent, SceneFrame, SceneTask, Task, Team } from "../index";
+import { tipoDaFerramenta, type EntradaDoRetrato, type FerramentaEmUso } from "./retrato";
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 const STATUS: Record<SceneTask["s"], Task["status"]> = { q: "queued", a: "in_progress", w: "waiting_approval", d: "done", f: "failed" };

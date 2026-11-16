@@ -13,7 +13,7 @@ describe("rotas do navegador compartilhado", () => {
 
   it("POST /browser/tabs com endereço local ou file:// volta 400 sem abrir o Chromium", async () => {
     const { app, workspaces } = await setup();
-    for (const url of ["http://127.0.0.1:3001", "file:///etc/passwd", "http://192.168.1.20:5173"]) {
+    for (const url of ["http://127.0.0.1:3068", "file:///etc/passwd", "http://192.168.1.20:3067"]) {
       const response = await app.inject({ method: "POST", url: `${API}/browser/tabs`, payload: { url } });
       expect(response.statusCode, url).toBe(400);
     }

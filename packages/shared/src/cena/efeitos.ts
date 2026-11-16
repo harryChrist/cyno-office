@@ -1,8 +1,8 @@
 // Festa e alarme da cena, por diferença entre um retrato e o anterior (o Cyno não tem eventos de GitHub: os gatilhos
 // são do próprio Cyno). Puro: a memória entra e sai sem ser mutada. O passado não comemora: na primeira leitura
 // (memória vazia) nada dispara, então recarregar a página não repete festa nem alarme.
-import type { AgentTerminalInfo, ForYouItem, OfficeState, Project, Task } from "@cyno/shared";
-import type { RoomEffect } from "@cyno/cena";
+import type { AgentTerminalInfo, ForYouItem, OfficeState, Project, Task } from "../index";
+import type { RoomEffect } from "@cyno/cena/tipos";
 
 /** Quanto dura a festa. */
 export const FESTA_MS = 12_000;

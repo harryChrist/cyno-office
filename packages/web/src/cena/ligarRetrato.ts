@@ -1,7 +1,7 @@
 // Liga as lojas do Cyno ao motor de cena: quando o estado muda, monta UM retrato novo (com atraso, juntando
 // rajadas) e só o publica se ele for diferente do último. Sem React, para ser testável com fontes falsas.
 import type { OfficeSnapshot } from "@cyno/cena";
-import { memoriaDeJson, memoriaParaJson, montarRetrato, type EntradaDoRetrato, type MemoriaDaCena } from "./adaptador/retrato";
+import { memoriaDeJson, memoriaParaJson, montarRetrato, type EntradaDoRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 /** Espera entre a última mudança e a montagem do retrato (rajadas de `agent:log` viram uma montagem só). */
 export const ATRASO_DO_RETRATO_MS = 150;

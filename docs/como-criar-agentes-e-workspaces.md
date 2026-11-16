@@ -45,21 +45,21 @@ Dá para fazer isso de dois jeitos: **pela UI** (desde a Etapa 5) ou **pela API 
 
 # Pela API
 
-Os exemplos abaixo usam o proxy do Vite (`:5173`). Direto no server, use `127.0.0.1:3001`.
+Os exemplos abaixo usam o proxy do Vite (`:3067`). Direto no server, use `127.0.0.1:3068`.
 
 ## Workspace
 Um workspace (ex.: "LinkedIn") tem o seu escritório, tarefas e Cérebros, separados dos outros. Pela UI: seletor à esquerda da barra de cima, **+ Novo workspace**. Pela API:
 ```bash
-curl http://localhost:5173/api/workspaces
-curl -X POST http://localhost:5173/api/workspaces -H 'content-type: application/json' -d '{"name":"LinkedIn"}'
-curl -X PATCH http://localhost:5173/api/workspaces/linkedin -H 'content-type: application/json' -d '{"name":"LinkedIn BR"}'
-curl -X DELETE http://localhost:5173/api/workspaces/linkedin   # 409 com tarefa ativa ou se for o último
+curl http://localhost:3067/api/workspaces
+curl -X POST http://localhost:3067/api/workspaces -H 'content-type: application/json' -d '{"name":"LinkedIn"}'
+curl -X PATCH http://localhost:3067/api/workspaces/linkedin -H 'content-type: application/json' -d '{"name":"LinkedIn BR"}'
+curl -X DELETE http://localhost:3067/api/workspaces/linkedin   # 409 com tarefa ativa ou se for o último
 ```
 Os exemplos abaixo usam o workspace `principal` (`/api/w/principal/...`). Todo workspace nasce com a Sala do Maestro (time "Gerência" e o agente Maestro), que não pode ser excluída.
 
 ## Sala pela API
 ```bash
-curl -X POST http://localhost:5173/api/w/principal/rooms -H 'content-type: application/json' \
+curl -X POST http://localhost:3067/api/w/principal/rooms -H 'content-type: application/json' \
   -d '{"name":"ProjetoZ","theme":"ocean","readsGlobalBrain":true}'
 ```
 - `theme` pode ser `mint`, `lavender`, `terracotta`, `ocean` ou `sand`.
@@ -71,28 +71,28 @@ curl -X POST http://localhost:5173/api/w/principal/rooms -H 'content-type: appli
 
 O que a sala lê do Cérebro (a lista é completa e não é simétrica):
 ```bash
-curl -X PATCH http://localhost:5173/api/w/principal/rooms/projetoz/brain-sharing -H 'content-type: application/json' \
+curl -X PATCH http://localhost:3067/api/w/principal/rooms/projetoz/brain-sharing -H 'content-type: application/json' \
   -d '{"readsBrainsOf":["projetox"],"readsGlobalBrain":false}'
-curl http://localhost:5173/api/w/principal/rooms/projetoz/context   # o que os agentes da sala enxergam
+curl http://localhost:3067/api/w/principal/rooms/projetoz/context   # o que os agentes da sala enxergam
 ```
 Para apagar, use `DELETE /api/w/:ws/rooms/:id`. A cascata remove times, agentes, tarefas, o Cérebro e a sala da lista de quem o lia.
 
 ## Time
 ```bash
-curl -X POST http://localhost:5173/api/w/principal/teams -H 'content-type: application/json' \
+curl -X POST http://localhost:3067/api/w/principal/teams -H 'content-type: application/json' \
   -d '{"roomId":"projetoz","name":"Backend","focus":"APIs e dados"}'
 ```
 
 Editar, mudar de sala e excluir (o mesmo que a UI faz, mais o `workspaceId`):
 ```bash
-curl -X PATCH http://localhost:5173/api/w/principal/teams/projetoz-backend -H 'content-type: application/json' -d '{"focus":"APIs, dados e filas"}'
-curl -X PATCH http://localhost:5173/api/w/principal/teams/projetoz-backend -H 'content-type: application/json' -d '{"roomId":"projetox"}'   # 409 com tarefas ativas
-curl -X DELETE http://localhost:5173/api/w/principal/teams/projetoz-backend   # em cascata: apaga os agentes e cancela as tarefas ativas
+curl -X PATCH http://localhost:3067/api/w/principal/teams/projetoz-backend -H 'content-type: application/json' -d '{"focus":"APIs, dados e filas"}'
+curl -X PATCH http://localhost:3067/api/w/principal/teams/projetoz-backend -H 'content-type: application/json' -d '{"roomId":"projetox"}'   # 409 com tarefas ativas
+curl -X DELETE http://localhost:3067/api/w/principal/teams/projetoz-backend   # em cascata: apaga os agentes e cancela as tarefas ativas
 ```
 
 ## Agente
 ```bash
-curl -X POST http://localhost:5173/api/w/principal/agents -H 'content-type: application/json' -d '{
+curl -X POST http://localhost:3067/api/w/principal/agents -H 'content-type: application/json' -d '{
   "teamId":"projetoz-backend","name":"Rafa","role":"Dev backend",
   "instructions":"Seja breve.",
   "avatar":{"skin":"tone3","hair":"curly","hairColor":"ink","shirt":"tomato","pants":"denim"}}'
@@ -104,9 +104,9 @@ curl -X POST http://localhost:5173/api/w/principal/agents -H 'content-type: appl
 
 ## Tarefa
 ```bash
-curl -X POST http://localhost:5173/api/w/principal/tasks -H 'content-type: application/json' \
+curl -X POST http://localhost:3067/api/w/principal/tasks -H 'content-type: application/json' \
   -d '{"roomId":"projetoz","teamId":"projetoz-backend","prompt":"Revisar a API [aprovar]"}'
-curl -X POST http://localhost:5173/api/w/principal/tasks/<id>/approval -H 'content-type: application/json' -d '{"approved":true}'
+curl -X POST http://localhost:3067/api/w/principal/tasks/<id>/approval -H 'content-type: application/json' -d '{"approved":true}'
 ```
 - `[aprovar]` força o pedido de aprovação, e `[falhar]` força uma falha (só no MockRunner).
 - Pela UI, use a caixa de tarefa (veja acima).

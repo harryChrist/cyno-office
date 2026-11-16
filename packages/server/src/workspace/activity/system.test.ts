@@ -23,7 +23,7 @@ describe("ServerLifecycle", () => {
     const dir = systemActivityDir(dataDir);
     const first = capture(dataDir);
     const lifecycle = new ServerLifecycle({ log: first.log, dir, intervalMs: 0, processHooks: false });
-    await lifecycle.start({ port: 3001 });
+    await lifecycle.start({ port: 3068 });
     await lifecycle.markClean("SIGTERM");
     expect(first.entries.map((entry) => entry.action)).toEqual(["iniciado", "desligado"]);
     expect(first.entries[1]!.summary).toContain("SIGTERM");

@@ -41,14 +41,14 @@ describe("UrlPolicy", () => {
 
   it("bloqueia o próprio app e a rede local: IPs, localhost, nomes .local e domínios que apontam para a LAN", async () => {
     const policy = new UrlPolicy({ resolve: dns });
-    for (const url of ["http://192.168.1.20:5173", "localhost:3001", "http://127.0.0.1:3001/api/workspaces", "http://[::1]/", "http://servidor.local/", "http://intranet.example.com/", "http://evil.com/", "http://0x7f000001/", "http://nas/"]) {
+    for (const url of ["http://192.168.1.20:3067", "localhost:3068", "http://127.0.0.1:3068/api/workspaces", "http://[::1]/", "http://servidor.local/", "http://intranet.example.com/", "http://evil.com/", "http://0x7f000001/", "http://nas/"]) {
       const verdict = await policy.check(url);
       expect(verdict.ok, url).toBe(false);
     }
     expect(await policy.check("https://www.google.com/search?q=pizza")).toMatchObject({ ok: true });
     // Requisições da página (imagem, fetch) também: uma página pública não alcança a LAN.
-    expect(await policy.allowsRequest("http://192.168.1.20:3001/api/w/principal/tasks")).toBe(false);
-    expect(await policy.allowsRequest("ws://127.0.0.1:3001/ws")).toBe(false);
+    expect(await policy.allowsRequest("http://192.168.1.20:3068/api/w/principal/tasks")).toBe(false);
+    expect(await policy.allowsRequest("ws://127.0.0.1:3068/ws")).toBe(false);
     expect(await policy.allowsRequest("https://www.google.com/logo.png")).toBe(true);
     expect(await policy.allowsRequest("data:image/png;base64,AAAA")).toBe(true);
     expect(await policy.allowsRequest("file:///etc/passwd")).toBe(false);

@@ -1,5 +1,5 @@
-import { PALETTE, type Avatar } from "@cyno/shared";
-import type { AppearanceParts } from "@cyno/cena";
+import { PALETTE, type Avatar } from "../index";
+import type { AppearanceParts } from "@cyno/cena/tipos";
 
 const PELE: Record<string, string> = { tone1: "skin-1", tone2: "skin-2", tone3: "skin-3", tone4: "skin-4", tone5: "skin-5", tone6: "skin-6" };
 

@@ -1,7 +1,7 @@
 import { isMaestroRoom, isRoomThemeId, type OfficeState, type Room, type RoomDeletionPreview } from "@cyno/shared";
 import { useEffect, useState, type ReactNode } from "react";
 import { api } from "../api/client";
-import { indiceDoTema } from "../cena/adaptador/temas";
+import { indiceDoTema } from "@cyno/shared/cena";
 import { nomeDoTemaNoMotor } from "../cena/adaptador/temasDoMotor";
 import { useViewStore } from "../store/viewStore";
 import { BrainPreview } from "./BrainPreview";

@@ -21,10 +21,10 @@ O que os agentes ganham (nomes em inglês, como aparecem para eles): `search_thr
 
 ### Qual endereço de retorno cadastrar
 
-- **`http://localhost:5173/api/library/oauth/callback` (padrão, recomendado).** Funciona qualquer que seja o endereço pelo qual você abre o Cyno e continua valendo se o domínio mudar. Com o Cyno em outra máquina, você cola um endereço de volta no fim do login (passo 9).
+- **`http://localhost:3067/api/library/oauth/callback` (padrão, recomendado).** Funciona qualquer que seja o endereço pelo qual você abre o Cyno e continua valendo se o domínio mudar. Com o Cyno em outra máquina, você cola um endereço de volta no fim do login (passo 9).
 - **O endereço do app**, só se você abre o Cyno por `https://` com domínio (não precisa ser público: basta abrir no seu navegador). O formulário mostra o endereço pronto para copiar; escolha "Endereço atual do app". O login termina sozinho.
 
-O Google aceita `http://localhost:<porta>` ou `https://` com domínio e **recusa IP** (por exemplo `http://192.168.0.10:5173`). Pode cadastrar os dois na mesma credencial.
+O Google aceita `http://localhost:<porta>` ou `https://` com domínio e **recusa IP** (por exemplo `http://192.168.0.10:3067`). Pode cadastrar os dois na mesma credencial.
 
 ## B. No Cyno: criar o conector
 
@@ -34,7 +34,7 @@ O Google aceita `http://localhost:<porta>` ou `https://` com domínio e **recusa
 ## C. Entrar
 
 8. Clique em **Entrar**. Abre uma aba do Google: escolha a conta (a de Test users) e confirme. Se aparecer o aviso de app não verificado, **Avançado** e continuar.
-9. Com o retorno em localhost e o Cyno em outra máquina, o navegador mostra **"página não encontrada"** em `http://localhost:5173/api/library/oauth/callback?…`. **É esperado.** Copie o endereço inteiro da barra, cole no campo **Endereço copiado da barra do navegador** do Cyno e clique em **Concluir**, em até **10 minutos** (o login pendente vale esse tempo). Aparece **Conectado**. Com o endereço do app, ou abrindo o Cyno pelo próprio localhost, termina sozinho.
+9. Com o retorno em localhost e o Cyno em outra máquina, o navegador mostra **"página não encontrada"** em `http://localhost:3067/api/library/oauth/callback?…`. **É esperado.** Copie o endereço inteiro da barra, cole no campo **Endereço copiado da barra do navegador** do Cyno e clique em **Concluir**, em até **10 minutos** (o login pendente vale esse tempo). Aparece **Conectado**. Com o endereço do app, ou abrindo o Cyno pelo próprio localhost, termina sozinho.
 
 ## D. Testar e liberar
 
@@ -45,6 +45,7 @@ O Google aceita `http://localhost:<porta>` ou `https://` com domínio e **recusa
 
 - **O Testar mostra HTTP 403 dizendo que a Gmail API não foi usada ou está desativada.** Falta ativar a Gmail API no projeto (passo 2), com o projeto certo selecionado. Espere alguns minutos e **Testar** de novo. Não precisa entrar de novo; o estado fica em **Erro**, não em "Precisa entrar de novo", e o login continua conectado.
 - **Erro 400 `redirect_uri_mismatch`.** O endereço cadastrado no Google é diferente do que o Cyno enviou (porta, `http`/`https` e barra final contam). Corrija em Clients ou troque a escolha no Cyno.
+- **`redirect_uri_mismatch` depois da troca de porta padrão (5173 para 3067).** O endereço fixo do modo localhost passou a ser `http://localhost:3067/api/library/oauth/callback`. Quem cadastrou `http://localhost:5173/api/library/oauth/callback` na credencial precisa **cadastrar o novo** em Clients (pode deixar os dois). Se preferir manter a porta antiga, ponha `WEB_PORT=5173` e `PORT=3001` no `.env`. Mesmo assim, o endereço fixo do modo localhost (usado quando você não abre o Cyno por localhost) continua sendo o de 3067; abrindo por `http://localhost:5173`, vale a própria origem.
 - **"Acesso bloqueado" ou `access_denied`.** App em modo de teste e a sua conta não está em Audience > Test users. Adicione-a.
 - **O Google recusa o endereço de retorno ao salvar.** Era um IP. Use `localhost` ou `https://` com domínio.
 - **O Cyno diz que o login expirou ou não está pendente.** Passaram os 10 minutos. Clique em **Entrar** de novo e conclua a tempo.

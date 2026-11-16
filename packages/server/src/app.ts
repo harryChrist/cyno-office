@@ -33,6 +33,8 @@ import { REPO_ROOT } from "./config";
 import { registerWorkspaceScopedRoutes } from "./routes/scope";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
 import { registerWsRoute } from "./routes/ws";
+import { registerSceneLiveRoute } from "./routes/scene-live";
+import { sceneLiveEnabled } from "./workspace/scene-live/service";
 import { DEFAULT_MAESTRO_TIMINGS, type MaestroTimings } from "./sim/coordinator";
 import { registerMcpRoute } from "./mcp/route";
 import { registerUsageRoutes } from "./routes/usage";
@@ -131,7 +133,7 @@ export type AppDeps = {
   /** Espera para juntar uma rajada de alertas num aviso só (padrão 3 s). */
   pushBatchMs?: number;
   now?: () => Date;
-  /** Terminais de CLI (agentes reais). Padrão: `claude`, MCP em 127.0.0.1:3001, ocioso 15 min. */
+  /** Terminais de CLI (agentes reais). Padrão: `claude`, MCP em 127.0.0.1:3068, ocioso 15 min. */
   terminals?: Partial<TerminalsConfig>;
   /**
    * Consulta do uso da CONTA Claude na Anthropic (endpoint não documentado). Padrão: desligada
@@ -537,7 +539,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   await retention.load();
 
-  registerHealthRoutes(app);
+  registerHealthRoutes(app, { sceneLive: sceneLiveEnabled() });
   const versionService = new VersionService({
     startDir: REPO_ROOT,
     ...(deps.version?.rootDir ? { rootDir: deps.version.rootDir } : {}),
@@ -563,6 +565,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerLibraryRoutes(app, library);
   registerLibraryAppsRoutes(app, installer, appRunner);
   registerWsRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000 });
+  // Cena ao vivo (o servidor simula o Escritório): desligada por padrão (CYNO_SCENE_LIVE=1 liga).
+  registerSceneLiveRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000, enabled: sceneLiveEnabled() });
   registerMcpRoute(app, manager, mcpTokens, cyno);
   registerCynoRoutes(app, cyno, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000, attention });
   registerAttentionRoutes(app, attention, now);

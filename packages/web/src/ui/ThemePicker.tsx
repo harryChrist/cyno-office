@@ -1,6 +1,6 @@
 import { THEMES, type RoomThemeId, type ThemeId } from "@cyno/shared";
 import { useId } from "react";
-import { indiceDoTema } from "../cena/adaptador/temas";
+import { indiceDoTema } from "@cyno/shared/cena";
 import { nomeDoTemaNoMotor, TEMAS_DO_MOTOR } from "../cena/adaptador/temasDoMotor";
 import { useArteDoMotor, type ArteDoMotor } from "../cena/arteDoMotor";
 

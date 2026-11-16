@@ -1,6 +1,6 @@
 import { AVATAR_OPTIONS, avatarSchema, isPaletteColorId, SCENE_AVATAR_OPTIONS } from "@cyno/shared";
 import { ACCESSORIES, HAIR_STYLES, TOP_STYLES } from "../../../cena/shared/appearance";
-import { avatarParaPartes } from "../cena/adaptador/avatar";
+import { avatarParaPartes } from "@cyno/shared/cena";
 import { describe, expect, it } from "vitest";
 import { ACCESSORY_LABELS, COLOR_LABELS, DEFAULT_AVATAR, HAIR_LABELS, randomAvatar, SCENE_ACCESSORY_LABELS, SCENE_HAIR_LABELS, SCENE_TOP_LABELS, sceneAccessoryOf, sceneHairOf, SKIN_LABELS, toAvatarInput, withSceneAccessory, withSceneHair, withSceneTop } from "./avatarOptions";
 

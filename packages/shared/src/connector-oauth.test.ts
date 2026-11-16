@@ -59,15 +59,15 @@ describe("risco de escopo", () => {
 describe("endereço de retorno", () => {
   it("monta origem + caminho fixo", () => {
     expect(oauthRedirectUri("https://app.exemplo")).toBe("https://app.exemplo/api/library/oauth/callback");
-    expect(oauthRedirectUri("http://localhost:5173/")).toBe("http://localhost:5173/api/library/oauth/callback");
+    expect(oauthRedirectUri("http://localhost:3067/")).toBe("http://localhost:3067/api/library/oauth/callback");
     expect(() => oauthRedirectUri("nao-e-url")).toThrow();
   });
 
   it("https e localhost servem; IP de rede em http não", () => {
     expect(redirectOriginIssue("https://app.exemplo")).toBeUndefined();
-    expect(redirectOriginIssue("http://localhost:5173")).toBeUndefined();
-    expect(redirectOriginIssue("http://127.0.0.1:5173")).toBeUndefined();
-    expect(redirectOriginIssue("http://192.168.0.10:5173")).toMatch(/https/);
+    expect(redirectOriginIssue("http://localhost:3067")).toBeUndefined();
+    expect(redirectOriginIssue("http://127.0.0.1:3067")).toBeUndefined();
+    expect(redirectOriginIssue("http://192.168.0.10:3067")).toMatch(/https/);
     expect(redirectOriginIssue("http://app.exemplo")).toMatch(/https/);
   });
 
@@ -88,32 +88,32 @@ describe("modo do endereço de retorno", () => {
   });
 
   it("reconhece origens da própria máquina", () => {
-    expect(isLocalOrigin("http://localhost:5173")).toBe(true);
+    expect(isLocalOrigin("http://localhost:3067")).toBe(true);
     expect(isLocalOrigin("http://127.0.0.1:3000")).toBe(true);
-    expect(isLocalOrigin("http://[::1]:5173")).toBe(true);
+    expect(isLocalOrigin("http://[::1]:3067")).toBe(true);
     expect(isLocalOrigin("https://app.exemplo")).toBe(false);
-    expect(isLocalOrigin("http://192.168.0.10:5173")).toBe(false);
+    expect(isLocalOrigin("http://192.168.0.10:3067")).toBe(false);
   });
 
   it("local: usa a própria origem se já é localhost; senão o endereço fixo. app: sempre a origem", () => {
-    expect(OAUTH_LOCAL_REDIRECT_URI).toBe("http://localhost:5173/api/library/oauth/callback");
+    expect(OAUTH_LOCAL_REDIRECT_URI).toBe("http://localhost:3067/api/library/oauth/callback");
     expect(oauthRedirectFor("local", "http://localhost:5411")).toBe("http://localhost:5411/api/library/oauth/callback");
     expect(oauthRedirectFor("local", "https://app.exemplo")).toBe(OAUTH_LOCAL_REDIRECT_URI);
-    expect(oauthRedirectFor("local", "http://192.168.0.10:5173")).toBe(OAUTH_LOCAL_REDIRECT_URI);
+    expect(oauthRedirectFor("local", "http://192.168.0.10:3067")).toBe(OAUTH_LOCAL_REDIRECT_URI);
     expect(oauthRedirectFor("app", "https://app.exemplo")).toBe("https://app.exemplo/api/library/oauth/callback");
     expect(oauthRedirectFor("app", "http://localhost:5411")).toBe("http://localhost:5411/api/library/oauth/callback");
   });
 
   it("só precisa colar de volta no modo local com o app aberto fora de localhost", () => {
     expect(needsPasteBack("local", "https://app.exemplo")).toBe(true);
-    expect(needsPasteBack("local", "http://localhost:5173")).toBe(false);
+    expect(needsPasteBack("local", "http://localhost:3067")).toBe(false);
     expect(needsPasteBack("app", "https://app.exemplo")).toBe(false);
   });
 
   it("interpreta o endereço colado e recusa outro caminho ou texto qualquer", () => {
-    expect(parsePastedCallbackUrl("  http://localhost:5173/api/library/oauth/callback?code=c&state=s&iss=https%3A%2F%2Fx.exemplo \n")).toEqual({ state: "s", code: "c", error: undefined, errorDescription: undefined, iss: "https://x.exemplo" });
-    expect(parsePastedCallbackUrl("http://localhost:5173/api/library/oauth/callback?error=access_denied&state=s")).toMatchObject({ error: "access_denied", state: "s" });
-    expect(parsePastedCallbackUrl("http://localhost:5173/outro?code=c&state=s")).toBeUndefined();
+    expect(parsePastedCallbackUrl("  http://localhost:3067/api/library/oauth/callback?code=c&state=s&iss=https%3A%2F%2Fx.exemplo \n")).toEqual({ state: "s", code: "c", error: undefined, errorDescription: undefined, iss: "https://x.exemplo" });
+    expect(parsePastedCallbackUrl("http://localhost:3067/api/library/oauth/callback?error=access_denied&state=s")).toMatchObject({ error: "access_denied", state: "s" });
+    expect(parsePastedCallbackUrl("http://localhost:3067/outro?code=c&state=s")).toBeUndefined();
     expect(parsePastedCallbackUrl("ftp://localhost/api/library/oauth/callback?code=c")).toBeUndefined();
     expect(parsePastedCallbackUrl("isto não é um endereço")).toBeUndefined();
   });

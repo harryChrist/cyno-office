@@ -5,12 +5,14 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./cena": "./src/cena/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@cyno/cena": "*",
     "zod": "^4.6.7"
   }
 }

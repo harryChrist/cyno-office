@@ -18,6 +18,7 @@ import { EnginesPanel } from "./EnginesPanel";
 import { HistorySettings } from "./HistorySettings";
 import { GlobalModelsSettings, WorkspaceModelsSettings } from "./ModelsSettings";
 import { OfficeSettings } from "./OfficeSettings";
+import { ShortcutsSettings } from "./ShortcutsSettings";
 import { PasswordSettings } from "./PasswordSettings";
 import { VersionSettings } from "./VersionSettings";
 import { OptionHead, Seal, StateBadge } from "./SettingsOption";
@@ -346,6 +347,9 @@ export function SettingsPage() {
             </SectionBlock>
             <SectionBlock id="escritorio" hidden={hide("escritorio")}>
               <OfficeSettings />
+            </SectionBlock>
+            <SectionBlock id="atalhos" hidden={hide("atalhos")}>
+              <ShortcutsSettings />
             </SectionBlock>
           </div>
 

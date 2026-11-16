@@ -4,8 +4,8 @@ import path from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 
 // Portas próprias por env (E2E_SERVER_PORT/E2E_WEB_PORT) para rodar com o app de dev no ar.
-const SERVER_PORT = Number(process.env.E2E_SERVER_PORT ?? 3001);
-const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5173);
+const SERVER_PORT = Number(process.env.E2E_SERVER_PORT ?? 3068);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 3067);
 const E2E_ROOT = path.join(tmpdir(), "cyno-e2e");
 
 /**

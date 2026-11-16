@@ -285,12 +285,12 @@ describe("AntigravityCliAdapter", () => {
   });
 
   it("grava GEMINI.md e o .agents/mcp_config.json do workspace (com o token, secreto)", () => {
-    const files = new AntigravityCliAdapter().agentFiles({ spec, mcpUrl: "http://127.0.0.1:3001/mcp", token: "tok-1" });
+    const files = new AntigravityCliAdapter().agentFiles({ spec, mcpUrl: "http://127.0.0.1:3068/mcp", token: "tok-1" });
     expect(files).toEqual([
       { path: `${CWD}/GEMINI.md`, content: "Você é o Pesquisador.\n" },
       { path: `${CWD}/${ANTIGRAVITY_MCP_CONFIG}`, content: expect.any(String), secret: true },
     ]);
-    expect(JSON.parse(files[1]!.content)).toEqual({ mcpServers: { office: { url: "http://127.0.0.1:3001/mcp", headers: { Authorization: "Bearer tok-1" } } } });
+    expect(JSON.parse(files[1]!.content)).toEqual({ mcpServers: { office: { url: "http://127.0.0.1:3068/mcp", headers: { Authorization: "Bearer tok-1" } } } });
   });
 
   it("o ambiente nunca leva chave de API de nenhum provedor", () => {

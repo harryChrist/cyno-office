@@ -151,7 +151,7 @@ export function GmailGuide({ onClose, action }: { onClose: () => void; action?: 
               </p>
               {appIssue ? (
                 <Note tone="warn">
-                  Você abriu o Cyno agora por <code>{origin}</code>. O Google <strong>recusa endereços com IP</strong> (como <code>http://192.168.0.10:5173</code>) e só aceita <code>http://localhost:&lt;porta&gt;</code> ou <code>https://</code> com domínio. Por isso, aqui, use o endereço de localhost acima.
+                  Você abriu o Cyno agora por <code>{origin}</code>. O Google <strong>recusa endereços com IP</strong> (como <code>http://192.168.0.10:3067</code>) e só aceita <code>http://localhost:&lt;porta&gt;</code> ou <code>https://</code> com domínio. Por isso, aqui, use o endereço de localhost acima.
                 </Note>
               ) : (
                 <CopyField value={appAddress} label="Endereço de retorno do app" testId="guide-redirect-app" />
@@ -196,7 +196,7 @@ export function GmailGuide({ onClose, action }: { onClose: () => void; action?: 
               <p>
                 Se você cadastrou o <strong>endereço de localhost</strong> e o Cyno roda em outra máquina, depois de autorizar o navegador mostra <strong>“página não encontrada”</strong> num endereço como:
               </p>
-              <CopyField value="http://localhost:5173/api/library/oauth/callback?state=…&code=…" label="Exemplo do endereço que o navegador mostra" />
+              <CopyField value="http://localhost:3067/api/library/oauth/callback?state=…&code=…" label="Exemplo do endereço que o navegador mostra" />
               <p>
                 <strong>É esperado.</strong> Copie o endereço inteiro da barra do navegador, volte ao Cyno, cole no campo <strong>Endereço copiado da barra do navegador</strong> e clique em <strong>Concluir</strong>. Faça isso em até <strong>10 minutos</strong>: o login pendente vale esse tempo. Com o endereço do app (https), ou abrindo o Cyno pelo próprio localhost, o login termina sozinho.
               </p>
@@ -245,7 +245,7 @@ export function GmailGuide({ onClose, action }: { onClose: () => void; action?: 
             </Problem>
             <Problem title="O Google recusa o endereço de retorno ao salvar a credencial">
               <p>
-                O Google não aceita IP (como <code>http://192.168.0.10:5173</code>). Use <code>http://localhost:5173/api/library/oauth/callback</code> ou um endereço <code>https://</code> com domínio.
+                O Google não aceita IP (como <code>http://192.168.0.10:3067</code>). Use <code>http://localhost:3067/api/library/oauth/callback</code> ou um endereço <code>https://</code> com domínio.
               </p>
             </Problem>
             <Problem title="O Cyno diz que o login expirou ou não está pendente">

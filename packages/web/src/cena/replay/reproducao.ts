@@ -4,8 +4,7 @@
 // o retrato que a cena desenha sai do mesmo adaptador do ao vivo (`montarRetrato`).
 import { applyChanges, cloneFrame, emptyFrame, frameOf, GAP_SLACK_MS, localHourOf, type SceneFrame, type TimelineRecord } from "@cyno/shared";
 import type { OfficeSnapshot } from "@cyno/cena";
-import { memoriaInicial, montarRetrato, type MemoriaDaCena } from "../adaptador/retrato";
-import { entradaDoQuadro } from "./entrada";
+import { entradaDoQuadro, memoriaInicial, montarRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 export const BUCKET_MS = 60_000;
 const PEAKS = 4;

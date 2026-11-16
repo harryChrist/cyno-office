@@ -1481,6 +1481,10 @@ textarea.ui-input {
   margin-left: auto;
 }
 
+.taskbox__shortcut {
+  white-space: nowrap;
+}
+
 .taskbox__hint kbd {
   display: inline-block;
   min-width: 18px;

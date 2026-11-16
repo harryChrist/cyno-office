@@ -1,9 +1,7 @@
 import type { Agent, AgentLogEntry, AgentTerminalInfo, ForYouItem, OfficeState, Project, Task } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { makeAgent, makeLogEntry, makeRoom, makeTask } from "../../test-fixtures";
-import { avatarParaPartes } from "./avatar";
-import { ferramentaEmUso, tipoDaFerramenta, memoriaDeJson, memoriaInicial, memoriaParaJson, montarRetrato, SALA_DESCONHECIDA, textoDeProgresso, type EntradaDoRetrato, type MemoriaDaCena } from "./retrato";
-import { sementeDaSala } from "./temas";
+import { avatarParaPartes, ferramentaEmUso, sementeDaSala, tipoDaFerramenta, memoriaDeJson, memoriaInicial, memoriaParaJson, montarRetrato, SALA_DESCONHECIDA, textoDeProgresso, type EntradaDoRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 const AGORA = Date.parse("2026-11-12T12:00:00.000Z");
 const iso = (deslocamentoMs: number) => new Date(AGORA + deslocamentoMs).toISOString();

@@ -1,9 +1,9 @@
 // `npm run lab:up`: sobe um app de teste ISOLADO (server + web), com DATA_DIR temporário, portas próprias
 // e sem senha (CYNO_AUTH=off: um DATA_DIR novo não tem auth.json e o laboratório fica aberto), e roda o `lab:setup` contra ele.
-// Nunca toca em data/, nas portas 3001/5173 nem no pm2. Ctrl+C derruba tudo e apaga o DATA_DIR
+// Nunca toca em data/, nas portas 3068/3067 nem no pm2. Ctrl+C derruba tudo e apaga o DATA_DIR
 // (LAB_KEEP=1 mantém a pasta). Variáveis: LAB_SERVER_PORT (3101), LAB_WEB_PORT (5273), LAB_DATA_DIR,
 // LAB_BROWSER=1 (liga o navegador dos agentes; o perfil do Chromium nasce novo dentro do DATA_DIR de teste),
-// LAB_CONNECTORS_STDIO=1 (libera conectores stdio), LAB_UPDATE_CHECK=1 (liga a verificação automática de atualização no GitHub; desligada por padrão), LAB_UPDATE_APPLY=1 (liga o botão que baixa a atualização; desligado por padrão), ROUTINE_TICK_MS (intervalo do vigia das rotinas, só teste) e
+// LAB_CONNECTORS_STDIO=1 (libera conectores stdio), LAB_SCENE_LIVE=1 (liga a cena ao vivo: o servidor simula o Escritório; desligada por padrão), LAB_UPDATE_CHECK=1 (liga a verificação automática de atualização no GitHub; desligada por padrão), LAB_UPDATE_APPLY=1 (liga o botão que baixa a atualização; desligado por padrão), ROUTINE_TICK_MS (intervalo do vigia das rotinas, só teste) e
 // LAB_HISTORY_DAYS=21 (depois do lab:setup, para o server, semeia N dias de histórico fabricado — `source:"seed"` — e sobe de novo;
 // só vale no DATA_DIR temporário `cyno-…` do laboratório: em qualquer outro a semente se recusa e o app sobe sem ela).
 import { spawn, spawnSync } from "node:child_process";
@@ -15,8 +15,8 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const serverPort = Number(process.env.LAB_SERVER_PORT ?? 3101);
 const webPort = Number(process.env.LAB_WEB_PORT ?? 5273);
-if ([serverPort, webPort].some((port) => port === 3001 || port === 5173)) {
-  console.error("lab:up: as portas 3001 e 5173 são do app real; escolha outras.");
+if ([serverPort, webPort].some((port) => port === 3068 || port === 3067)) {
+  console.error("lab:up: as portas 3068 e 3067 são do app real; escolha outras.");
   process.exit(1);
 }
 const dataDir = process.env.LAB_DATA_DIR ?? mkdtempSync(path.join(tmpdir(), "cyno-lab-"));
@@ -54,6 +54,8 @@ const env = {
   CYNO_UPDATE_CHECK: process.env.LAB_UPDATE_CHECK === "1" ? "on" : "off",
   // O laboratório roda a partir do repositório real: o botão que baixa a atualização fica desligado (LAB_UPDATE_APPLY=1 liga, só com um clone descartável).
   CYNO_UPDATE_APPLY: process.env.LAB_UPDATE_APPLY === "1" ? "on" : "off",
+  // Cena ao vivo (o servidor simula o Escritório; rota /ws/scene): desligada por padrão, LAB_SCENE_LIVE=1 liga.
+  CYNO_SCENE_LIVE: process.env.LAB_SCENE_LIVE === "1" ? "1" : "0",
 };
 const children = [];
 function start(command, args, cwd) {

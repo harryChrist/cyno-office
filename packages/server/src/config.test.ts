@@ -6,7 +6,7 @@ describe("loadConfig", () => {
   it("usa padrões seguros", () => {
     const config = loadConfig({});
     expect(config).toMatchObject({
-      port: 3001,
+      port: 3068,
       host: "127.0.0.1",
       logLevel: "info",
       // Produção: sem AGENT_RUNNER o modo simulado fica desligado.

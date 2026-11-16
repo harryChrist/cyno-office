@@ -10,7 +10,9 @@
   "exports": {
     "./arte": "./arte.ts",
     "./cidade": "./cidade.ts",
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./tipos": "./tipos.ts",
+    "./sim": "./sim.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

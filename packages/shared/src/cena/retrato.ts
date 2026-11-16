@@ -15,11 +15,11 @@ import {
   type Project,
   type Room,
   type Task,
+  type TaskProgressInfo,
   type Team,
-} from "@cyno/shared";
-import type { AccountInfo, Activity, AgentInfo, OfficeSnapshot, RoomInfo, TaskItem } from "@cyno/cena";
+} from "../index";
+import type { AccountInfo, Activity, AgentInfo, OfficeSnapshot, RoomInfo, TaskItem } from "@cyno/cena/tipos";
 import { runningSubagents } from "./subagentes";
-import type { TaskProgressMap } from "../../store/taskProgress";
 import { avatarParaPartes, parecenca, partesDoMaestro } from "./avatar";
 import { calcularEfeitos } from "./efeitos";
 import { decidirEstado, type EstadoDecidido } from "./estados";
@@ -36,6 +36,9 @@ export const MAX_TAREFAS = 15;
 const VINTE_E_QUATRO_HORAS = 24 * 3_600_000;
 /** Id de sala que o motor não conhece: ele manda o personagem esperar na recepção. */
 export const SALA_DESCONHECIDA = "?";
+
+/** Último progresso conhecido de cada tarefa ativa, por id da tarefa (o mesmo tipo da loja do web). */
+export type TaskProgressMap = Readonly<Record<string, TaskProgressInfo>>;
 
 /** O estado do Cyno de que o adaptador precisa (já lido das lojas Zustand). */
 export type EntradaDoRetrato = {

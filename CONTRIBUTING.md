@@ -8,7 +8,7 @@ Requisitos: Node 22.12 ou mais novo e npm.
 
 ```bash
 npm ci            # ou npm install
-npm run dev       # server (3001, só loopback) e web (5173)
+npm run dev       # server (3068, só loopback) e web (3067)
 ```
 
 Na primeira visita o app pede a criação da senha com um código que aparece no log (`npm run auth:code` mostra de novo). Todos os caminhos de execução (pm2, Docker, variáveis) estão em [docs/como-rodar.md](docs/como-rodar.md).

@@ -33,7 +33,7 @@ export function Instalar() {
     <section className="secao" id="instalar" aria-labelledby="t-instalar">
       <div className="wrap wrap-estreito">
         <Cabecalho rotulo="Instalar" titulo={<span id="t-instalar">Quatro comandos e o escritório abre.</span>}>
-          Precisa de Node 22.12 ou mais novo (pm2) ou de Docker com Compose v2. Com a instalação feita, abra o endereço da porta 5173. Sem senha, o app fica
+          Precisa de Node 22.12 ou mais novo (pm2) ou de Docker com Compose v2. Com a instalação feita, abra o endereço da porta 3067. Sem senha, o app fica
           fechado e pede um código de primeiro acesso, que só o servidor mostra.
         </Cabecalho>
         <Revela>

@@ -1,8 +1,7 @@
 import type { AgentTerminalInfo, ForYouItem, OfficeState, Project, Task } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { makeAgent, makeRoom, makeTask } from "../../test-fixtures";
-import { ALARME_MS, calcularEfeitos, ERRO_DE_TERMINAL_MS, FESTA_MS, memoriaDeEfeitosVazia, type EntradaDeEfeitos } from "./efeitos";
-import { memoriaInicial, montarRetrato, type EntradaDoRetrato, type MemoriaDaCena } from "./retrato";
+import { ALARME_MS, calcularEfeitos, ERRO_DE_TERMINAL_MS, FESTA_MS, memoriaDeEfeitosVazia, memoriaInicial, montarRetrato, type EntradaDeEfeitos, type EntradaDoRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 const AGORA = Date.parse("2026-11-12T12:00:00.000Z");
 const iso = (ms: number) => new Date(AGORA + ms).toISOString();

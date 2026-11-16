@@ -14,7 +14,7 @@ import { z } from "zod";
 export const OAUTH_CALLBACK_PATH = "/api/library/oauth/callback";
 
 /** Porta web padrão do app: vira o endereço de retorno `localhost` fixo quando o navegador não está na máquina do servidor. */
-export const OAUTH_LOCAL_REDIRECT_ORIGIN = "http://localhost:5173";
+export const OAUTH_LOCAL_REDIRECT_ORIGIN = "http://localhost:3067";
 
 /** Endereço de retorno `localhost` fixo (o que se cadastra no Google quando o app não é aberto por localhost). */
 export const OAUTH_LOCAL_REDIRECT_URI = `${OAUTH_LOCAL_REDIRECT_ORIGIN}${OAUTH_CALLBACK_PATH}`;
@@ -203,7 +203,7 @@ export function parsePastedCallbackUrl(text: string): ParsedCallbackUrl | undefi
 
 /**
  * Problema do endereço de retorno para esta origem, ou undefined se serve. O Google só aceita https
- * ou `http://localhost`; um IP da rede local em http (ex.: `http://192.168.0.10:5173`) não serve.
+ * ou `http://localhost`; um IP da rede local em http (ex.: `http://192.168.0.10:3067`) não serve.
  */
 export function redirectOriginIssue(origin: string): string | undefined {
   const url = parseOrigin(origin);

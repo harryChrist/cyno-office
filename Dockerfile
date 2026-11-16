@@ -1,8 +1,8 @@
 # Cyno em contêiner: server (Fastify via tsx) + web (vite preview com proxy /api e /ws) no mesmo contêiner.
-# Só a porta 5173 (web) precisa ser publicada; o server escuta em 127.0.0.1:3001, dentro do contêiner.
+# Só a porta 3067 (web) precisa ser publicada; o server escuta em 127.0.0.1:3068, dentro do contêiner.
 #
 #   docker build -t cyno .
-#   docker run -d --name cyno -p 5173:5173 -v cyno-data:/data -v cyno-home:/home/node cyno
+#   docker run -d --name cyno -p 3067:3067 -v cyno-data:/data -v cyno-home:/home/node cyno
 
 # ---- 1) dependências e build do web ----
 FROM node:22-bookworm-slim AS build
@@ -32,9 +32,9 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers \
     DATA_DIR=/data \
     HOST=127.0.0.1 \
-    PORT=3001 \
+    PORT=3068 \
     WEB_HOST=0.0.0.0 \
-    WEB_PORT=5173
+    WEB_PORT=3067
 WORKDIR /app
 
 # python3: cerca de arquivos (Landlock); tini: init de verdade (os agentes são processos filhos e terminais pty);
@@ -63,10 +63,10 @@ RUN mkdir -p /data /home/node/.claude && chown node:node /data /home/node /home/
 USER node
 ENV HOME=/home/node
 VOLUME ["/data", "/home/node"]
-EXPOSE 5173
+EXPOSE 3067
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3068)+'/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
 
 ENTRYPOINT ["tini", "--"]
 CMD ["node_modules/.bin/concurrently", "--names", "server,web", "--kill-others-on-fail", "npm run start -w @cyno/server", "npm run preview -w @cyno/web"]

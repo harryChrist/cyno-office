@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeLogEntry as entry } from "../../test-fixtures";
-import { runningSubagents } from "./subagentes";
+import { runningSubagents } from "@cyno/shared/cena";
 
 const started = (id: string, sub: string, extra: { model?: string; taskId?: string } = {}) =>
   entry(id, { kind: "subagent", phase: "started", subagentId: sub, label: `Peça ${sub}`, goal: "x", ...(extra.model ? { model: extra.model } : {}) }, extra.taskId ? { taskId: extra.taskId } : {});

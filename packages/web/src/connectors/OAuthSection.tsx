@@ -179,7 +179,7 @@ export function PasteBack({ pending, error, onFinish }: { pending: boolean; erro
         Depois de autorizar, o navegador vai tentar abrir um endereço que começa com <strong>http://localhost</strong> e mostrar erro de página não encontrada. É esperado. Copie o endereço inteiro da barra do navegador e cole aqui.
       </p>
       <Field label="Endereço copiado da barra do navegador">
-        {(props) => <input {...props} className="ui-input" autoComplete="off" spellCheck={false} value={url} placeholder="http://localhost:5173/api/library/oauth/callback?code=…&state=…" onChange={(event) => setUrl(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (url.trim() && !pending) onFinish(url); } }} data-testid="oauth-paste-url" />}
+        {(props) => <input {...props} className="ui-input" autoComplete="off" spellCheck={false} value={url} placeholder="http://localhost:3067/api/library/oauth/callback?code=…&state=…" onChange={(event) => setUrl(event.currentTarget.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); if (url.trim() && !pending) onFinish(url); } }} data-testid="oauth-paste-url" />}
       </Field>
       <div className="ui-actions">
         <button type="button" className="ui-button ui-button--small" disabled={pending || !url.trim()} onClick={() => onFinish(url)} aria-busy={pending} data-testid="oauth-paste-finish">

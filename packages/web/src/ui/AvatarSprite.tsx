@@ -1,8 +1,7 @@
 import type { Avatar } from "@cyno/shared";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useArteDoMotor } from "../cena/arteDoMotor";
-import { avatarParaPartes, parecenca, partesDoMaestro } from "../cena/adaptador/avatar";
-import { hash32 } from "../cena/adaptador/hash";
+import { avatarParaPartes, hash32, parecenca, partesDoMaestro } from "@cyno/shared/cena";
 import type { AvatarDirection } from "./avatarDirections";
 import { BUSTO, medirCabeca, QUADRO_ALTURA, QUADRO_LARGURA, ROSTO } from "./avatarMedida";
 

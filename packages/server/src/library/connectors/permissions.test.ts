@@ -19,7 +19,7 @@ describe("conectores: permissões das CLIs", () => {
     expect(full).toBe("mcp__office__notion__create_page");
     expect(full.length).toBeLessThanOrEqual(64);
     // A configuração MCP do agente só tem o servidor office (com o token dele), nenhum conector.
-    const files = new ClaudeCliAdapter().agentFiles({ spec, mcpUrl: "http://127.0.0.1:3001/mcp", token: "t" });
+    const files = new ClaudeCliAdapter().agentFiles({ spec, mcpUrl: "http://127.0.0.1:3068/mcp", token: "t" });
     const mcp = JSON.parse(files.find((file) => file.path === spec.mcpConfigFile)!.content) as { mcpServers: Record<string, unknown> };
     expect(Object.keys(mcp.mcpServers)).toEqual([OFFICE_MCP_SERVER]);
   });

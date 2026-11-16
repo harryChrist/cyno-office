@@ -732,7 +732,8 @@ export type ForYouBatchBody = z.infer<typeof forYouBatchBodySchema>;
 /** O que o lote devolve: os itens aprovados, na ordem pedida. */
 export type ForYouBatchResponse = { items: ForYouItem[] };
 
-export type HealthResponse = { ok: true };
+/** `sceneLive: true` só aparece com a cena ao vivo ligada no servidor (`CYNO_SCENE_LIVE`). */
+export type HealthResponse = { ok: true; sceneLive?: true };
 
 /**
  * Rotas da API (o server valida os corpos com os schemas acima):

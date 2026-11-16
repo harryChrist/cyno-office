@@ -3,7 +3,7 @@
 import type { Agent, OfficeState, Room, Team } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { makeAgent, makeRoom } from "../../test-fixtures";
-import { memoriaDeJson, memoriaInicial, memoriaParaJson, montarRetrato, ordenarSalas, type EntradaDoRetrato, type MemoriaDaCena } from "./retrato";
+import { memoriaDeJson, memoriaInicial, memoriaParaJson, montarRetrato, ordenarSalas, type EntradaDoRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 const AGORA = Date.parse("2026-11-12T12:00:00.000Z");
 

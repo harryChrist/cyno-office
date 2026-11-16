@@ -103,7 +103,7 @@ describe("mensagens e ajudas do terminal", () => {
   });
 
   it("URL do WebSocket segue o protocolo da página", () => {
-    expect(terminalSocketUrl({ protocol: "http:", host: "192.168.1.20:5173" }, "principal")).toBe("ws://192.168.1.20:5173/api/w/principal/maestro/terminal");
+    expect(terminalSocketUrl({ protocol: "http:", host: "192.168.1.20:3067" }, "principal")).toBe("ws://192.168.1.20:3067/api/w/principal/maestro/terminal");
     expect(terminalSocketUrl({ protocol: "https:", host: "dev.x" }, "a b")).toBe("wss://dev.x/api/w/a%20b/maestro/terminal");
   });
 

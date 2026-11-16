@@ -101,6 +101,7 @@ import { modelSaving } from "./metrics/saving";
 import { dayStatsDir, StateClock } from "./day-stats/state-clock";
 import { timelineDir } from "./timeline/recorder";
 import { TimelineService } from "./timeline/service";
+import { SceneLiveService, sceneLiveEnabled, sceneLiveIdleMs } from "./scene-live/service";
 import { currentStates } from "./day-stats/states";
 import { RoutineScheduler } from "./routines/scheduler";
 import { SLOT_TICK_MS, SlotClock } from "./routines/slot-clock";
@@ -254,6 +255,8 @@ export class WorkspaceRuntime {
   readonly stateClock: StateClock;
   /** O "Rever o dia": grava o que a cena desenha (retrato de 5 em 5 min mais as mudanças) e lê o dia gravado. */
   readonly timeline: TimelineService;
+  /** A cena ao vivo (CYNO_SCENE_LIVE=1; senão ausente): o servidor roda a simulação do Escritório enquanto alguém assiste. */
+  readonly sceneLive: SceneLiveService | undefined;
   /** Agentes de time com motor de CLI (as ferramentas MCP `submit_result` & cia mexem aqui). */
   readonly cliRunner: CliAgentRunner;
   /** Conversa direta do usuário com um agente de time (nota na tarefa ou conversa numa sessão própria). */
@@ -663,6 +666,8 @@ export class WorkspaceRuntime {
       if (event.type === "task:upserted" || event.type === "project:upserted" || event.type === "project:deleted" || event.type === "agent:terminal" || event.type === "agent:deleted") this.stateClock.observe();
       // "Rever o dia": o gravador marca que mudou e guarda o que só o log sabe (o mesmo ouvinte, sem outra assinatura).
       this.timeline.observe(event);
+      // Cena ao vivo: o mesmo ouvinte (a ordem não importa); sem ninguém assistindo só guarda o que o log sabe.
+      this.sceneLive?.observe(event);
       this.cliMaestro.handleEvent(event);
       this.plans.handleEvent(event);
       this.connectors.handleEvent(event);
@@ -874,20 +879,25 @@ export class WorkspaceRuntime {
       now: () => options.now().getTime(),
       log,
     });
+    // Os dados do Cyno de que a cena depende: os mesmos para o gravador da linha do tempo e para a cena ao vivo.
+    const sceneSource = () => ({
+      office: this.state.read(),
+      terminals: this.terminals.snapshot(),
+      forYou: this.forYou.list(),
+      projects: this.plans.list(),
+      progress: this.progressSnapshot(),
+      block: (agent: Agent) => options.availability?.block(agentEngine(agent), agent.model, { agentId: agent.id, workspaceId: id }),
+    });
     this.timeline = new TimelineService({
       dir: timelineDir(store.paths.root),
       enabled: process.env.CYNO_TIMELINE !== "0",
-      source: () => ({
-        office: this.state.read(),
-        terminals: this.terminals.snapshot(),
-        forYou: this.forYou.list(),
-        projects: this.plans.list(),
-        progress: this.progressSnapshot(),
-        block: (agent) => options.availability?.block(agentEngine(agent), agent.model, { agentId: agent.id, workspaceId: id }),
-      }),
+      source: sceneSource,
       now: () => options.now().getTime(),
       log,
     });
+    this.sceneLive = sceneLiveEnabled()
+      ? new SceneLiveService({ workspaceId: id, workspaceName: () => options.workspaceName?.(id) ?? id, source: sceneSource, now: () => options.now().getTime(), idleMs: sceneLiveIdleMs(), log })
+      : undefined;
   }
 
   /** Para o terminal do agente e revoga o token; a promessa fica guardada até o processo parar. */
@@ -1313,6 +1323,7 @@ export class WorkspaceRuntime {
     this.orchestrator.stop();
     await this.stateClock.stop();
     this.timeline.stop();
+    this.sceneLive?.dispose();
     this.unsubscribeTerminals();
     this.agentChat.close();
     this.unsubscribeAvailability();

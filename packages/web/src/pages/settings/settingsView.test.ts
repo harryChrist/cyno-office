@@ -71,7 +71,7 @@ describe("seção das Configurações no endereço", () => {
 
 describe("áreas das Configurações", () => {
   it("Da plataforma: acesso, motores, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
-    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "modelos-padrao", "cyno-ajustes", "avisos", "conectores-locais", "historico", "versao", "escritorio"]);
+    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "modelos-padrao", "cyno-ajustes", "avisos", "conectores-locais", "historico", "versao", "escritorio", "atalhos"]);
     expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "acesso", "pastas", "seguranca", "distribuicao", "relatorios", "aprovacoes", "conectores"]);
     // As áreas vêm em ordem na página (toda a plataforma antes do workspace).
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id));
@@ -79,7 +79,7 @@ describe("áreas das Configurações", () => {
 
   it("o selo de cada seção bate com a área (e a aparência é só do navegador)", () => {
     for (const section of SETTINGS_SECTIONS) {
-      if (section.id === "escritorio") expect(section.seal).toBe("navegador");
+      if (section.id === "escritorio" || section.id === "atalhos") expect(section.seal).toBe("navegador");
       else expect(section.seal).toBe(section.area);
     }
     expect(SEAL_LABELS).toEqual({ plataforma: "Toda a plataforma", workspace: "Só este workspace", navegador: "Só neste navegador" });

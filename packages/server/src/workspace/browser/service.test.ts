@@ -113,7 +113,7 @@ describe("BrowserService (Chromium de verdade)", { timeout: 60_000 }, () => {
   it("sem a exceção dos testes, a rede local e o próprio app ficam bloqueados (e file://)", async () => {
     const { service } = await makeService({ allowPrivate: false });
     await expect(service.open("clara", `${site.url}/`)).rejects.toThrow(/Local network addresses/);
-    await expect(service.open("clara", "http://localhost:3001")).rejects.toThrow(/Local network addresses/);
+    await expect(service.open("clara", "http://localhost:3068")).rejects.toThrow(/Local network addresses/);
     await expect(service.open("clara", "file:///etc/passwd")).rejects.toThrow(/Only http and https/);
     await expect(service.open("clara", "chrome://settings")).rejects.toThrow(/Only http and https/);
     expect(service.state().tabs).toEqual([]);

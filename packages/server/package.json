@@ -14,9 +14,10 @@
     "auth:reset-2fa": "tsx src/platform/auth/cli.ts reset-2fa",
     "lab:setup": "tsx src/dev/lab-cli.ts",
     "usage:backfill": "tsx src/engines/usage/backfill-cli.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc -b ../cena && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@cyno/cena": "*",
     "@cyno/shared": "*",
     "@fastify/websocket": "^11.3.7",
     "@lydell/node-pty": "1.2.0-beta.15",

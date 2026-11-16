@@ -4,7 +4,7 @@ import type { OfficeState } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { DELIVERY_REWARD, START_COINS, TASK_REWARD, TURN_REWARD, Wallets } from "../../../../cena/client/src/world/social/wallet";
 import { makeAgent, makeLogEntry, makeRoom, makeTask } from "../../test-fixtures";
-import { memoriaInicial, montarRetrato, type EntradaDoRetrato, type MemoriaDaCena } from "./retrato";
+import { memoriaInicial, montarRetrato, type EntradaDoRetrato, type MemoriaDaCena } from "@cyno/shared/cena";
 
 const AGORA = Date.parse("2026-11-12T12:00:00.000Z");
 

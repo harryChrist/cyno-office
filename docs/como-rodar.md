@@ -8,8 +8,8 @@ Node >= 22.12 e npm. O Node 20 não serve, porque o Vite 8 e o Vitest 5 exigem 2
 npm install
 npm run dev
 ```
-- O server roda com `tsx watch` em 127.0.0.1:3001, e o web com Vite em 0.0.0.0:5173.
-- Abra `http://<ip-do-servidor>:5173`. Por exemplo: http://192.168.1.20:5173.
+- O server roda com `tsx watch` em 127.0.0.1:3068, e o web com Vite em 0.0.0.0:3067.
+- Abra `http://<ip-do-servidor>:3067`. Por exemplo: http://192.168.1.20:3067.
 - O Vite serve **HTTP** por padrão. O ditado por voz precisa de contexto seguro (o microfone não funciona em `http://<ip-da-rede>`): rode com `WEB_HTTPS=1 npm run dev` para HTTPS com certificado autoassinado (`@vitejs/plugin-basic-ssl`, cobrindo `localhost` e os IPs da máquina; na primeira visita "Avançado" → "Continuar") ou libere o endereço no Chrome em `chrome://flags/#unsafely-treat-insecure-origin-as-secure`. O proxy de `/api` e `/ws` é o mesmo nos dois modos.
 - Encerre com Ctrl+C (SIGINT). O server fecha as filas e os sockets.
 - O `npm install` não deve avisar de vulnerabilidades nem do script de instalação do esbuild: o `package.json` tem `overrides` do `minimatch` (`^11.0.5`, que zerou o `npm audit`) e `allowScripts` liberando só o esbuild (npm 11).
@@ -38,8 +38,8 @@ npm run dev
 
 ### Acesso pela rede (servidor headless)
 - O Vite escuta em `0.0.0.0` e repassa `/api` e `/ws` para o server, que só escuta em loopback.
-- **A senha é obrigatória** (veja "Primeiro acesso" abaixo e "Senha de acesso" em [decisoes-e-limitacoes.md](decisoes-e-limitacoes.md)): sem `auth.json` o app fica fechado até a senha ser criada. A segurança vive no próprio app; não depende de túnel nem de proxy. Para nem expor a porta na rede, use `WEB_HOST=127.0.0.1` e acesse por túnel SSH: `ssh -L 5173:127.0.0.1:5173 servidor` (e abra `http://localhost:5173`).
-- A porta é fixa (`strictPort`). Se a 5173 estiver ocupada, o Vite falha em vez de trocar de porta.
+- **A senha é obrigatória** (veja "Primeiro acesso" abaixo e "Senha de acesso" em [decisoes-e-limitacoes.md](decisoes-e-limitacoes.md)): sem `auth.json` o app fica fechado até a senha ser criada. A segurança vive no próprio app; não depende de túnel nem de proxy. Para nem expor a porta na rede, use `WEB_HOST=127.0.0.1` e acesse por túnel SSH: `ssh -L 3067:127.0.0.1:3067 servidor` (e abra `http://localhost:3067`).
+- A porta é fixa (`strictPort`). Se a 3067 estiver ocupada, o Vite falha em vez de trocar de porta.
 
 ## Com pm2
 O `ecosystem.config.cjs` já define dois processos: `maestri-server` (o server, sem watch) e `maestri-web` (compila a web e serve a versão compilada com `vite preview`, com o mesmo proxy e porta do dev). Ele lê um `.env` opcional na raiz e põe `~/.local/bin` no `PATH` (é onde ficam `claude` e `agy`).
@@ -57,18 +57,18 @@ pm2 save && pm2 startup  # opcional: subir junto com a máquina
 Para reiniciar só uma parte: `pm2 restart maestri-server` ou `pm2 restart maestri-web`. Os dados ficam em `./data` (ou `DATA_DIR`). As CLIs dos agentes (`claude` etc.) precisam estar instaladas e logadas no usuário que roda o pm2.
 
 ## Com Docker
-A imagem (`Dockerfile`, Node 22 Debian slim) traz o server, o web já compilado, `python3` (cerca de arquivos), o Chromium do Playwright com as bibliotecas dele (navegador dos agentes) e o Claude Code. Um contêiner roda os dois processos (`concurrently`: server via `tsx` em `127.0.0.1:3001` e `vite preview` em `0.0.0.0:5173`, que faz proxy de `/api` e `/ws`). **Só a porta 5173 é publicada**; o server nunca fica exposto. Roda como o usuário `node` (uid 1000), com `tini` como init.
+A imagem (`Dockerfile`, Node 22 Debian slim) traz o server, o web já compilado, `python3` (cerca de arquivos), o Chromium do Playwright com as bibliotecas dele (navegador dos agentes) e o Claude Code. Um contêiner roda os dois processos (`concurrently`: server via `tsx` em `127.0.0.1:3068` e `vite preview` em `0.0.0.0:3067`, que faz proxy de `/api` e `/ws`). **Só a porta 3067 é publicada**; o server nunca fica exposto. Roda como o usuário `node` (uid 1000), com `tini` como init.
 
 ```bash
-docker compose up -d --build     # http://localhost:5173
+docker compose up -d --build     # http://localhost:3067
 docker compose logs -f cyno
 docker compose ps                # STATUS "healthy" (HEALTHCHECK em /api/health do server)
 ```
-Sem Compose: `docker build -t cyno . && docker run -d --name cyno -p 5173:5173 -v cyno-data:/data -v cyno-home:/home/node cyno`.
+Sem Compose: `docker build -t cyno . && docker run -d --name cyno -p 3067:3067 -v cyno-data:/data -v cyno-home:/home/node cyno`.
 
 - **Dados:** o volume `cyno-data` é o `DATA_DIR=/data` (workspaces, projetos, `auth.json`). Reiniciar ou recriar o contêiner mantém tudo. Backup: `docker run --rm -v cyno-data:/data -v "$PWD":/b debian tar czf /b/cyno-data.tgz -C /data .`.
 - **Configuração:** um `.env` na raiz (opcional; veja `.env.example`) é lido pelo Compose. Domínio de túnel ou proxy reverso: `WEB_ALLOWED_HOSTS=app.exemplo.com`. Para trocar a porta, mude `WEB_PORT` no `.env` (o Compose publica a mesma porta).
-- **Senha:** no primeiro acesso, veja o código de configuração com `docker compose exec cyno npm run auth:code` (ele também aparece em `docker compose logs cyno`); abra `http://localhost:5173` e crie a senha pela tela. Alternativas: `docker compose exec cyno npm run auth:set-password -w @cyno/server` (sem eco; precisa de terminal), `... auth:clear ...` para voltar ao primeiro acesso e `... auth:reset-2fa ...` para desligar o 2FA. O server relê o arquivo sozinho. O app nunca fica aberto sem senha; `CYNO_AUTH=off` não é para o contêiner.
+- **Senha:** no primeiro acesso, veja o código de configuração com `docker compose exec cyno npm run auth:code` (ele também aparece em `docker compose logs cyno`); abra `http://localhost:3067` e crie a senha pela tela. Alternativas: `docker compose exec cyno npm run auth:set-password -w @cyno/server` (sem eco; precisa de terminal), `... auth:clear ...` para voltar ao primeiro acesso e `... auth:reset-2fa ...` para desligar o 2FA. O server relê o arquivo sozinho. O app nunca fica aberto sem senha; `CYNO_AUTH=off` não é para o contêiner.
 - **Login das CLIs:** nada do seu `~/.claude` do host é montado. Entre uma vez no contêiner: `docker compose exec cyno claude` (siga o login da sua assinatura e saia). O login fica no volume `cyno-home` (`/home/node`), então sobrevive a reinícios e atualizações. Confira com `docker compose exec cyno claude auth status`.
 - **Outras CLIs:** só o Claude Code vem na imagem. Para Codex e OpenCode, construa com `docker compose build --build-arg EXTRA_CLIS="@openai/codex opencode-ai"` (ou `build.args` no compose); um pacote que falhar só gera um aviso e o build segue. Quem tem instalador próprio (Antigravity `agy`, Freebuff, Hermes, OpenClaw) pode ser instalado dentro do contêiner (`docker compose exec cyno ...`, indo para o volume do home, em `~/.local/bin`; acrescente-o ao `PATH` com `PATH` no `.env`/`environment` se preciso) e logado do mesmo jeito. `GET /api/engines` mostra o que o server achou.
 - **Atualizar:** `git pull && npm run docker:up`. Os volumes continuam. O `npm run docker:up` grava o `version.json` (commit, data, ramo e número de commits) e depois roda `docker compose up -d --build`; a imagem não leva a pasta `.git`, e é esse arquivo que faz a tela mostrar o commit e comparar com o GitHub. Sem ele (por exemplo, com `docker compose up --build` direto), a tela mostra só a versão do package.json e a verificação fica como "não foi possível verificar". Para atualizar só o Claude Code, `docker compose build --no-cache` refaz a camada.
@@ -101,7 +101,7 @@ Agentes com `engine: "claude"` rodam no **Claude Code logado com a sua assinatur
    ```bash
    npm run lab:up
    ```
-   Sobe server (`127.0.0.1:3101`) e web (`127.0.0.1:5273`) com `DATA_DIR` temporário em `/tmp/cyno-lab-*`, **aberto** (`CYNO_AUTH=off`; um `DATA_DIR` novo não tem `auth.json`), com cotas, Chromium (ligue com `LAB_BROWSER=1`: o perfil nasce novo dentro do `DATA_DIR` de teste) e Remote Control desligados, e roda o setup contra ele. Ctrl+C derruba tudo e apaga a pasta (`LAB_KEEP=1` mantém; `LAB_SERVER_PORT`, `LAB_WEB_PORT` e `LAB_DATA_DIR` mudam portas e pasta; 3001 e 5173 são recusadas). Em segundo plano, guarde o PID e derrube com `kill -TERM <pid>` (nunca `pkill`). Os `curl` abaixo funcionam trocando 3001 por 3101. Não depende do app real nem da senha dele.
+   Sobe server (`127.0.0.1:3101`) e web (`127.0.0.1:5273`) com `DATA_DIR` temporário em `/tmp/cyno-lab-*`, **aberto** (`CYNO_AUTH=off`; um `DATA_DIR` novo não tem `auth.json`), com cotas, Chromium (ligue com `LAB_BROWSER=1`: o perfil nasce novo dentro do `DATA_DIR` de teste) e Remote Control desligados, e roda o setup contra ele. Ctrl+C derruba tudo e apaga a pasta (`LAB_KEEP=1` mantém; `LAB_SERVER_PORT`, `LAB_WEB_PORT` e `LAB_DATA_DIR` mudam portas e pasta; 3068 e 3067 são recusadas). Em segundo plano, guarde o PID e derrube com `kill -TERM <pid>` (nunca `pkill`). Os `curl` abaixo funcionam trocando 3068 por 3101. Não depende do app real nem da senha dele.
 1. Crie o workspace de teste (idempotente; com o server no ar vai pela API, parado abre os dados direto; não mexe no "Principal"). Com `lab:up` isto já foi feito; à mão, contra um server sem senha:
    ```bash
    LAB_API_URL=http://127.0.0.1:3101 npm run lab:setup
@@ -109,7 +109,7 @@ Agentes com `engine: "claude"` rodam no **Claude Code logado com a sua assinatur
    Ele cria **Laboratório** (`laboratorio`): Sala do Maestro com o Maestro em motor `claude`, a sala/time **Conteúdo** com o agente **Redator** (motor `claude`, foco "escrever textos curtos") e a sala/time **Pesquisa** com o agente **Pesquisador** (motor `gemini`, no Antigravity, modelo `gemini-3.8-flash-medium`; veja abaixo).
 2. Suba o app (`npm run dev`) e mande um pedido ao Maestro do Laboratório (pela caixa "Peça ao Maestro…" no workspace Laboratório, ou):
    ```bash
-   curl -s -X POST http://127.0.0.1:3001/api/w/laboratorio/tasks -H 'content-type: application/json' \
+   curl -s -X POST http://127.0.0.1:3068/api/w/laboratorio/tasks -H 'content-type: application/json' \
      -d '{"prompt":"Escreva um slogan curto para uma pizzaria"}'
    ```
 3. O que deve acontecer: o terminal do Maestro sobe (`claude -p … stream-json`, na pasta `data/workspaces/laboratorio/agents/maestro/`), ele chama `get_team` e `delegate_task` pelo MCP, o terminal do Redator sobe e chama `submit_result`, o resultado volta para a sessão do Maestro e ele fecha com `concluir_pedido`. Tudo aparece no log de trabalho (Ctrl/⌘+K no app, ou `GET /api/w/laboratorio/tasks/<id>/log`), com `provider: "claude"` no que veio da CLI.
@@ -141,11 +141,11 @@ O server nunca mexe na sua configuração do agy: o MCP do escritório vai em `d
 
 **Smoke test supervisionado (Maestro no Claude Code → Pesquisador no Antigravity)** — gasta um pouco das duas assinaturas:
 1. `npm run lab:setup` (cria ou acerta o Pesquisador) e `npm run dev`.
-2. Opcional: `curl -s http://127.0.0.1:3001/api/engines` deve mostrar Claude Code e Antigravity com `"available": true`.
-3. Ligue o Pesquisador sozinho primeiro (sobe o `agy` e não gasta nada até a primeira mensagem): `curl -s -X POST http://127.0.0.1:3001/api/w/laboratorio/agents/<id do Pesquisador>/terminal/start` → `"status":"idle"` (o id sai no fim do `lab:setup`).
+2. Opcional: `curl -s http://127.0.0.1:3068/api/engines` deve mostrar Claude Code e Antigravity com `"available": true`.
+3. Ligue o Pesquisador sozinho primeiro (sobe o `agy` e não gasta nada até a primeira mensagem): `curl -s -X POST http://127.0.0.1:3068/api/w/laboratorio/agents/<id do Pesquisador>/terminal/start` → `"status":"idle"` (o id sai no fim do `lab:setup`).
 4. Mande o pedido: pela caixa "Peça ao Maestro…" do Laboratório, ou
    ```bash
-   curl -s -X POST http://127.0.0.1:3001/api/w/laboratorio/tasks -H 'content-type: application/json' \
+   curl -s -X POST http://127.0.0.1:3068/api/w/laboratorio/tasks -H 'content-type: application/json' \
      -d '{"prompt":"Peça ao Pesquisador 3 curiosidades curtas sobre pizza"}'
    ```
 5. O que deve acontecer: o Maestro chama `get_team` e `delegate_task` para o Pesquisador; o terminal dele mostra `[init] conversa <id> · modelo gemini-3.8-flash-medium · permissões: request-review`, às vezes um `read_file` do esquema da ferramenta (em `~/.gemini/antigravity-cli/mcp/office/`), depois `mcp__office__submit_result` "ok"; o resultado volta ao Maestro, que fecha com `complete_request`. No app, a tela de trabalho do Pesquisador mostra o selo "Antigravity".
@@ -159,7 +159,7 @@ npm test                # Vitest
 npx playwright install chromium   # uma vez
 npm run test:e2e        # Playwright
 ```
-- O e2e sobe o server (3001) e o Vite (5173, só em 127.0.0.1) com `DATA_DIR` temporário em `$TMPDIR/cyno-e2e`. O e2e liga o modo simulado (`AGENT_RUNNER=mock`, só ele usa agentes simulados). As tarefas ficam rápidas (`MOCK_MIN_MS=50`, `MOCK_MAX_MS=150`) e não há sorteio de aprovação (`MOCK_APPROVAL_RATE=0`). As portas 3001 e 5173 precisam estar livres.
+- O e2e sobe o server (3068) e o Vite (3067, só em 127.0.0.1) com `DATA_DIR` temporário em `$TMPDIR/cyno-e2e`. O e2e liga o modo simulado (`AGENT_RUNNER=mock`, só ele usa agentes simulados). As tarefas ficam rápidas (`MOCK_MIN_MS=50`, `MOCK_MAX_MS=150`) e não há sorteio de aprovação (`MOCK_APPROVAL_RATE=0`). As portas 3068 e 3067 precisam estar livres.
 - O Chromium headless roda com `--use-angle=swiftshader --enable-unsafe-swiftshader` (WebGL por software, sem warning no console). Use as mesmas flags em scripts próprios.
 - O Playwright **tira `DISPLAY`** do ambiente do Chromium (`browserEnv()` em `playwright.config.ts`). Numa sessão SSH com X11, o ANGLE tentava Vulkan via XCB, falhava e o WebGL sumia.
 - Scripts próprios de navegador não passam por essa config: rode-os com `env -u DISPLAY` (por exemplo `env -u DISPLAY node meu-script.mjs`).
@@ -178,7 +178,7 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 
 | Variável | Padrão | Uso |
 |---|---|---|
-| `PORT` | 3001 | porta do server (o Vite usa para o proxy) |
+| `PORT` | 3068 | porta do server (o Vite usa para o proxy) |
 | `HOST` | 127.0.0.1 | host do server |
 | `DATA_DIR` | `./data` | estado e Cérebros (relativo à raiz do repo) |
 | `LOG_LEVEL` | info | nível do pino |
@@ -213,7 +213,7 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `BROWSER_BLOCKED_HOSTS` | (vazio) | domínios que o navegador nunca abre (vírgulas) |
 | `CYNO_MIGRATE_NO_GROUP` | (desligada) | `1` = a migração para projetos não agrupa os pedidos "N/M" (só vale no primeiro boot de um workspace antigo) |
 | `SYSTEM_LOG` / `SYSTEM_LOG_SAMPLE_MS` | 1 / 60000 | atividade do servidor em `DATA_DIR/activity` e intervalo da amostra (`0` desliga) |
-| `WEB_HOST` / `WEB_PORT` | 0.0.0.0 / 5173 | Vite |
+| `WEB_HOST` / `WEB_PORT` | 0.0.0.0 / 3067 | Vite |
 | `WEB_ALLOWED_HOSTS` | (vazio) | domínios extras aceitos no cabeçalho Host da UI (túnel, proxy reverso; vírgulas). Sem ela vale o padrão do Vite |
 | `WEB_HTTPS` | 0 | `1` serve HTTPS autoassinado |
 | `LAB_SERVER_PORT` / `LAB_WEB_PORT` / `LAB_DATA_DIR` / `LAB_KEEP` / `LAB_API_URL` | 3101 / 5273 / temporária / 0 / server local | só do `lab:up` e `lab:setup` |

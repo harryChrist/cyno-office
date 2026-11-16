@@ -27,6 +27,8 @@
     "client/src",
     "shared",
     "index.ts",
-    "arte.ts"
+    "arte.ts",
+    "sim.ts",
+    "tipos.ts"
   ]
 }

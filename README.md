@@ -45,7 +45,7 @@ O modo simulado (`AGENT_RUNNER=mock`) existe só para os testes automáticos.
 
 ## Como rodar
 
-Três caminhos (detalhes em [docs/como-rodar.md](docs/como-rodar.md)). Em todos, a UI fica em `http://localhost:5173` (ou `http://<ip-do-servidor>:5173` na rede local) e na primeira subida o server cria o workspace de exemplo.
+Três caminhos (detalhes em [docs/como-rodar.md](docs/como-rodar.md)). Em todos, a UI fica em `http://localhost:3067` (ou `http://<ip-do-servidor>:3067` na rede local) e na primeira subida o server cria o workspace de exemplo.
 
 **Desenvolvimento** (Node >= 22.12):
 
@@ -71,7 +71,7 @@ docker compose exec cyno claude     # login da sua assinatura do Claude Code (fi
 
 | Script | O que faz |
 |---|---|
-| `npm run dev` | server (`tsx watch`, porta 3001, só loopback) e web (Vite, porta 5173) juntos |
+| `npm run dev` | server (`tsx watch`, porta 3068, só loopback) e web (Vite, porta 3067) juntos |
 | `npm start` | build do web e execução sem watch |
 | `npm run build` | build de todos os pacotes |
 | `npm run typecheck` | `tsc` em todos os pacotes e na raiz |

@@ -31,6 +31,7 @@ import {
 import { Character, dirOf, facing } from './character';
 import { Elevator } from './elevator';
 import { RoomFxState } from './github';
+import { RemoteScene, type RemoteDelta, type RemoteFull } from './remote'; // CYNO-PATCH 14
 import { RoomState } from './room-state';
 import { countShells, latestShellDone, shellLabel, shellStage, shellWaitSince, spinDir, spinPhase, yawnPhase } from './shell';
 import { SpotRegistry } from './spots';
@@ -141,6 +142,8 @@ export class Sim {
   visitorIntent: VisitorIntent = { ...NO_INTENT };
   /** Visita: as luzes do prédio (aplicadas a cada snapshot e a cada segundo). */
   visitLight: VisitLight = 'live';
+  /** CYNO-PATCH 14: modo remoto (cena ao vivo): quem simula é o servidor; este `Sim` só desenha o estado recebido. */
+  readonly remote: RemoteScene;
 
   /** `storage` das carteiras: null = só em memória (o timelapse não mexe nas moedinhas de verdade). */
   constructor(
@@ -150,6 +153,7 @@ export class Sim {
     mode: SimMode = {},
   ) {
     this.visit = !!mode.visit;
+    this.remote = new RemoteScene(this, art); // CYNO-PATCH 14
     this.social = new Social(this, storage);
     this.building = assembleBuilding(columnsFor([]), [], 0);
     this.finder = new PathFinder(this.building.grid);
@@ -157,9 +161,65 @@ export class Sim {
     for (const s of this.spots.ofKind('elevator')) this.elevators.push(new Elevator(this.elevators.length, s.id));
   }
 
+  // =================================================================== modo remoto (CYNO-PATCH 14)
+
+  /** Estado inteiro da cena ao vivo (liga o modo remoto na primeira vez: o mundo local é descartado). */
+  applyRemoteFull(full: RemoteFull, now: number): void {
+    if (!this.remote.on) this.remote.enter(now, this.lastSnapshot);
+    this.remote.applyFull(full, now);
+  }
+
+  /** O que mudou desde o último estado (ignorado fora do modo remoto). */
+  applyRemoteDelta(delta: RemoteDelta, now: number): void {
+    if (this.remote.on) this.remote.applyDelta(delta, now);
+  }
+
+  /** Para os personagens no lugar (a conexão caiu) ou os solta de novo. */
+  freezeRemote(frozen: boolean): void {
+    this.remote.frozen = frozen;
+  }
+
+  /** Sai do modo remoto: volta a simulação local, com carga inicial normal a partir do último retrato. */
+  stopRemote(now: number): void {
+    if (!this.remote.on) return;
+    this.remote.leave();
+    this.clearWorld(now);
+    const snap = this.lastSnapshot;
+    if (snap) this.applySnapshot(snap, now);
+  }
+
+  /** Esvazia o mundo (personagens, salas, prédio, vida social) para recomeçar do zero. */
+  clearWorld(now: number): void {
+    for (const id of [...this.chars.keys()]) this.spots.releaseAll(id);
+    this.spots.releaseAll(GHOST_OWNER);
+    this.chars.clear();
+    this.rooms.clear();
+    this.social.reset(now);
+    this.effects.length = 0;
+    this.machineUntil.clear();
+    this.stallBusy.clear();
+    for (const e of this.elevators) e.reset();
+    this.building = assembleBuilding(columnsFor([]), [], this.layoutVersion + 1);
+    this.layoutVersion++;
+    this.finder.setGrid(this.building.grid);
+    this.spots.setSpots(this.building.spots);
+    this.initialized = false;
+    this.gapSince = 0;
+    this.shrinkPending = false;
+    this.nextHousekeeping = 0;
+    this.visitor = null;
+  }
+
   // =================================================================== snapshot
 
   applySnapshot(input: OfficeSnapshot, now: number): void {
+    // CYNO-PATCH 14: no modo remoto o retrato só atualiza o `info` e a aparência de quem o servidor criou
+    if (this.remote.on) {
+      this.lastSnapshot = input;
+      this.now = now;
+      this.remote.snapshot(input, now);
+      return;
+    }
     let snap = this.injected.rooms.length || this.injected.agents.length ? { ...input, rooms: [...input.rooms, ...this.injected.rooms], agents: [...input.agents, ...this.injected.agents] } : input;
     if (this.agentPatches.size) {
       const patches = this.agentPatches;
@@ -581,6 +641,11 @@ export class Sim {
 
   update(dt: number, now: number): void {
     this.now = now;
+    // CYNO-PATCH 14: no modo remoto nada é planejado nem movido aqui
+    if (this.remote.on) {
+      this.remote.update(dt, now);
+      return;
+    }
     for (const e of this.elevators) e.update(dt, now);
     this.updateRooms(now);
     this.social.update(now);
@@ -760,7 +825,7 @@ export class Sim {
   }
 
   /** Contas presentes e quadro kanban de cada sala. */
-  private refreshRoomInfo(): void {
+  refreshRoomInfo(): void { // CYNO-PATCH 14: público, o modo remoto também o usa
     for (const room of this.rooms.values()) {
       const accs = new Set<string>();
       const board: RoomState['board'] = [];
@@ -1873,6 +1938,7 @@ export class Sim {
 
   /** Avança tudo instantaneamente para os destinos (usado ao voltar de uma aba oculta). */
   fastForward(now: number): void {
+    if (this.remote.on) return; // CYNO-PATCH 14: o servidor já andou por todos; a tela só espera o próximo estado
     this.now = now;
     for (const room of this.rooms.values()) {
       if (room.phase === 'building') room.setPhase('ready', now - 10_000);

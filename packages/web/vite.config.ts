@@ -13,8 +13,8 @@ try {
 }
 
 // O server (Fastify) escuta só em 127.0.0.1; o Vite expõe a UI na rede e faz proxy.
-const serverPort = Number(process.env.PORT || 3001);
-const webPort = Number(process.env.WEB_PORT || 5173);
+const serverPort = Number(process.env.PORT || 3068);
+const webPort = Number(process.env.WEB_PORT || 3067);
 const webHost = process.env.WEB_HOST || "0.0.0.0";
 /**
  * HTTP por padrão (escolha do usuário). `WEB_HTTPS=1` liga HTTPS com certificado autoassinado:

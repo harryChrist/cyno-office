@@ -1,5 +1,5 @@
-import { agentEngine, friendlyTerminalError, isCliEngine, type AttentionKind, type Agent, type AgentTerminalInfo, type Blocked, type ForYouItem } from "@cyno/shared";
-import type { AgentStatus } from "@cyno/cena";
+import { agentEngine, friendlyTerminalError, isCliEngine, type AttentionKind, type Agent, type AgentTerminalInfo, type Blocked, type ForYouItem } from "../index";
+import type { AgentStatus } from "@cyno/cena/tipos";
 
 /**
  * Estado do agente do Cyno -> estado do motor (tabela 2.3 do plano da Junção V2). Puro: recebe tudo pronto.

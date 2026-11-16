@@ -1,5 +1,5 @@
-import type { AgentLogEntry, AgentLogThread } from "@cyno/shared";
-import { tasksOf, threadsOf } from "../../store/agentLog";
+import type { AgentLogEntry, AgentLogThread } from "../index";
+import { tasksOf, threadsOf } from "../agent-log-threads";
 
 /** Subagentes rodando agora nas tarefas abertas do agente (as que ainda não têm status final no log). */
 export function runningSubagents(entries: readonly AgentLogEntry[]): AgentLogThread[] {

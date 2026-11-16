@@ -1,28 +1,25 @@
 import { useEffect } from "react";
 import { useWorkPanelStore } from "../agentWork/workPanelStore";
+import { DEFAULT_SHORTCUTS, matchesBinding, shortcuts, type KeyBinding } from "./shortcuts";
 
-/** Atalho no Mac é ⌘K; no resto, Ctrl+K. */
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-export const COMMAND_SHORTCUT_LABEL = IS_MAC ? "⌘K" : "Ctrl K";
-
-/** Ctrl/⌘+K: o atalho do diálogo de comando. */
-export function isCommandShortcut(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">): boolean {
-  return event.key.toLowerCase() === "k" && (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+/** O atalho do chat do Maestro (padrão Ctrl/⌘+K; o dono troca em Configurações > Atalhos do teclado). */
+export function isCommandShortcut(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">, binding: KeyBinding = DEFAULT_SHORTCUTS.maestro): boolean {
+  return matchesBinding(event, binding);
 }
 
 /**
- * Atalho Ctrl/⌘+K: abre o painel do Maestro de qualquer página (volta ao Office) e põe o foco no
- * campo. Não desenha nada (o botão da barra de cima saiu; a entrada é a caixa do rodapé, TaskBox).
+ * O atalho do Maestro (padrão Ctrl/⌘+K): abre o painel do Maestro de qualquer página (volta ao Office) e põe o foco no
+ * campo. A combinação é lida a cada tecla, então trocar nas Configurações vale na hora. Não desenha nada (o botão da barra de cima saiu; a entrada é a caixa do rodapé, TaskBox).
  */
 export function CommandShortcut() {
   const openMaestro = useWorkPanelStore((state) => state.openMaestro);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isCommandShortcut(event) || event.defaultPrevented) return;
+      if (!isCommandShortcut(event, shortcuts().maestro) || event.defaultPrevented) return;
       // Outra janela modal aberta: o atalho não empilha um diálogo por cima dela.
       if (document.querySelector("dialog[open]")) return;
-      // No terminal do Maestro o Ctrl+K é do Claude Code (apaga até o fim da linha).
+      // No terminal do Maestro as teclas são do Claude Code (o Ctrl+K apaga até o fim da linha).
       if (event.target instanceof Element && event.target.closest(".mterm")) return;
       event.preventDefault();
       openMaestro();

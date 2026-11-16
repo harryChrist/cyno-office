@@ -1,6 +1,7 @@
 import { findMaestroAgent, MOCK_PROMPT_MARKERS, type Task } from "@cyno/shared";
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { DictationStatus, MicButton } from "../dictation/MicButton";
+import { bindingKeys, bindingText, IS_MAC, useShortcuts } from "../hud/shortcuts";
 import { useOverlayInsets } from "../hud/useOverlayInsets";
 import { useChatStatusStore } from "../store/chatStatusStore";
 import { useOfficeStore } from "../store/officeStore";
@@ -116,6 +117,7 @@ function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string):
  * e clicável; Esc, o chevron ou um clique no escritório recolhem.
  */
 export function TaskBox() {
+  const maestroKeys = useShortcuts().maestro;
   const maestro = useMaestroPrompt();
   // Marcadores [aprovar]/[falhar] só valem no modo simulado do servidor (só testes).
   const simulated = useSimulated();
@@ -174,7 +176,16 @@ export function TaskBox() {
             )}
           </span>
           <span className="taskbox__keys">
-            <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> nova linha{open && <> · <kbd>Esc</kbd> recolhe</>}
+            <span className="taskbox__shortcut" title={`${bindingText(maestroKeys, IS_MAC)} abre este chat de qualquer tela. Para trocar: Configurações, Atalhos do teclado.`} data-testid="taskbox-shortcut">
+              {bindingKeys(maestroKeys, IS_MAC).map((key, index) => (
+                <Fragment key={key}>
+                  {index > 0 && "+"}
+                  <kbd>{key}</kbd>
+                </Fragment>
+              ))}{" "}
+              abre de qualquer tela
+            </span>{" "}
+            · <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> nova linha{open && <> · <kbd>Esc</kbd> recolhe</>}
           </span>
         </p>
         <div className="taskbox__compose">

@@ -49,7 +49,7 @@ import type { CliAdapter, TerminalAccess, TerminalAgent, TerminalEvent, Terminal
 
 /** Configuração dos terminais de CLI (igual para todos os workspaces). */
 export type TerminalsConfig = {
-  /** URL do servidor MCP "office" (sempre 127.0.0.1), ex.: http://127.0.0.1:3001/mcp. */
+  /** URL do servidor MCP "office" (sempre 127.0.0.1), ex.: http://127.0.0.1:3068/mcp. */
   mcpUrl: string;
   /** Ocioso por tanto tempo = processo parado (a próxima ordem retoma a sessão). Padrão: 15 min. */
   idleMs: number;
@@ -114,7 +114,7 @@ export const DEFAULT_ONE_SHOT_TURN_MS = 15 * 60_000;
 export const DEFAULT_MCP_READY_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_TERMINALS_CONFIG: TerminalsConfig = {
-  mcpUrl: "http://127.0.0.1:3001/mcp",
+  mcpUrl: "http://127.0.0.1:3068/mcp",
   idleMs: 15 * 60_000,
   maxRetries: 3,
   claude: {},

@@ -1,4 +1,4 @@
-import type { AgentInfo } from "@cyno/cena";
+import type { AgentInfo } from "@cyno/cena/tipos";
 import { memoriaDeEfeitosVazia, type MemoriaDeEfeitos } from "./efeitos";
 
 /** Quanto tempo um subagente que terminou fica no retrato como `done` (o motor entrega ao pai e o manda embora). */
