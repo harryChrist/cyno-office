@@ -1,4 +1,4 @@
-import { MEDIA_LIMITS, MEDIA_STATUSES, type MediaItem } from "@cyno/shared";
+import { MEDIA_FOLDER_LIMITS, MEDIA_LIMITS, MEDIA_STATUSES, type MediaItem } from "@cyno/shared";
 import { z } from "zod";
 import { RENDER_MAX_SIDE, type RenderInput } from "../workspace/browser/render";
 import { MediaToolError, type MediaService } from "../workspace/media/media-service";
@@ -13,7 +13,7 @@ import { defineTool, type McpTool, type McpToolResult } from "./protocol";
  */
 
 export type MediaToolsDeps = {
-  media: Pick<MediaService, "list" | "find" | "update" | "addBuffer" | "importFile" | "fileOf" | "missing">;
+  media: Pick<MediaService, "list" | "find" | "update" | "addBuffer" | "importFile" | "fileOf" | "missing" | "folders" | "exportTo">;
   /** Pasta do agente (data/workspaces/<ws>/agents/<id>). */
   agentDir: (agentId: string) => string;
   /** Tarefa em curso do agente (a mídia nova fica ligada a ela). */
@@ -27,13 +27,18 @@ export type MediaToolsDeps = {
 const ok = (text: string): McpToolResult => ({ text });
 const fail = (text: string): McpToolResult => ({ text, isError: true });
 
+const sizeText = (bytes: number): string => (bytes >= 1024 * 1024 * 1024 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : bytes >= 1024 * 1024 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+
+const FOLDER_PARAM = 'Folder path in the library, e.g. "Livros/Matemática" (up to 5 levels, created if missing); "" = root. Names in Brazilian Portuguese.';
+
 const describe = (item: MediaItem): string =>
   [
-    `${item.id} “${item.title}” — ${item.kind} ${item.mime}${item.width ? ` ${item.width}x${item.height}` : ""}, ${Math.round(item.size / 1024)} KB`,
+    `${item.id} “${item.title}” — ${item.kind} ${item.mime}${item.width ? ` ${item.width}x${item.height}` : ""}, ${sizeText(item.size)}`,
     `status ${item.status}`,
     `by ${item.createdBy}`,
     item.taskId ? `task ${item.taskId}` : "",
     item.forYouIds?.length ? `approval ${item.forYouIds.join(",")}` : "",
+    item.folder ? `folder: ${item.folder}` : "",
     item.where ? `where: ${item.where}` : "",
     item.publishedUrl ? `published at ${item.publishedUrl}` : "",
   ]
@@ -101,21 +106,22 @@ export function mediaTools(agentId: string, deps: MediaToolsDeps): McpTool[] {
   tools.push(
     defineTool({
       name: "media_save_file",
-      description: `Copies a file you made (in YOUR OWN agent folder, your working directory) into the workspace media library, linked to your current task. Returns the media id (use it in request_approval mediaIds). Accepted: png, jpg, webp, gif, svg, mp4, webm, mov, mp3, wav, ogg, pdf, txt, md, csv, json, html. Limits: image 25 MB, video 300 MB, audio 50 MB, other 50 MB. Files outside your folder (or links leaving it) are refused.`,
+      description: `Copies a file you made (in YOUR OWN agent folder, your working directory) into the workspace media library, linked to your current task. Returns the media id (use it in request_approval mediaIds). Any file type is accepted (images, video, audio, pdf, text, office documents, ebooks, archives...; unknown types are stored as a generic file) and there is no size limit. Optional folder puts it in a library folder. Files outside your folder (or links leaving it) are refused.`,
       input: z.object({
         path: z.string().trim().min(1).max(500).describe("Path of the file, relative to your folder (or absolute inside it)"),
         title: z.string().trim().min(1).max(MEDIA_LIMITS.title).describe("Short title in Brazilian Portuguese"),
         note: z.string().trim().max(MEDIA_LIMITS.note).optional().describe("Optional note about the file"),
+        folder: z.string().trim().max(MEDIA_FOLDER_LIMITS.path).optional().describe(FOLDER_PARAM),
       }),
-      call: ({ path: file, title, note }) =>
+      call: ({ path: file, title, note, folder }) =>
         guard(async () => {
-          const item = await deps.media.importFile(deps.agentDir(agentId), file, { title, createdBy: agentId, ...(note ? { note } : {}), ...link() });
-          return ok(`Saved ${item.id} “${item.title}” (${item.kind}, ${Math.round(item.size / 1024)} KB). Attach it to the approval with request_approval(mediaIds: ["${item.id}"]).`);
+          const item = await deps.media.importFile(deps.agentDir(agentId), file, { title, createdBy: agentId, ...(note ? { note } : {}), ...(folder ? { folder } : {}), ...link() });
+          return ok(`Saved ${item.id} “${item.title}” (${item.kind}, ${sizeText(item.size)}${item.folder ? `, folder ${item.folder}` : ""}). Attach it to the approval with request_approval(mediaIds: ["${item.id}"]).`);
         }),
     }),
     defineTool({
       name: "media_view",
-      description: `Lets you LOOK at an item of the workspace media library (image, or a video's start/middle/end frames). The library folder is outside your folder, so this saves a reduced copy (max ${PREVIEW_SIDE} px) in your folder (previa/<id>.png) and returns its relative path: open it with your file-reading tool. Use it to review your own work or any item from media_list.`,
+      description: `Lets you LOOK at an item of the workspace media library (image, or a video's start/middle/end frames). The library folder is outside your folder, so this saves a reduced copy (max ${PREVIEW_SIDE} px) in your folder (previa/<id>.png) and returns its relative path: open it with your file-reading tool. Use it to review your own work or any item from media_list. For documents, spreadsheets, ebooks, PDFs and any other non-visual file use media_get_file instead.`,
       input: z.object({ id: z.string().trim().regex(/^M-\d{4,}$/, 'Use the media id, e.g. "M-0001"') }),
       call: ({ id }) =>
         guard(async () => {
@@ -126,21 +132,51 @@ export function mediaTools(agentId: string, deps: MediaToolsDeps): McpTool[] {
     }),
     defineTool({
       name: "media_list",
-      description: "Lists items of the workspace media library (newest first): id, title, kind, status, who made it, task, approval and where it was published. Filter by task, kind or status.",
+      description: "Lists items of the workspace media library (newest first): id, title, kind, status, folder, who made it, task, approval and where it was published. Filter by task, kind, status or folder (only items directly in that folder; use media_list_folders to see the folders).",
       input: z.object({
+        folder: z.string().trim().max(MEDIA_FOLDER_LIMITS.path).optional().describe('Only items directly in this folder, e.g. "Livros/Matemática"; "" = items in the root'),
         taskId: z.string().trim().max(80).optional().describe("Only media linked to this task (or its request)"),
         kind: z.enum(["image", "video", "audio", "document", "other"]).optional(),
         status: z.enum(MEDIA_STATUSES).optional().describe("rascunho (draft), aprovado (approved), publicado (published), descartado (discarded)"),
         limit: z.number().int().min(1).max(100).optional().describe("Default 20"),
       }),
-      call: ({ taskId, kind, status, limit }) => {
-        const items = deps.media.list({ ...(taskId ? { taskId } : {}), ...(kind ? { kind } : {}), ...(status ? { status } : {}), limit: limit ?? 20 });
+      call: ({ taskId, kind, status, limit, folder }) => {
+        const items = deps.media.list({ ...(folder !== undefined ? { folder } : {}), ...(taskId ? { taskId } : {}), ...(kind ? { kind } : {}), ...(status ? { status } : {}), limit: limit ?? 20 });
         return ok(items.length === 0 ? "No media found." : items.map(describe).join("\n"));
       },
     }),
     defineTool({
+      name: "media_list_folders",
+      description: "Lists the folders of the workspace media library (a folder path like \"Livros/Matemática\" can have subfolders), with how many items are directly in each and in total. Use a path as the folder filter of media_list or as the folder parameter of media_save_file and media_update.",
+      input: z.object({}),
+      call: () => {
+        const folders = deps.media.folders();
+        const items = deps.media.list();
+        const root = items.filter((item) => !item.folder).length;
+        if (folders.length === 0) return ok(`No folders yet (all ${items.length} items are in the root). Create one by passing folder to media_save_file or media_update.`);
+        const lines = folders.map((folder) => {
+          const direct = items.filter((item) => item.folder === folder).length;
+          const total = items.filter((item) => item.folder === folder || item.folder?.startsWith(`${folder}/`)).length;
+          return `${folder} — ${direct} item${direct === 1 ? "" : "s"}${total !== direct ? ` (${total} with subfolders)` : ""}`;
+        });
+        return ok([`${folders.length} folder${folders.length === 1 ? "" : "s"}; ${root} item${root === 1 ? "" : "s"} in the root:`, ...lines].join("\n"));
+      },
+    }),
+    defineTool({
+      name: "media_get_file",
+      description: `Copies the ORIGINAL file of a library item into your own folder (midia/<id>-<file name>) so you can read it with your file tools: PDFs, spreadsheets, documents, ebooks, text, audio, video, anything. The library lives outside your folder, so you cannot open it directly. Returns the relative path, type and size. It is a COPY: the library original never changes; to give back a new version, save your edited file with media_save_file. Large files are copied whole, so delete the copy from your folder when you are done. Use media_view instead to just look at an image or video frames.`,
+      input: z.object({ id: z.string().trim().regex(/^M-\d{4,}$/, 'Use the media id, e.g. "M-0001"') }),
+      call: ({ id }) =>
+        guard(async () => {
+          const item = deps.media.find(id);
+          if (!item) return fail(`Media ${id} does not exist (see media_list).`);
+          const copy = await deps.media.exportTo(item, deps.agentDir(agentId));
+          return ok(`Copied the original of ${item.id} “${item.title}” to "${copy.relative}" (path relative to your folder; ${item.kind} ${item.mime}, ${sizeText(copy.size)}). Open it with your file tools. This is a COPY: the library original is unchanged. To return a new version, save it with media_save_file. Delete the copy when you are done.`);
+        }),
+    }),
+    defineTool({
       name: "media_update",
-      description: `Updates a media item, e.g. after publishing: set status "publicado" with the post URL (publishedUrl) and where (e.g. "Post no LinkedIn"). You cannot set "aprovado" (that comes from the user's approval) and cannot delete media (only the user can).`,
+      description: `Updates a media item (title, status, note, or moves it to a folder), e.g. after publishing: set status "publicado" with the post URL (publishedUrl) and where (e.g. "Post no LinkedIn"). You cannot set "aprovado" (that comes from the user's approval) and cannot delete media (only the user can).`,
       input: z.object({
         id: z.string().trim().regex(/^M-\d{4,}$/, 'Use the media id, e.g. "M-0001"'),
         title: z.string().trim().min(1).max(MEDIA_LIMITS.title).optional(),
@@ -148,10 +184,11 @@ export function mediaTools(agentId: string, deps: MediaToolsDeps): McpTool[] {
         publishedUrl: z.string().trim().max(MEDIA_LIMITS.url).optional().describe("Full link of where it was published"),
         where: z.string().trim().max(MEDIA_LIMITS.where).optional().describe('Where it was published/used, in Brazilian Portuguese (e.g. "Post no LinkedIn")'),
         note: z.string().trim().max(MEDIA_LIMITS.note).optional(),
+        folder: z.string().trim().max(MEDIA_FOLDER_LIMITS.path).optional().describe(`Move the item to this library folder (created if missing; "" = move to the root). ${FOLDER_PARAM}`),
       }),
       call: ({ id, ...patch }) => {
         if (!deps.media.find(id)) return fail(`Media ${id} does not exist (see media_list).`);
-        if (Object.values(patch).every((value) => value === undefined)) return fail("Nothing to change: pass title, status, publishedUrl, where or note.");
+        if (Object.values(patch).every((value) => value === undefined)) return fail("Nothing to change: pass title, status, publishedUrl, where, note or folder.");
         const item = deps.media.update(id, patch);
         return ok(`Updated: ${describe(item)}`);
       },

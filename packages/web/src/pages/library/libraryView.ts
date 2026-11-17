@@ -2,15 +2,23 @@ import { libraryUsage, type LibraryConnector, type LibraryGrantsInput, type Libr
 
 // ---------- Abas e endereço ----------
 
-/** As abas da Biblioteca. Mídia e Cérebro são por workspace (o endereço leva o workspace: `#/biblioteca/midia/<ws>`). */
+/**
+ * As abas da Biblioteca. Cérebro e Mídia vêm primeiro (são as mais abertas) e são por workspace (o endereço leva o
+ * workspace: `#/biblioteca/midia/<ws>`).
+ */
 export const LIBRARY_TABS = [
+  { id: "cerebro", label: "Cérebro (notas)", ready: true },
+  { id: "midia", label: "Mídia", ready: true },
   { id: "apps", label: "Apps", ready: true },
   { id: "conectores", label: "Conectores (MCP)", ready: true },
   { id: "skills", label: "Skills", ready: true },
-  { id: "midia", label: "Mídia", ready: true },
-  { id: "cerebro", label: "Cérebro (notas)", ready: true },
 ] as const;
 export type LibraryTabId = (typeof LIBRARY_TABS)[number]["id"];
+
+/** A aba que abre ao entrar na Biblioteca sem aba no endereço: o Cérebro do workspace atual. */
+export const DEFAULT_LIBRARY_TAB: LibraryTabId = "cerebro";
+/** A aba de abertura quando não há workspace nenhum (o Cérebro é de um workspace só). */
+export const PLATFORM_LIBRARY_TAB: LibraryTabId = "conectores";
 
 /** Filtros da lista de conectores. */
 export const LIBRARY_FILTERS = [
@@ -29,14 +37,14 @@ export const WORKSPACE_TABS: readonly LibraryTabId[] = ["midia", "cerebro"];
 export const isWorkspaceTab = (tab: LibraryTabId): boolean => WORKSPACE_TABS.includes(tab);
 
 export function libraryHash(location: Partial<LibraryLocation> = {}): string {
-  const tab = location.tab ?? "conectores";
+  const tab = location.tab ?? DEFAULT_LIBRARY_TAB;
   const base = location.workspaceId ? `#/biblioteca/${tab}/${encodeURIComponent(location.workspaceId)}` : `#/biblioteca/${tab}`;
   return location.item ? `${base}?item=${encodeURIComponent(location.item)}` : base;
 }
 
 export function parseLibraryHash(hash: string): LibraryLocation {
   const parts = hash.replace(/^#\/?/, "").split("?")[0]!.split("/").filter(Boolean).map(decodeURIComponent);
-  const tab = LIBRARY_TABS.find((candidate) => candidate.id === parts[1] && candidate.ready)?.id ?? "conectores";
+  const tab = LIBRARY_TABS.find((candidate) => candidate.id === parts[1] && candidate.ready)?.id ?? DEFAULT_LIBRARY_TAB;
   const item = new URLSearchParams(hash.split("?")[1] ?? "").get("item");
   return { tab, workspaceId: parts[0] === "biblioteca" ? (parts[2] ?? null) : null, ...(item ? { item } : {}) };
 }

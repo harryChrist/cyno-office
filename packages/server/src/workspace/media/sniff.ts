@@ -64,18 +64,36 @@ export function sniffMime(buf: Buffer): string | undefined {
   return undefined;
 }
 
-/** Mime pela extensão do nome (undefined = extensão não aceita). */
+/** Mime pela extensão do nome (undefined = extensão fora da tabela; quem chama decide o genérico). */
 export function mimeOfFileName(fileName: string): string | undefined {
   return MEDIA_EXT_MIME[path.extname(fileName).slice(1).toLowerCase()];
 }
 
-/** O conteúdo bate com o mime declarado? Binários conferem a assinatura; textos não podem ter bytes nulos; SVG precisa ter "<svg". */
+/** Famílias com assinatura que o app confere; qualquer outro tipo entra sem conferência de conteúdo. */
+const ZIP_FAMILY = new Set([
+  "application/zip",
+  "application/epub+zip",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+]);
+const SIGNED = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "audio/wav", "application/pdf", "video/mp4", "video/quicktime", "video/webm", "audio/ogg", "audio/mpeg"]);
+
+/**
+ * O conteúdo bate com o mime declarado? Só os tipos com assinatura conhecida são conferidos (imagem, vídeo, áudio, PDF e
+ * os formatos zip: docx, xlsx, pptx, odt, ods, epub, zip); textos não podem ter bytes nulos; SVG precisa ter "<svg".
+ * Todos os outros tipos entram sem conferência.
+ */
 export function contentMatchesMime(mime: string, head: Buffer): boolean {
   if (mime === "image/svg+xml") return head.toString("utf8").includes("<svg");
   if (mime.startsWith("text/") || mime === "application/json") return !head.includes(0);
+  if (ZIP_FAMILY.has(mime)) return head.length >= 4 && head[0] === 0x50 && head[1] === 0x4b && (head[2] === 0x03 || head[2] === 0x05) && (head[3] === 0x04 || head[3] === 0x06);
+  if (!SIGNED.has(mime)) return true;
   const sniffed = sniffMime(head);
   if (!sniffed) return false;
-  if (mime === "audio/ogg" && sniffed === "audio/ogg") return true;
   // O container Ogg também guarda vídeo; WebM/MP4/MOV são "irmãos" no mesmo tipo de assinatura.
   if ((mime === "video/mp4" || mime === "video/quicktime") && (sniffed === "video/mp4" || sniffed === "video/quicktime")) return true;
   return sniffed === mime;

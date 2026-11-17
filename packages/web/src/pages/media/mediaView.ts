@@ -1,10 +1,8 @@
 import {
   MEDIA_EXT_MIME,
-  MEDIA_MAX_BYTES,
   MEDIA_MIME_TABLE,
   MEDIA_STATUSES,
   MEDIA_USER_CREATOR,
-  mediaKindOf,
   type MediaItem,
   type MediaKind,
   type MediaOrigin,
@@ -48,7 +46,7 @@ export function filterMedia(items: readonly MediaItem[], filters: MediaFilters, 
     if (filters.status !== "todos" && item.status !== filters.status) return false;
     if (filters.agent !== "todos" && item.createdBy !== filters.agent) return false;
     if (!needle) return true;
-    const haystack = [item.title, item.fileName, item.note, item.where, creatorLabel(item.createdBy, agents), ...(item.tags ?? [])].filter(Boolean).join(" ");
+    const haystack = [item.title, item.fileName, item.note, item.where, item.folder, creatorLabel(item.createdBy, agents), ...(item.tags ?? [])].filter(Boolean).join(" ");
     return normalize(haystack).includes(needle);
   });
 }
@@ -124,31 +122,22 @@ export function extensionLabel(item: Pick<MediaItem, "fileName" | "mime">): stri
   return (fromMime ?? fromName ?? "ARQ").toUpperCase().slice(0, 5);
 }
 
-/** O mime que o servidor aceita para o arquivo: o do navegador, ou o da extensão quando ele vem vazio. */
+/** O mime do arquivo: o do navegador, ou o da extensão quando ele vem vazio; sem nenhum dos dois, genérico (o servidor aceita qualquer tipo). */
 export function mimeForFile(file: Pick<File, "name" | "type">): string {
   const direct = file.type.toLowerCase();
   if (direct && MEDIA_MIME_TABLE[direct]) return direct;
   const ext = file.name.includes(".") ? file.name.split(".").pop()!.toLowerCase() : "";
-  return MEDIA_EXT_MIME[ext] ?? direct;
+  return MEDIA_EXT_MIME[ext] ?? (direct || "application/octet-stream");
 }
 
-/** Texto do limite ("25 MB"). */
-const limitLabel = (kind: MediaKind) => `${Math.round(MEDIA_MAX_BYTES[kind] / 1024 / 1024)} MB`;
-
-/** Confere o arquivo antes de enviar: devolve o motivo em pt-BR, ou null se pode seguir. */
+/** Confere o arquivo antes de enviar: só recusa vazio. Não há limite de tamanho nem de tipo. */
 export function uploadProblem(file: Pick<File, "name" | "type" | "size">): string | null {
-  const mime = mimeForFile(file);
-  const kind = mediaKindOf(mime);
-  if (!kind) return `“${file.name}”: tipo de arquivo não aceito. Use imagem, vídeo, áudio, PDF ou texto.`;
-  if (file.size === 0) return `“${file.name}” está vazio.`;
-  if (file.size > MEDIA_MAX_BYTES[kind]) return `“${file.name}” é grande demais (${formatBytes(file.size)}). O máximo para ${KIND_LABELS_SINGULAR[kind].toLowerCase()} é ${limitLabel(kind)}.`;
-  return null;
+  return file.size === 0 ? `“${file.name}” está vazio.` : null;
 }
 
-/** Mensagem para um erro do servidor no envio (413, 415) ou o texto dele. */
+/** Mensagem para um erro do servidor no envio (415: conteúdo que não bate com o tipo) ou o texto dele. */
 export function uploadErrorMessage(status: number | undefined, fileName: string, fallback: string): string {
-  if (status === 413) return `“${fileName}” é grande demais para a biblioteca.`;
-  if (status === 415) return `“${fileName}”: tipo de arquivo não aceito.`;
+  if (status === 415) return `“${fileName}”: o conteúdo não bate com o tipo do arquivo.`;
   return `Não deu para enviar “${fileName}”: ${fallback}`;
 }
 

@@ -161,6 +161,54 @@ describe("ferramentas media_*", () => {
   });
 });
 
+describe("pastas e arquivo original para o agente", () => {
+  it("media_save_file com pasta, media_list por pasta, media_list_folders e media_update movendo", async () => {
+    const { dir, media, call } = await setup();
+    const own = path.join(dir, "agents", "clara");
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(own, "livro.epub"), Buffer.from([0x50, 0x4b, 0x03, 0x04, 1]));
+    await writeFile(path.join(own, "arte.png"), fakePng(10, 10));
+    expect((await call("clara", "media_list_folders")).text).toContain("No folders yet");
+    const saved = await call("clara", "media_save_file", { path: "livro.epub", title: "Livro", folder: "Livros/Matemática" });
+    expect(saved.isError).toBe(false);
+    expect(saved.text).toContain("folder Livros/Matemática");
+    await call("clara", "media_save_file", { path: "arte.png", title: "Arte" });
+    expect(media.get("M-0001")).toMatchObject({ kind: "document", folder: "Livros/Matemática" });
+    const folders = (await call("clara", "media_list_folders")).text;
+    expect(folders).toContain("Livros/Matemática — 1 item");
+    expect(folders).toContain("Livros — 0 items (1 with subfolders)");
+    expect((await call("clara", "media_list", { folder: "Livros/Matemática" })).text).toMatch(/M-0001.*folder: Livros\/Matemática/);
+    expect((await call("clara", "media_list", { folder: "" })).text).toContain("M-0002");
+    expect((await call("clara", "media_list", { folder: "" })).text).not.toContain("M-0001");
+    const moved = await call("clara", "media_update", { id: "M-0002", folder: "Imagens" });
+    expect(moved.isError).toBe(false);
+    expect(media.get("M-0002").folder).toBe("Imagens");
+    expect((await call("clara", "media_update", { id: "M-0002", folder: "" })).isError).toBe(false);
+    expect(media.get("M-0002").folder).toBeUndefined();
+    expect((await call("clara", "media_update", { id: "M-0002", folder: "../x" })).isError).toBe(true);
+  });
+
+  it("media_get_file copia o original para midia/ na pasta do agente e media_view de documento aponta para ela", async () => {
+    const { dir, media, call } = await setup();
+    const own = path.join(dir, "agents", "clara");
+    await mkdir(own, { recursive: true });
+    await writeFile(path.join(own, "Plano 2026.xlsx"), Buffer.from([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]));
+    await call("clara", "media_save_file", { path: "Plano 2026.xlsx", title: "Plano" });
+    const view = await call("clara", "media_view", { id: "M-0001" });
+    expect(view.text).toContain("media_get_file");
+    expect(view.text).not.toContain("cannot be viewed");
+    const got = await call("clara", "media_get_file", { id: "M-0001" });
+    expect(got.isError).toBe(false);
+    expect(got.text).toContain('"midia/M-0001-Plano_2026.xlsx"');
+    expect(got.text).toContain("COPY");
+    expect((await stat(path.join(own, "midia", "M-0001-Plano_2026.xlsx"))).size).toBe(7);
+    expect(got.text).not.toContain(media.fileOf(media.get("M-0001")));
+    expect(media.get("M-0001").size).toBe(7);
+    expect((await call("clara", "media_get_file", { id: "M-0099" })).isError).toBe(true);
+    expect((await call("clara", "media_get_file", { id: "xx" })).isError).toBe(true);
+  });
+});
+
 describe("request_approval com mediaIds e sources", () => {
   it("valida os ids e repassa mídia e fontes (agente e Maestro)", async () => {
     const { runner, maestro, call } = await setup();

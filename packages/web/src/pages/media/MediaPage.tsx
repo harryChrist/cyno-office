@@ -8,7 +8,10 @@ import { useOfficeStore } from "../../store/officeStore";
 import { useWorkStore } from "../../store/workStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
 import { Drawer } from "../../ui/Drawer";
+import { ConfirmDialog } from "../../ui/widgets";
 import { MediaCard } from "./MediaCards";
+import { Breadcrumb, FolderBlock, FolderNameDialog, MoveDialog, SelectionBar, SizeLabel } from "./FolderParts";
+import { childFolders, folderOf, folderStats, parentOf, remapAfterDelete, remapAfterRename, ROOT_LABEL } from "./mediaFolders";
 import { MediaDetail, type BringAction } from "./MediaDetail";
 import { buildEntries, entryItems, entryKey, entryMatches, loadDensity, loadScope, saveDensity, saveScope, scopeKey, timeSections, type Density, type GalleryEntry, type Located, type Scope } from "./mediaGroups";
 import { ActiveFilters, FilterBar } from "./FilterBar";
@@ -19,9 +22,6 @@ import { MIcon } from "./MediaParts";
 import { MediaViewer, type ViewerMode } from "./MediaViewer";
 import { agentOptions, cameFrom, isFiltering, kindOptions, NO_FILTERS, statusOptions, type MediaFilters } from "./mediaView";
 import { prefetchRemoteMedia, useRemoteMedia } from "./useMediaScope";
-
-/** Tipos que o seletor de arquivos oferece (o servidor confere de novo). */
-const ACCEPT = "image/*,video/mp4,video/webm,video/quicktime,audio/mpeg,audio/wav,audio/ogg,application/pdf,.txt,.md,.csv,.json,.html";
 
 /** Página "Mídia": a biblioteca do workspace (o que os agentes fizeram e o que você enviou), mais a de outros workspaces só para ver e trazer. */
 export function MediaPage() {
@@ -88,6 +88,7 @@ const SCOPE_OPTIONS = [
 
 function MediaView() {
   const items = useMediaStore((state) => state.items);
+  const folders = useMediaStore((state) => state.folders);
   const error = useMediaStore((state) => state.error);
   const uploads = useMediaStore((state) => state.uploads);
   const focusId = useMediaStore((state) => state.focusId);
@@ -125,6 +126,14 @@ function MediaView() {
   const [viewer, setViewer] = useState<{ items: Located[]; index: number; mode: ViewerMode } | null>(null);
   const [busy, setBusy] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
+  // Pastas: a aberta ("" = raiz), a seleção para mover e os diálogos.
+  const [folderRaw, setFolder] = useState("");
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const [folderDialog, setFolderDialog] = useState<{ mode: "create" } | { mode: "rename"; path: string } | null>(null);
+  const [deleteFolder, setDeleteFolder] = useState<string | null>(null);
+  const [moveIds, setMoveIds] = useState<string[] | null>(null);
+  const [folderNotice, setFolderNotice] = useState<string | null>(null);
   const dragDepth = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -171,7 +180,16 @@ function MediaView() {
   const located = view.located;
   const entries = useMemo(() => buildEntries(located, showDiscarded), [located, showDiscarded]);
   const nameLookup = useMemo(() => new Map(located.map(({ ws, item }) => [item.createdBy, agentName(ws, item.createdBy)])), [located, agentName]);
-  const shown = useMemo(() => entries.filter((entry) => entryMatches(entry, filters, showDiscarded, agentName)), [entries, filters, showDiscarded, agentName]);
+  const matched = useMemo(() => entries.filter((entry) => entryMatches(entry, filters, showDiscarded, agentName)), [entries, filters, showDiscarded, agentName]);
+  // Pastas só neste workspace. Buscando ou filtrando, a lista olha TODAS as pastas (e cada cartão diz em qual está).
+  const foldersOn = scope === "este";
+  const browsing = foldersOn && !isFiltering(filters);
+  const folder = folders === null || folderRaw === "" || folders.includes(folderRaw) ? folderRaw : "";
+  const shown = useMemo(() => (browsing ? matched.filter((entry) => folderOf(entry.main.item) === folder) : matched), [matched, browsing, folder]);
+  const subfolders = useMemo(() => (browsing && folders ? childFolders(folders, folder) : []), [browsing, folders, folder]);
+  const ownItems = useMemo(() => items ?? [], [items]);
+  // Rótulo de tamanho do cabeçalho: tudo o que há nesta pasta (com as subpastas); buscando, o que a lista mostra.
+  const headerBytes = useMemo(() => (browsing ? folderStats(ownItems, folders ?? [], folder).bytes : shown.reduce((total, entry) => total + entry.main.item.size, 0)), [browsing, ownItems, folders, folder, shown]);
   // As contagens dos menus seguem os cartões (um carrossel conta 1; descartados só com o interruptor).
   const allItems = useMemo(() => entries.filter((entry) => showDiscarded || entry.type === "carousel" || entry.main.item.status !== "descartado").map((entry) => entry.main.item), [entries, showDiscarded]);
   const filterOptions = useMemo(() => ({ kind: kindOptions(allItems, filters.kind), status: statusOptions(allItems, filters.status), agent: agentOptions(allItems, nameLookup, filters.agent) }), [allItems, filters.kind, filters.status, filters.agent, nameLookup]);
@@ -274,12 +292,17 @@ function MediaView() {
     }
   };
 
-  const ownEmpty = items !== null && items.length === 0;
+  const ownEmpty = items !== null && items.length === 0 && (folders?.length ?? 0) === 0;
+  const folderEmpty = browsing && shown.length === 0 && subfolders.length === 0;
 
+  // O envio cai na pasta aberta (o escopo e os filtros voltam ao normal depois, mas a pasta fica).
+  const uploadFolder = browsing ? folder : "";
   const send = (files: FileList | File[] | null) => {
     const list = files ? Array.from(files) : [];
     if (list.length === 0) return;
-    void useMediaStore.getState().upload(list).then((created) => {
+    const target = uploadFolder;
+    void useMediaStore.getState().upload(list, target).then((created) => {
+      if (created.length > 0) setFolder(target);
       if (created.length > 0) {
         setFilters(NO_FILTERS);
         setScope("este");
@@ -287,6 +310,45 @@ function MediaView() {
       }
     });
   };
+
+  // ---------- Pastas: abrir, mover, apagar ----------
+  const openFolder = (path: string) => {
+    setFolder(path);
+    setFolderNotice(null);
+  };
+  const idsOf = (entry: GalleryEntry) => entryItems(entry).map((part) => part.item.id);
+  const togglePicked = (entry: GalleryEntry) =>
+    setPicked((current) => {
+      const next = new Set(current);
+      const ids = idsOf(entry);
+      if (ids.every((id) => next.has(id))) for (const id of ids) next.delete(id);
+      else for (const id of ids) next.add(id);
+      return next;
+    });
+  const stopSelecting = () => {
+    setSelecting(false);
+    setPicked(new Set());
+  };
+  // Mover (pelo diálogo ou arrastando): avisa onde foi parar e sai do modo de seleção.
+  const moveTo = async (ids: readonly string[], target: string) => {
+    await useMediaStore.getState().moveItems(ids, target);
+    setFolderNotice(`${ids.length === 1 ? "1 item movido" : `${ids.length} itens movidos`} para ${target ? target.split("/").pop() : ROOT_LABEL}.`);
+    stopSelecting();
+  };
+  const dropOnFolder = (target: string, ids: string[]) => {
+    if (ids.length === 0) return;
+    void moveTo(ids, target).catch((failure) => setFolderNotice(`Não deu para mover: ${describeError(failure)}`));
+  };
+  // Arrastar um cartão selecionado leva toda a seleção; senão, só ele.
+  const dragIdsOf = (entry: GalleryEntry) => () => {
+    const own = idsOf(entry);
+    return selecting && own.every((id) => picked.has(id)) ? [...picked] : own;
+  };
+  const pickedIds = [...picked];
+  const moveFrom = (() => {
+    const places = new Set(pickedIds.map((id) => folderOf(ownItems.find((item) => item.id === id) ?? {})));
+    return places.size === 1 ? [...places][0]! : null;
+  })();
 
   const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
   const onDragEnter = (event: DragEvent) => {
@@ -399,7 +461,17 @@ function MediaView() {
   const renderGrid = (list: GalleryEntry[]) => (
     <ul className="md-grid" data-testid="media-grid">
       {list.map((entry) => (
-        <MediaCard key={entry.key} entry={entry} selected={entry.key === selected?.key} agentName={agentName} onOpen={() => selectMedia(entryKey(entry.main), "push")} onView={() => openViewer(entry)} {...(bringOf(entry) ? { bring: bringOf(entry)! } : {})} />
+        <MediaCard
+          key={entry.key}
+          entry={entry}
+          selected={entry.key === selected?.key}
+          agentName={agentName}
+          onOpen={() => selectMedia(entryKey(entry.main), "push")}
+          onView={() => openViewer(entry)}
+          {...(bringOf(entry) ? { bring: bringOf(entry)! } : {})}
+          {...(foldersOn && !browsing ? { folderLabel: folderOf(entry.main.item) } : {})}
+          {...(foldersOn ? { selecting, checked: idsOf(entry).every((id) => picked.has(id)), onToggle: () => togglePicked(entry), dragIds: dragIdsOf(entry) } : {})}
+        />
       ))}
     </ul>
   );
@@ -433,7 +505,16 @@ function MediaView() {
         </div>
       );
     }
-    if (shown.length === 0) {
+    if (shown.length === 0 && folderEmpty && folder !== "") {
+      return (
+        <div className="md-empty md-empty--folder" data-testid="media-folder-empty">
+          <MIcon name="folder" size={30} />
+          <h3>Esta pasta está vazia</h3>
+          <p>Arraste arquivos para cá, use “Enviar arquivo” (o envio cai nesta pasta) ou mova itens de outra pasta.</p>
+        </div>
+      );
+    }
+    if (shown.length === 0 && subfolders.length === 0) {
       return (
         <div className="md-nomatch" data-testid="media-nomatch">
           <p>
@@ -464,6 +545,21 @@ function MediaView() {
     }
     return (
       <div className="md-groups">
+        {subfolders.length > 0 && (
+          <ul className="md-folders" aria-label="Pastas" data-testid="media-folders">
+            {subfolders.map((path) => (
+              <FolderBlock
+                key={path}
+                path={path}
+                stat={folderStats(ownItems, folders ?? [], path)}
+                onOpen={() => openFolder(path)}
+                onRename={() => setFolderDialog({ mode: "rename", path })}
+                onDelete={() => setDeleteFolder(path)}
+                onDropIds={(ids) => dropOnFolder(path, ids)}
+              />
+            ))}
+          </ul>
+        )}
         {timeSections(shown).map((section) => (
           <section key={section.id} className="md-section" aria-label={section.title ?? "Mídia"}>
             {section.title && (
@@ -493,7 +589,9 @@ function MediaView() {
             {showToolbar && (
               <span className="md-bar__count" aria-live="polite" title={scope === "este" ? undefined : `Só para ver. “Trazer para ${currentName}” copia; o original fica onde está.`}>
                 {visible} {visible === 1 ? "item" : "itens"}
+                {scope === "este" && !browsing && <span className="md-bar__ro"> · todas as pastas</span>}
                 {scope !== "este" && <span className="md-bar__ro"> · só para ver</span>}
+                {scope === "este" && <SizeLabel bytes={headerBytes} testId="media-size" className="md-size--head" title="Peso dos arquivos da Mídia deste workspace" />}
                 {switching && <span className="md-spinner" role="status" aria-label="Carregando" data-testid="media-switching" />}
               </span>
             )}
@@ -537,14 +635,37 @@ function MediaView() {
               </button>
             </div>
           )}
-          <input ref={input} type="file" multiple accept={ACCEPT} hidden onChange={(event) => { send(event.target.files); event.target.value = ""; }} data-testid="media-file-input" />
+          {showToolbar && foldersOn && (
+            <button type="button" className="ui-button ui-button--secondary md-folder-btn" onClick={() => setFolderDialog({ mode: "create" })} data-testid="media-new-folder" aria-label="Nova pasta">
+              <MIcon name="folderPlus" size={14} />
+              <span className="md-folder-btn__label">Nova pasta</span>
+            </button>
+          )}
+          {showToolbar && foldersOn && shown.length > 0 && (
+            <button type="button" className={`ui-button ui-button--secondary md-folder-btn${selecting ? " md-folder-btn--on" : ""}`} aria-pressed={selecting} onClick={() => (selecting ? stopSelecting() : setSelecting(true))} data-testid="media-select" aria-label="Selecionar itens">
+              <MIcon name="task" size={14} />
+              <span className="md-folder-btn__label">Selecionar</span>
+            </button>
+          )}
+          <input ref={input} type="file" multiple hidden onChange={(event) => { send(event.target.files); event.target.value = ""; }} data-testid="media-file-input" />
           <button type="button" className="ui-button md-upload-btn" onClick={() => input.current?.click()} data-testid="media-upload" aria-label="Enviar arquivo">
             <MIcon name="upload" size={14} />
             <span className="md-upload-btn__label">Enviar arquivo</span>
           </button>
         </div>
         {showToolbar && <ActiveFilters filters={filters} onChange={setFilters} options={filterOptions} />}
+        {showToolbar && browsing && <Breadcrumb folder={folder} onOpen={openFolder} onDropIds={dropOnFolder} />}
       </div>
+
+      {folderNotice && (
+        <p className="md-notice" role="status" data-testid="media-folder-notice">
+          <MIcon name="check" size={14} />
+          <span>{folderNotice}</span>
+          <button type="button" className="ui-icon-button" onClick={() => setFolderNotice(null)} aria-label="Dispensar aviso">
+            <MIcon name="close" size={14} />
+          </button>
+        </p>
+      )}
 
       {scope === "este" && <RenderStrip runs={myRuns} />}
 
@@ -639,10 +760,53 @@ function MediaView() {
 
       {viewer && <MediaViewer items={viewer.items} index={viewer.index} mode={viewer.mode} agentName={agentName} onIndex={(index) => setViewer({ ...viewer, index })} onClose={() => setViewer(null)} />}
 
+      {selecting && foldersOn && <SelectionBar count={pickedIds.length} total={shown.reduce((total, entry) => total + idsOf(entry).length, 0)} onAll={() => setPicked(new Set(shown.flatMap(idsOf)))} onMove={() => setMoveIds(pickedIds)} onCancel={stopSelecting} />}
+
+      {folderDialog && (
+        <FolderNameDialog
+          title={folderDialog.mode === "create" ? (folder ? `Nova pasta em ${folder.split("/").pop()}` : "Nova pasta") : "Renomear a pasta"}
+          confirmLabel={folderDialog.mode === "create" ? "Criar pasta" : "Renomear"}
+          {...(folderDialog.mode === "rename" ? { initial: folderDialog.path.split("/").pop() ?? "" } : {})}
+          hint={folderDialog.mode === "create" ? "Pastas só organizam: os arquivos não saem do lugar." : undefined}
+          onClose={() => setFolderDialog(null)}
+          onSubmit={async (name) => {
+            if (folderDialog.mode === "create") {
+              const created = await useMediaStore.getState().createFolder(name, folder);
+              openFolder(created);
+              return;
+            }
+            const renamed = await useMediaStore.getState().renameFolder(folderDialog.path, name);
+            setFolder(remapAfterRename(folder, folderDialog.path, renamed));
+          }}
+        />
+      )}
+
+      {deleteFolder !== null && (
+        <ConfirmDialog
+          title={`Apagar a pasta “${deleteFolder.split("/").pop()}”?`}
+          message={
+            <p>
+              Nenhum arquivo é apagado. Os {folderStats(ownItems, folders ?? [], deleteFolder).count} itens e as subpastas dela sobem para {parentOf(deleteFolder) ? `“${parentOf(deleteFolder).split("/").pop()}”` : `a raiz (${ROOT_LABEL})`}.
+            </p>
+          }
+          confirmLabel="Apagar pasta"
+          pendingLabel="Apagando…"
+          testId="media-folder-delete-dialog"
+          onClose={() => setDeleteFolder(null)}
+          onConfirm={async () => {
+            const removed = deleteFolder;
+            await useMediaStore.getState().deleteFolder(removed);
+            setFolder(remapAfterDelete(folder, removed));
+          }}
+        />
+      )}
+
+      {moveIds && <MoveDialog folders={folders ?? []} count={moveIds.length} from={moveFrom} onClose={() => setMoveIds(null)} onMove={(target) => moveTo(moveIds, target)} />}
+
       {dragging && (
         <div className="md-drop" aria-hidden="true" data-testid="media-drop">
           <MIcon name="upload" size={34} />
-          <p>Solte para enviar a este workspace</p>
+          <p>{uploadFolder ? `Solte para enviar à pasta ${uploadFolder.split("/").pop()}` : "Solte para enviar a este workspace"}</p>
         </div>
       )}
     </div>
@@ -659,12 +823,12 @@ function EmptyState({ onPick }: { onPick: () => void }) {
         <path d="m50 68 22-22 16 16 10-10 24 24" stroke="var(--ui-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <h3>Nenhuma mídia neste workspace ainda</h3>
-      <p>Os agentes guardam aqui as imagens e os vídeos que fazem; você também pode enviar um arquivo.</p>
+      <p>Os agentes guardam aqui o que fazem; você também pode enviar qualquer arquivo e organizar tudo em pastas.</p>
       <button type="button" className="ui-button" onClick={onPick}>
         <MIcon name="upload" size={14} />
         Enviar arquivo
       </button>
-      <p className="md-empty__hint">Arraste para esta tela ou use o botão. Aceita imagens, vídeos, áudios, PDF e texto. Para usar algo de outro workspace, escolha “Outro workspace” acima.</p>
+      <p className="md-empty__hint">Arraste para esta tela ou use o botão. Aceita qualquer arquivo, de qualquer tamanho. Para usar algo de outro workspace, escolha “Outro workspace” acima.</p>
     </div>
   );
 }

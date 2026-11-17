@@ -9,6 +9,7 @@ import type { ForYouItem } from "./for-you";
 import type { ForYouTypeDef } from "./for-you-types";
 import type { Project } from "./projects";
 import type { MediaItem } from "./media";
+import type { Board, BoardChange } from "./board";
 import type { Routine, RoutineEntry, RoutineExecution, RoutineRunChange } from "./routines";
 import type { AgentChatStatus, AgentTerminalInfo } from "./terminal";
 import type { AgentUsageTurn, SubscriptionUsage } from "./usage";
@@ -125,6 +126,9 @@ export type ServerEvent =
   /** Biblioteca de mídia (media/media.json): item criado ou alterado (mesmo `id`) e item apagado. */
   | { type: "media:upserted"; media: MediaItem }
   | { type: "media:deleted"; id: string }
+  /** Quadros do workspace (boards/): criado ou alterado (`changed` diz o que mudou: página, dados ou só detalhes; a tela busca o que mudou por GET) e apagado. */
+  | { type: "board:upserted"; board: Board; changed: BoardChange[]; created?: true }
+  | { type: "board:deleted"; id: string }
   /** Fechamento semanal feito (o resumo foi pedido ao Maestro). */
   | { type: "routine:closed"; periodKey: string; routineIds: string[] }
   /**
@@ -198,6 +202,8 @@ const EVENT_TYPES: Record<ServerEventType, true> = {
   "routine:goal-hit": true,
   "media:upserted": true,
   "media:deleted": true,
+  "board:upserted": true,
+  "board:deleted": true,
   "foryou:upserted": true,
   "foryou:deleted": true,
   "foryou-types:upserted": true,

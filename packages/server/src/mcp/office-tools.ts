@@ -10,6 +10,7 @@ import { brainTools, type BrainToolsDeps } from "./brain-tools";
 import { browserTools, type BrowserToolsDeps } from "./browser-tools";
 import { agendaTools, type AgendaToolsDeps } from "./agenda-tools";
 import { approvalTypeTool, delegationTypeNote, mentionedForYouType, type ApprovalTypeDeps } from "./approval-type-tool";
+import { boardTools, type BoardToolsDeps } from "./board-tools";
 import { mediaTools, type MediaToolsDeps } from "./media-tools";
 import { muralTools, type MuralToolsDeps } from "./mural-tools";
 import { asSources, attachmentError } from "./sources-field";
@@ -55,6 +56,8 @@ export type OfficeToolsDeps = {
   browser?: BrowserToolsDeps;
   /** Biblioteca de mídia (`media_*`, e o `mediaIds`/`sources` do request_approval). */
   media?: MediaToolsDeps;
+  /** Quadros (`board_*`): páginas e dados para o dono olhar, para o Maestro e os agentes de time. */
+  board?: BoardToolsDeps;
   /** Rotinas: o Maestro propõe/lista/pausa; os agentes veem as suas e registram o que fizeram (routine_record). */
   /** O painel "Hoje" do workspace (`get_today` do Maestro). */
   today?: () => TodayView;
@@ -91,6 +94,7 @@ export function officeToolsFor(agentId: string, deps: OfficeToolsDeps): McpTool[
   const brain = deps.brain ? brainTools(agentId, { state: deps.state, access: deps.brain }) : [];
   const browser = deps.browser && effectiveAccess(deps.browser.access(), agent).browser ? browserTools(agentId, deps.browser) : [];
   const media = deps.media ? mediaTools(agentId, deps.media) : [];
+  const board = deps.board ? boardTools(agentId, deps.board) : [];
   const agenda = deps.agenda
     ? agendaTools({
         agenda: deps.agenda.service,
@@ -106,7 +110,7 @@ export function officeToolsFor(agentId: string, deps: OfficeToolsDeps): McpTool[
       })
     : [];
   const mural = deps.mural ? muralTools({ mural: deps.mural.service, workspace: deps.mural.workspaceId, address: agentAddress(deps.mural.workspaceId, agent.id), agentId: agent.id, workspaceName: deps.mural.workspaceName }) : [];
-  return [...(isMaestroAgent(state, agent) ? maestroTools(deps) : workerTools(agentId, deps)), ...agenda, ...brain, ...browser, ...media, ...mural];
+  return [...(isMaestroAgent(state, agent) ? maestroTools(deps) : workerTools(agentId, deps)), ...agenda, ...brain, ...browser, ...media, ...board, ...mural];
 }
 
 function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote, plans, manage, routines, media, cardSummary, cyno, today, dayStats, metrics, reports, retro }: OfficeToolsDeps): McpTool[] {

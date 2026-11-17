@@ -22,7 +22,8 @@ const MANAGE_TOOLS = [
 const BROWSER_TOOLS = ["browser_open", "browser_tabs", "browser_snapshot", "browser_current_url", "browser_get_link", "browser_find", "browser_inspect", "browser_click", "browser_type", "browser_upload", "browser_press", "browser_scroll", "browser_back", "browser_screenshot", "browser_close_tab"];
 // "Sua agenda" (Maestro e agentes de time), logo depois das ferramentas do papel e antes do Cérebro.
 const AGENDA_TOOLS = ["agenda_book", "agenda_free_slots", "agenda_list", "agenda_move", "agenda_cancel"];
-const MEDIA_TOOLS = ["media_render_html", "media_save_file", "media_view", "media_list", "media_update"];
+const MEDIA_TOOLS = ["media_render_html", "media_save_file", "media_view", "media_list", "media_list_folders", "media_get_file", "media_update"];
+const BOARD_TOOLS = ["board_guide", "board_list", "board_save", "board_set_data", "board_patch_data", "board_read_data"];
 const MURAL_TOOLS = ["mural_share", "mural_list", "mural_use", "mural_unshare"];
 
 /** Antigravity CLI falso (imita o `agy` stream-json; veja fixtures/agy-stream-json.jsonl). */
@@ -649,10 +650,11 @@ describe("servidor MCP /mcp", () => {
       // Navegador compartilhado (ligado por padrão no workspace e no agente).
       ...BROWSER_TOOLS,
       ...MEDIA_TOOLS,
+      ...BOARD_TOOLS,
       ...MURAL_TOOLS,
     ]);
     expect(maestroTools[1]!.inputSchema.type).toBe("object");
-    expect((await names(claraToken)).map((tool) => tool.name)).toEqual(["get_task", "ask_user", "list_pending_items", "update_pending_item", "cancel_pending_item", "routine_items_list", "routine_item_add", "routine_item_update", "routine_item_stop", "routine_status", "routine_record", "request_help", "send_to_colleague", "submit_result", "report_progress", "request_approval", ...AGENDA_TOOLS, "search_notes", "read_note", "save_note", ...BROWSER_TOOLS, ...MEDIA_TOOLS, ...MURAL_TOOLS]);
+    expect((await names(claraToken)).map((tool) => tool.name)).toEqual(["get_task", "ask_user", "list_pending_items", "update_pending_item", "cancel_pending_item", "routine_items_list", "routine_item_add", "routine_item_update", "routine_item_stop", "routine_status", "routine_record", "request_help", "send_to_colleague", "submit_result", "report_progress", "request_approval", ...AGENDA_TOOLS, "search_notes", "read_note", "save_note", ...BROWSER_TOOLS, ...MEDIA_TOOLS, ...BOARD_TOOLS, ...MURAL_TOOLS]);
 
     const team = await mcp(testApp, maestroToken, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_team", arguments: {} } });
     const teamText = (team.json() as { result: { content: { text: string }[] } }).result.content[0]!.text;

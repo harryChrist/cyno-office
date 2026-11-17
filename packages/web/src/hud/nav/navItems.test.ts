@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, railGroupSub, SHORTCUTS, visibleChildren, visibleShortcuts } from "./navItems";
 
-describe("menu de seis páginas", () => {
-  it("Office, Trabalho, Para você, Gestão e Biblioteca (mais o Cyno no topo)", () => {
-    expect(menuPages()).toEqual(["office", "trabalho", "para-voce", "gestao", "biblioteca"]);
+describe("menu de páginas", () => {
+  it("Office, Trabalho, Para você, Quadro (antes da Gestão), Gestão e Biblioteca (mais o Cyno no topo)", () => {
+    expect(menuPages()).toEqual(["office", "trabalho", "para-voce", "quadro", "gestao", "biblioteca"]);
+  });
+
+  it("o Quadro vem logo antes da Gestão, com ícone próprio e dica curta", () => {
+    const items = NAV_SECTIONS.flatMap((section) => section.items);
+    const quadro = items.findIndex((item) => item.page === "quadro");
+    expect(items[quadro + 1]?.page).toBe("gestao");
+    expect(items[quadro]).toMatchObject({ icon: "quadro", testId: "nav-quadro", hint: "Os dados que os agentes montam para você" });
   });
 
   it("Mídia, Cérebro, Gastos, Atividade, Calendário e Navegador não são itens de menu", () => {
@@ -42,7 +49,7 @@ describe("nomes claros e destinos visíveis", () => {
 
   it("Gestão e Biblioteca mostram os destinos como links diretos, com os nomes novos", () => {
     expect(gestao.children!.map((child) => child.label)).toEqual(["Painel", "Rotinas e metas", "Pessoas", "Gastos", "Atividade", "Relatórios"]);
-    expect(biblioteca.children!.map((child) => child.label)).toEqual(["Apps", "Conectores (MCP)", "Skills", "Mídia", "Cérebro (notas)"]);
+    expect(biblioteca.children!.map((child) => child.label)).toEqual(["Cérebro (notas)", "Mídia", "Apps", "Conectores (MCP)", "Skills"]);
     expect(NAV_SECTIONS.flatMap((section) => section.items).filter((item) => item.children).map((item) => item.page)).toEqual(["gestao", "biblioteca"]);
   });
 
@@ -52,14 +59,14 @@ describe("nomes claros e destinos visíveis", () => {
     expect(activeChild(gestao, "gestao", "pessoas")?.label).toBe("Pessoas");
     expect(activeChild(gestao, "gestao", "gastos")?.label).toBe("Gastos");
     expect(activeChild(gestao, "gestao", "atividade")?.label).toBe("Atividade");
-    expect(activeChild(biblioteca, "biblioteca", "")?.label).toBe("Conectores (MCP)");
+    expect(activeChild(biblioteca, "biblioteca", "")?.label).toBe("Cérebro (notas)");
     expect(activeChild(biblioteca, "biblioteca", "midia/principal")?.label).toBe("Mídia");
     expect(activeChild(biblioteca, "biblioteca", "cerebro/principal/c/nota")?.label).toBe("Cérebro (notas)");
     expect(activeChild(gestao, "trabalho", "")).toBeNull();
   });
 
   it("Mídia e Cérebro levam o workspace no endereço; os outros não", () => {
-    const [apps, , , midia] = biblioteca.children!;
+    const [, midia, apps] = biblioteca.children!;
     expect(childSub(midia!, "meu ws")).toBe("midia/meu%20ws");
     expect(childSub(midia!, null)).toBe("midia");
     expect(childSub(apps!, "principal")).toBe("apps");
@@ -80,9 +87,9 @@ describe("barra recolhida: itens com sublinks", () => {
   const gestao = NAV_SECTIONS[0]!.items.find((item) => item.page === "gestao")!;
   const biblioteca = NAV_SECTIONS[1]!.items.find((item) => item.page === "biblioteca")!;
 
-  it("o clique no ícone leva à primeira página do grupo (Painel; Apps), não à de abertura da página", () => {
+  it("o clique no ícone leva à primeira página do grupo (Painel; Cérebro), não à última aberta", () => {
     expect(railGroupSub(gestao, false, "demo")).toBe("");
-    expect(railGroupSub(biblioteca, false, "demo")).toBe("apps");
+    expect(railGroupSub(biblioteca, false, "demo")).toBe("cerebro/demo");
   });
 
   it("sem workspace, a primeira página que vale (os destinos de um workspace só somem)", () => {

@@ -44,6 +44,7 @@ import type {
   UpdateWorkspaceAccessBody,
   AddWorkFolderBody,
   UpdateWorkFolderBody,
+  StorageResponse,
   EnginesResponse,
   ListBrainsResponse,
   CreateRoomBody,
@@ -58,6 +59,10 @@ import type {
   ProjectPriority,
   MediaItem,
   BringMediaBody,
+  CreateMediaFolderBody,
+  MediaFoldersResponse,
+  MoveMediaBody,
+  RenameMediaFolderBody,
   UpdateMediaBody,
   ForYouTypeDef,
   UpdateForYouTypeBody,
@@ -118,6 +123,7 @@ import { FREEBUFF_MODELS_REFRESH_PATH, FREEBUFF_SETTINGS_PATH, FREEBUFF_TEST_PAT
 import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, VERSION_CHECK_PATH, VERSION_PATH, VERSION_UPDATE_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
+import { boardDataPath, boardPagePath, boardPath, boardsPath, type Board, type UpdateBoardBody } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
 import { useNavStore } from "../store/navStore";
 
@@ -155,6 +161,23 @@ export async function requestJson<T>(path: string, init: JsonInit = {}): Promise
     throw new ApiRequestError(response.status, body?.error ?? `Erro HTTP ${response.status}`, body?.details);
   }
   return (await readJson(response)) as T;
+}
+
+/** GET que devolve texto puro (a página HTML de um quadro). */
+export async function requestText(path: string): Promise<string> {
+  const response = await fetch(path, { headers: { accept: "text/html, text/plain" } });
+  if (!response.ok) {
+    if (response.status === 401) useAuthStore.getState().expire();
+    const text = await response.text().catch(() => "");
+    let message = `Erro HTTP ${response.status}`;
+    try {
+      message = (JSON.parse(text) as ApiErrorBody).error ?? message;
+    } catch {
+      // Corpo que não é JSON: fica a mensagem padrão.
+    }
+    throw new ApiRequestError(response.status, message);
+  }
+  return response.text();
 }
 
 const segment = encodeURIComponent;
@@ -537,8 +560,25 @@ export const api = {
   deleteMedia: (id: string) => requestJson<void>(`${ws()}/media/${segment(id)}`, { method: "DELETE" }),
   /** Só leitura: a biblioteca de OUTRO workspace (a tela de Mídia no escopo "Outro workspace" e "Todos"). */
   listMediaOf: (workspaceId: string) => requestJson<MediaItem[]>(`/api/w/${segment(workspaceId)}/media`),
+  /** Quadros do workspace (o mexido por último primeiro): quem cria e atualiza são os agentes. */
+  listBoards: () => requestJson<Board[]>(`${ws()}${boardsPath}`),
+  updateBoard: (id: string, body: UpdateBoardBody) => requestJson<Board>(`${ws()}${boardPath(id)}`, { method: "PATCH", body }),
+  deleteBoard: (id: string) => requestJson<void>(`${ws()}${boardPath(id)}`, { method: "DELETE" }),
+  /** A página HTML do quadro (texto) e os dados (JSON, qualquer formato). */
+  boardPage: (id: string) => requestText(`${ws()}${boardPagePath(id)}`),
+  boardData: (id: string) => requestJson<unknown>(`${ws()}${boardDataPath(id)}`),
+  /** Espaço em disco do workspace e das pastas de trabalho (responde na hora; mede em segundo plano). */
+  storageOf: (workspaceId: string) => requestJson<StorageResponse>(`/api/w/${segment(workspaceId)}/storage`),
+  refreshStorageOf: (workspaceId: string) => requestJson<StorageResponse>(`/api/w/${segment(workspaceId)}/storage/refresh`, { method: "POST" }),
   /** Os agentes de outro workspace (id e nome), para dizer quem fez cada mídia dele. */
   agentNamesOf: async (workspaceId: string) => (await requestJson<{ agents: Pick<Agent, "id" | "name" | "avatar">[] }>(`/api/w/${segment(workspaceId)}/office`)).agents,
+  /** Pastas da biblioteca (caminhos como "Livros/Matemática"; uma pasta vazia também existe). */
+  listMediaFolders: async () => (await requestJson<MediaFoldersResponse>(`${ws()}/media/folders`)).folders,
+  createMediaFolder: (body: CreateMediaFolderBody) => requestJson<{ folders: string[]; folder: string }>(`${ws()}/media/folders`, { method: "POST", body }),
+  renameMediaFolder: (body: RenameMediaFolderBody) => requestJson<{ folders: string[]; folder: string }>(`${ws()}/media/folders`, { method: "PATCH", body }),
+  /** Os itens e as subpastas sobem para a pasta de cima; nenhum arquivo é apagado. */
+  deleteMediaFolder: (folder: string) => requestJson<{ folders: string[]; folder: string }>(`${ws()}/media/folders?path=${segment(folder)}`, { method: "DELETE" }),
+  moveMedia: (body: MoveMediaBody) => requestJson<{ items: MediaItem[]; folders: string[] }>(`${ws()}/media/move`, { method: "POST", body }),
   /** Copia a mídia de outro workspace para o atual. */
   bringMedia: (body: BringMediaBody) => requestJson<MediaItem>(`${ws()}/media/bring`, { method: "POST", body }),
 };
@@ -552,11 +592,11 @@ export function mediaFileUrl(workspaceId: string, mediaId: string, download = fa
  * Envia um arquivo para a biblioteca: o File vai cru no corpo (sem base64), com o mime dele no
  * Content-Type. Usa XMLHttpRequest só para ter o progresso do envio (o fetch não tem).
  */
-export function uploadMedia(file: File, options: { onProgress?: (fraction: number) => void } = {}): Promise<MediaItem> {
+export function uploadMedia(file: File, options: { onProgress?: (fraction: number) => void; folder?: string } = {}): Promise<MediaItem> {
   return new Promise((resolve, reject) => {
     let url: string;
     try {
-      url = `${ws()}/media?fileName=${segment(file.name)}`;
+      url = `${ws()}/media?fileName=${segment(file.name)}${options.folder ? `&folder=${segment(options.folder)}` : ""}`;
     } catch (error) {
       reject(error);
       return;

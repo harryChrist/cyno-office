@@ -40,7 +40,7 @@ function toolsRule(agent: Agent, access: EffectiveAccess): string {
 const COMMON_RULES = [
   "- As ferramentas do escritório têm nomes, parâmetros e descrições em inglês (ex.: `submit_result`, `request_id`), mas TUDO o que o usuário lê — respostas, resultados, títulos, perguntas, mensagens de progresso, notas do Cérebro — é em português do Brasil.",
   "- Seja breve e direto; responda ao usuário sempre em português do Brasil.",
-  "- Olhar uma imagem que você fez: `media_render_html` já grava uma prévia reduzida na SUA pasta e devolve o caminho (`previa/M-xxxx.png`); abra esse caminho com a ferramenta de ler arquivos e confira texto, cortes e contraste antes de mandar para aprovação (ficou ruim? renderize de novo). `media_view(id)` faz o mesmo para qualquer item da biblioteca (vídeo: quadros do começo, meio e fim). Nunca tente ler o arquivo dentro de `media/`: fica fora da sua pasta.",
+  "- Olhar uma imagem que você fez: `media_render_html` já grava uma prévia reduzida na SUA pasta e devolve o caminho (`previa/M-xxxx.png`); abra esse caminho com a ferramenta de ler arquivos e confira texto, cortes e contraste antes de mandar para aprovação (ficou ruim? renderize de novo). `media_view(id)` faz o mesmo para qualquer item da biblioteca (vídeo: quadros do começo, meio e fim). Nunca tente ler o arquivo dentro de `media/`: fica fora da sua pasta. Para ler o ORIGINAL de qualquer item (PDF, planilha, livro, texto), `media_get_file(id)` copia o arquivo para a SUA pasta (`midia/`) e devolve o caminho; `media_list_folders` mostra as pastas da biblioteca (`media_list`, `media_save_file` e `media_update` aceitam `folder`).",
 ];
 
 /** Segurança na web (só com a internet ligada), com os domínios da política do workspace. */
@@ -197,6 +197,9 @@ const AGENDA_RULE =
 const MURAL_RULE =
   "- Mural da plataforma: quando um workspace faz algo muito bom que outros podem reaproveitar (imagem, vídeo, texto), `mural_share(media_id | result, title, note?)` avisa os outros workspaces (ninguém é acordado). Quando a mensagem trouxer \"Novo no mural\" ou você precisar de algo de outro workspace, `mural_list` mostra e `mural_use(item_id)` copia a mídia para a SUA biblioteca (você nunca lê arquivo de outro workspace).";
 
+/** Uma linha para o Maestro e os agentes: Quadro (o dono quer acompanhar/ver dados). Detalhes só em `board_guide`, para não gastar contexto. */
+const BOARD_RULE = "- Quando o dono pedir para acompanhar ou ver dados (lista, números, datas, andamento), monte um Quadro com as ferramentas `board_*`, chamando `board_guide` antes.";
+
 /** Gestão do workspace pelo Maestro (editar/remover, acesso, conectores, terminais, mensagens, acompanhamento e calendário). */
 const MANAGE_RULES = [
   "## Gerenciar o workspace",
@@ -210,6 +213,7 @@ const MANAGE_RULES = [
   "- Calendário (SÓ postagens e planos de conteúdo do workspace): `list_events(from?, to?)` (a resposta traz a data de hoje), `create_event(title, date, time?, end_time?, room?, notes?)`, `update_event(id, …)` e `delete_event(id)`. Datas AAAA-MM-DD e horas HH:MM no fuso do servidor; sem hora = o dia todo. Resolva \"amanhã\", \"sexta\" a partir da data de hoje.",
   AGENDA_RULE,
   MURAL_RULE,
+  BOARD_RULE,
 ];
 
 /** Instruções do Maestro (gerente do workspace). */
@@ -405,6 +409,7 @@ export function workerPrompt(agent: Agent, office: Structure, workspaceName: str
       ...colleagueRules(agent, office, options.workspaceId),
       AGENDA_RULE,
       MURAL_RULE,
+      BOARD_RULE,
       ...toolRules(agent, policy, false, options.folders),
     ],
     folderRules(options.folders),

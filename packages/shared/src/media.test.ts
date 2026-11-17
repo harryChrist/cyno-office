@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { forYouItemSchema, forYouSourceSchema } from "./api";
 import { FOR_YOU_SOURCE_LIMITS, normalizeSources, type ForYouSource } from "./for-you";
-import { MEDIA_MAX_BYTES, mediaItemSchema, nextMediaId, updateMediaBodySchema } from "./media";
+import { cleanFolderName, folderChain, MEDIA_MIME_TABLE, MEDIA_OTHER_MIME, mediaItemSchema, nextMediaId, normalizeFolderPath, parentFolder, resolveMediaMime, updateMediaBodySchema } from "./media";
 
 const AT = "2026-11-10T12:00:00.000Z";
 
@@ -12,11 +12,45 @@ describe("mídia: schemas", () => {
     expect(() => mediaItemSchema.parse({ ...item, id: "X-1" })).toThrow();
   });
 
-  it("ids sequenciais por workspace e limites por tipo", () => {
+  it("ids sequenciais por workspace", () => {
     expect(nextMediaId([])).toBe("M-0001");
     expect(nextMediaId([{ id: "M-0001" }, { id: "M-0009" }])).toBe("M-0010");
-    expect(MEDIA_MAX_BYTES.image).toBe(25 * 1024 * 1024);
-    expect(MEDIA_MAX_BYTES.video).toBe(300 * 1024 * 1024);
+  });
+
+  it("qualquer arquivo entra: tipos de escritório conhecidos e o resto vira application/octet-stream", () => {
+    expect(resolveMediaMime("application/octet-stream", "Balanço 2026.XLSX")).toContain("spreadsheetml");
+    expect(MEDIA_MIME_TABLE[resolveMediaMime("", "livro.epub")]).toEqual({ kind: "document", ext: "epub" });
+    expect(MEDIA_MIME_TABLE[resolveMediaMime("application/zip", "a.zip")]!.kind).toBe("other");
+    expect(resolveMediaMime("image/png; charset=x", "a.bin")).toBe("image/png");
+    expect(resolveMediaMime("application/x-estranho", "a.xyz")).toBe(MEDIA_OTHER_MIME);
+    expect(resolveMediaMime(undefined, "semextensao")).toBe(MEDIA_OTHER_MIME);
+    expect(MEDIA_MIME_TABLE[MEDIA_OTHER_MIME]).toEqual({ kind: "other", ext: "bin" });
+  });
+
+  it("pastas: caminho normalizado, saneado e com limite de profundidade", () => {
+    expect(normalizeFolderPath("")).toBe("");
+    expect(normalizeFolderPath(null)).toBe("");
+    expect(normalizeFolderPath(" /Livros//Matemática/ ")).toBe("Livros/Matemática");
+    expect(normalizeFolderPath("A\\B")).toBe("A/B");
+    expect(normalizeFolderPath("../fora")).toBeNull();
+    expect(normalizeFolderPath("a/./b")).toBeNull();
+    expect(normalizeFolderPath("a/b/c/d/e")).toBe("a/b/c/d/e");
+    expect(normalizeFolderPath("a/b/c/d/e/f")).toBeNull();
+    expect(normalizeFolderPath("a\u0000b/c")).toBe("ab/c");
+    expect(cleanFolderName("  x / y ")).toBe("x - y");
+    expect(cleanFolderName("..")).toBeNull();
+    expect(cleanFolderName("a".repeat(100))).toHaveLength(60);
+    expect(folderChain("A/B/C")).toEqual(["A", "A/B", "A/B/C"]);
+    expect(parentFolder("A/B")).toBe("A");
+    expect(parentFolder("A")).toBe("");
+  });
+
+  it("item antigo sem pasta continua válido; PATCH aceita pasta e null", () => {
+    const item = mediaItemSchema.parse({ id: "M-0001", kind: "other", mime: MEDIA_OTHER_MIME, fileName: "a.bin", title: "x", size: 1, createdAt: AT, createdBy: "usuario", origin: "upload" });
+    expect(item.folder).toBeUndefined();
+    expect(mediaItemSchema.parse({ ...item, folder: "A/B" }).folder).toBe("A/B");
+    expect(updateMediaBodySchema.parse({ folder: null })).toEqual({ folder: null });
+    expect(updateMediaBodySchema.parse({ folder: "A" })).toEqual({ folder: "A" });
   });
 
   it("PATCH aceita null para limpar e recusa campo desconhecido", () => {

@@ -7,7 +7,7 @@ import { MediaPage } from "../media/MediaPage";
 import { LibraryAppsTab } from "./apps/LibraryAppsTab";
 import { LibraryConnectorsTab } from "./LibraryConnectorsTab";
 import { LibrarySkillsTab } from "./LibrarySkillsTab";
-import { LIBRARY_TABS, isWorkspaceTab, libraryHash, openLibrary, parseLibraryHash, type LibraryLocation } from "./libraryView";
+import { LIBRARY_TABS, PLATFORM_LIBRARY_TAB, isWorkspaceTab, libraryHash, openLibrary, parseLibraryHash, type LibraryLocation } from "./libraryView";
 import "./library.css";
 
 /** O endereço da Biblioteca (`#/biblioteca/conectores/<workspace>`), acompanhando voltar/avançar e a troca de workspace. */
@@ -87,7 +87,8 @@ function WorkspaceSelect({ tab, workspaceId }: { tab: LibraryLocation["tab"]; wo
 /**
  * A Biblioteca: o que o sistema guarda para os workspaces e os agentes usarem. É da plataforma
  * (fora dos workspaces): cada item é guardado uma vez e liberado a workspaces e, dentro deles, a
- * agentes. Cinco abas: Apps, Conectores, Skills e, por workspace (com seletor), Mídia e Cérebro.
+ * agentes. Cinco abas: por workspace (com seletor), Cérebro e Mídia; da plataforma, Apps, Conectores e Skills.
+ * Abre no Cérebro do workspace atual.
  */
 export function LibraryPage() {
   const location = useLibraryLocation();
@@ -100,8 +101,8 @@ export function LibraryPage() {
   useEffect(() => {
     if (!byWorkspace || location.workspaceId || !workspaces) return;
     const ws = [navWorkspace, lastWorkspace()].find((id) => id && workspaces.some((workspace) => workspace.id === id)) ?? workspaces[0]?.id;
-    if (!ws) return;
-    window.history.replaceState(null, "", libraryHash({ tab: location.tab, workspaceId: ws }));
+    // Sem workspace nenhum não há Cérebro nem Mídia para mostrar: a Biblioteca abre nos conectores, que são da plataforma.
+    window.history.replaceState(null, "", ws ? libraryHash({ tab: location.tab, workspaceId: ws }) : libraryHash({ tab: PLATFORM_LIBRARY_TAB }));
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, [byWorkspace, location.workspaceId, location.tab, workspaces, navWorkspace]);
 

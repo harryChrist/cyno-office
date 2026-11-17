@@ -5,6 +5,7 @@ import { AgendaPage } from "./agenda/AgendaPage";
 import { ForYouPage } from "./foryou/ForYouPage";
 import { GestaoShell } from "./gestao/GestaoShell";
 import { LibraryPage } from "./library/LibraryPage";
+import { QuadroPage } from "./quadro/QuadroPage";
 import "./pages.css";
 import { SettingsPage } from "./settings/SettingsPage";
 import { WorkPage } from "./work/WorkPage";
@@ -17,6 +18,7 @@ export function Pages() {
     <main className="pages" data-testid="pages">
       {page === "trabalho" && <WorkPage />}
       {page === "para-voce" && <ForYouPage />}
+      {page === "quadro" && <QuadroPage />}
       {page === "gestao" && <GestaoShell />}
       {/* `#/agenda` é a agenda inteira; `#/agenda/<ws>` já vem filtrada nele. */}
       {page === "agenda" && <AgendaPage />}

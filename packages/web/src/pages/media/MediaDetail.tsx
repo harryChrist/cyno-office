@@ -271,6 +271,12 @@ export function MediaDetail({ entry, currentWs, agentName, agentAvatar, workspac
                       {KIND_LABELS_SINGULAR[item.kind]} · {item.mime}
                     </dd>
                   </div>
+                  {item.folder && (
+                    <div className="md-meta__wide">
+                      <dt>Pasta</dt>
+                      <dd data-testid="media-detail-folder">{item.folder.split("/").join(" / ")}</dd>
+                    </div>
+                  )}
                   <div className="md-meta__wide">
                     <dt>Arquivo</dt>
                     <dd className="md-meta__file">

@@ -42,6 +42,7 @@ import {
   type Agent,
   isMaestroAgent,
   effectiveAccess,
+  effectiveFolders,
   workspaceAccess,
   type WorkspaceAccess,
   type WorkspaceAccessInput,
@@ -82,6 +83,7 @@ import { createServices, type Services } from "./office";
 import { ensureMaestro, type MaestroProfile } from "./office/maestro";
 import { Orchestrator } from "./office/orchestrator";
 import { MediaService } from "./media/media-service";
+import { BoardService } from "./board/board-service";
 import { proposalText, RoutineService } from "./routines/routine-service";
 import { RoutineItemsStore } from "./routines/routine-items";
 import { MetaTracker } from "./routines/meta-tracker";
@@ -245,6 +247,8 @@ export class WorkspaceRuntime {
   cardSummary!: CardSummaryStore;
   /** Biblioteca de mídia (media/media.json + media/files/): imagens, vídeos e arquivos dos agentes e do usuário. */
   readonly media: MediaService;
+  /** Quadros (boards/): páginas e dados que os agentes montam para o dono olhar (veja board-service.ts). */
+  readonly boards: BoardService;
   /** Log de trabalho dos agentes (logs/<taskId>.jsonl, gravado pela mesma fila do store). */
   readonly agentLog: AgentLogService;
   /** Histórico de gastos para sempre (usage/YYYY-MM.jsonl): um registro por turno dos agentes de CLI. */
@@ -279,6 +283,8 @@ export class WorkspaceRuntime {
   readonly browser: BrowserService | undefined;
   /** Política de acesso dos agentes (com os padrões aplicados; lida a cada uso). */
   readonly access: () => WorkspaceAccess;
+  /** Pastas de trabalho do workspace (os agentes leem delas os arquivos de dados dos Quadros). */
+  private readonly workFolders: () => readonly WorkFolder[];
   private readonly simulated: boolean;
   private readonly engines: (() => Promise<EngineInfo[]>) | undefined;
   /** Uso da assinatura e disponibilidade dos motores (o get_usage do Maestro). */
@@ -379,6 +385,15 @@ export class WorkspaceRuntime {
       log,
       now: options.now,
     });
+    this.boards = new BoardService({
+      dir: store.paths.boardsDir,
+      file: store.paths.boardsFile,
+      boardDir: store.paths.boardDir,
+      queue: store.queue,
+      publish: (event) => this.state.publish(event),
+      log,
+      now: options.now,
+    });
     this.cliRunner = new CliAgentRunner(this.terminals);
     // Tarefa que acaba com o cartão ainda pendente: o cartão não fica órfão (aprovar depois não faria nada).
     this.cliRunner.onApprovalAbandoned = (_agentId, taskId) => {
@@ -391,6 +406,7 @@ export class WorkspaceRuntime {
         .catch((error: unknown) => log.warn({ err: error, taskId }, "não foi possível fechar o cartão da tarefa encerrada"));
     };
     this.access = () => workspaceAccess(options.workspaceAccess?.(id));
+    this.workFolders = () => options.workspaceFolders?.(id) ?? [];
     this.browser =
       options.browser?.enabled === false
         ? undefined
@@ -938,6 +954,7 @@ export class WorkspaceRuntime {
       }
     }
     const runtime = new WorkspaceRuntime(id, store, await readCalendarFile(store.paths.calendarFile), types.types, options, plans, routinesData, mediaItems, trackedItems);
+    await runtime.boards.load();
     if (types.changed) await runtime.forYouTypes.save();
     runtime.cardSummary = await CardSummaryStore.open({ file: store.paths.cardFile, queue: store.queue, now: options.now, log: options.log });
     // Cérebro em camadas: resultados datados vão para historico/ e cada Cérebro ganha os fixos que faltam (move, nunca apaga).
@@ -1205,6 +1222,11 @@ export class WorkspaceRuntime {
         currentTask: (id) => this.runningTask(id),
         ...(this.browser ? { render: (input) => this.browser!.renderHtml(input) } : {}),
         ffmpeg: () => this.ffmpegPath(),
+      },
+      board: {
+        boards: this.boards,
+        agentDir: (id) => this.store.paths.agentDir(id),
+        readableFolders: (id) => effectiveFolders(this.workFolders(), this.state.read().agents.find((agent) => agent.id === id)).map((folder) => folder.path),
       },
       manage: {
         services: this.services,

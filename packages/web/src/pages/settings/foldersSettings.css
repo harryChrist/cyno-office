@@ -1,8 +1,54 @@
-/* Configurações › Pastas de trabalho */
+/* Configurações > Pastas de trabalho: uma linha compacta por pasta. O cartão é um contêiner: o arranjo segue a largura dele
+   (a página larga, o celular e o painel aberto pela barra usam o mesmo CSS). */
+.folders {
+  container: folders / inline-size;
+  gap: 10px;
+}
+
+.folders__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.folders__head-text {
+  display: grid;
+  flex: 1 1 320px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.folders__head-text .settings__card-title {
+  margin: 0;
+}
+
+.folders__add-btn {
+  flex: 0 0 auto;
+  min-height: 32px;
+}
+
+.folders__more summary {
+  width: fit-content;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+  cursor: pointer;
+}
+
+.folders__more summary:hover {
+  color: var(--ui-text-2);
+}
+
+.folders__more[open] summary {
+  margin-bottom: 4px;
+}
+
 .folders__empty {
   display: grid;
-  gap: 8px;
-  padding: 16px;
+  justify-items: start;
+  gap: 6px;
+  padding: 14px 16px;
   background: var(--ui-surface-2);
   border: 1px dashed var(--ui-border-strong);
   border-radius: var(--ui-radius);
@@ -15,62 +61,106 @@
   color: var(--ui-text);
 }
 
-.folders__examples {
-  display: grid;
-  gap: 6px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
+.folders__empty-hint {
+  margin: 0 0 4px;
   font-size: 13px;
   color: var(--ui-text-2);
 }
 
-.folders__examples li {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: baseline;
-}
-
-.folders__examples code,
 .folder-row__path code {
   font-family: var(--ui-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-  font-size: 12.5px;
-  color: var(--ui-text);
+  font-size: 12px;
+  color: var(--ui-text-2);
 }
 
 .folders__list {
   display: grid;
-  gap: 10px;
   margin: 0;
   padding: 0;
+  overflow: hidden;
   list-style: none;
-}
-
-.folder-row {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
 }
 
-.folder-row__top {
+.folder-row {
+  display: grid;
+  gap: 2px;
+  padding: 8px 8px 8px 12px;
+}
+
+.folder-row + .folder-row {
+  border-top: 1px solid var(--ui-border);
+}
+
+.folder-row__head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.folder-row__meta {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 2px 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* Nome e "para que serve": parecem texto até o cursor chegar (edição no lugar). */
+.folder-row__name,
+.folder-row__purpose {
+  min-width: 0;
+  font: inherit;
+  color: var(--ui-text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  transition:
+    background var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.folder-row__name {
+  flex: 1 1 0;
+  padding: 3px 6px;
+  margin-left: -6px;
+  font-size: 14.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.folder-row__purpose {
+  padding: 3px 6px;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  color: var(--ui-text-2);
+}
+
+.folder-row__purpose::placeholder {
+  color: var(--ui-text-3);
+  opacity: 0.8;
+}
+
+.folder-row__name:hover,
+.folder-row__purpose:hover {
+  background: var(--ui-hover);
+}
+
+.folder-row__name:focus,
+.folder-row__purpose:focus {
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border-color: var(--ui-accent);
+  outline: none;
 }
 
 .folder-row__field {
   display: grid;
   gap: 4px;
   min-width: 0;
-}
-
-.folder-row__field--name {
-  flex: 1 1 200px;
 }
 
 .folder-row__label {
@@ -80,14 +170,107 @@
 }
 
 .folder-row__path {
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.folder-row__path code {
+  unicode-bidi: plaintext;
+}
+
+/* Tamanho da pasta em disco ("1,2 GB", "calculando…", "sem acesso"). */
+.folder-row__size {
+  flex: 0 0 auto;
+  min-width: 84px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.folder-row__size[data-state="computing"] {
+  color: var(--ui-text-3);
+  font-style: italic;
+}
+
+.folder-row__size[data-state="error"] {
+  color: var(--ui-warn);
+}
+
+.folder-row__refresh {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -6px;
+  padding: 0;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    background var(--ui-fast),
+    color var(--ui-fast),
+    opacity var(--ui-fast);
+}
+
+.folder-row__refresh:hover:not(:disabled),
+.folder-row__refresh:focus-visible {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  opacity: 1;
+}
+
+.folder-row__refresh:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.folder-row__refresh:disabled {
+  cursor: default;
+  opacity: 0.35;
 }
 
 .folder-row__remove {
+  display: inline-grid;
   flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-sm);
+  cursor: pointer;
+  transition:
+    background var(--ui-fast),
+    color var(--ui-fast);
+}
+
+.folder-row__remove:hover:not(:disabled),
+.folder-row__remove:focus-visible {
+  color: var(--ui-danger, #ff6b6b);
+  background: var(--ui-hover);
+}
+
+.folder-row__remove:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.folder-row__remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /* "Só leitura" | "Leitura e escrita" */
@@ -101,15 +284,16 @@
 }
 
 .folder-mode__option {
-  min-height: 30px;
-  padding: 3px 12px;
+  min-height: 26px;
+  padding: 2px 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ui-text-2);
   background: transparent;
   border: 0;
   border-radius: calc(var(--ui-radius-sm) - 2px);
   cursor: pointer;
+  white-space: nowrap;
   transition:
     background var(--ui-fast),
     color var(--ui-fast);
@@ -145,15 +329,10 @@
 .folder-add {
   display: grid;
   gap: 10px;
-  padding-top: 14px;
-  border-top: 1px solid var(--ui-border);
-}
-
-.folder-add__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--ui-text);
+  padding: 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
 }
 
 .folder-add__grid {
@@ -173,6 +352,12 @@
   gap: 10px;
   align-items: center;
   justify-content: space-between;
+}
+
+.folder-add__buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* Painel do agente: uma pasta do workspace e a escolha dele */
@@ -237,22 +422,88 @@
   border-radius: var(--ui-radius-sm);
 }
 
-@media (max-width: 640px) {
+/* Cartão estreito (celular, painel da barra): o modo desce para a segunda linha e o resto empilha. */
+@container folders (max-width: 560px) {
+  .folder-row {
+    padding: 10px 6px 10px 10px;
+  }
+
+  .folder-row__head {
+    flex-wrap: wrap;
+  }
+
+  .folder-row__name {
+    order: 1;
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .folder-row__size {
+    order: 2;
+    min-width: 0;
+  }
+
+  .folder-row__refresh {
+    order: 2;
+    width: 32px;
+    height: 32px;
+    margin-left: 0;
+  }
+
+  .folder-row__remove {
+    order: 3;
+    width: 40px;
+    height: 40px;
+  }
+
+  .folder-row .folder-mode {
+    order: 4;
+    flex: 0 0 auto;
+  }
+
+  .folder-row .folder-mode__option {
+    min-height: 30px;
+    padding-inline: 12px;
+  }
+
+  .folder-row__meta {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .folder-row__purpose {
+    min-height: 38px;
+    margin-left: -6px;
+    border-bottom-color: var(--ui-border);
+    border-radius: 0;
+  }
+
   .folder-add__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .folder-mode {
+  .folder-add .folder-mode {
     width: 100%;
   }
 
-  .folder-mode__option {
+  .folder-add .folder-mode__option {
     flex: 1 1 0;
+    min-height: 34px;
     padding-inline: 6px;
   }
 
-  .folder-row__remove {
-    margin-left: auto;
+  .folder-add__buttons {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+
+  .folder-add__buttons .ui-button {
+    min-height: 40px;
+  }
+
+  .folders__add-btn {
+    min-height: 40px;
   }
 }
 
@@ -262,4 +513,149 @@
   background: transparent;
   border: 0;
   border-radius: 0;
+}
+
+/* ---------- Cartão "Espaço em disco" ---------- */
+.storage {
+  container: storage / inline-size;
+  gap: 12px;
+}
+
+.storage__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.storage__head-text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.storage__total {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  align-items: baseline;
+}
+
+.storage__bytes {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--ui-text);
+}
+
+.storage__total-label {
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+.storage__bar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  overflow: hidden;
+  background: var(--ui-bar-track, var(--ui-surface-2));
+  border-radius: 999px;
+}
+
+.storage__seg {
+  flex-basis: 0;
+  min-width: 4px;
+}
+
+.storage__seg--media {
+  background: var(--ui-tc-1, #86b5f2);
+}
+
+.storage__seg--agents {
+  background: var(--ui-tc-2, #8fd6a8);
+}
+
+.storage__seg--logs {
+  background: var(--ui-tc-3, #f0c674);
+}
+
+.storage__seg--brains {
+  background: var(--ui-tc-4, #c9a2ee);
+}
+
+.storage__seg--boards {
+  background: #f09aa8;
+}
+
+.storage__seg--other {
+  background: var(--ui-text-3);
+}
+
+.storage__legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.storage__item {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 38px;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.storage__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.storage__item-label {
+  overflow: hidden;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage__item-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.storage__item-share {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ui-text-3);
+}
+
+.storage__folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  align-items: baseline;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.storage__folders-label {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.storage__folders-value {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+
+.storage__folders-note {
+  font-size: 12px;
+  color: var(--ui-text-3);
 }

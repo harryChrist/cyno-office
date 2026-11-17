@@ -256,11 +256,20 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   browser_inspect: row("🔎", "inspecionar página", "Inspecionando a página", "Inspecionou a página"),
   browser_upload: row("📤", "enviar arquivo", "Enviando um arquivo pela página", "Enviou um arquivo pela página"),
   // Mídia
+  media_get_file: row("📎", "pegar arquivo da mídia", "Pegando um arquivo da mídia", "Pegou um arquivo da mídia"),
   media_list: row("🖼️", "listar mídia", "Olhando a biblioteca de mídia", "Listou a biblioteca de mídia"),
+  media_list_folders: row("🗂️", "listar pastas da mídia", "Olhando as pastas da mídia", "Listou as pastas da mídia"),
   media_render_html: row("🖼️", "gerar imagem", "Gerando uma imagem", "Gerou uma imagem"),
   media_save_file: row("🖼️", "guardar mídia", "Guardando um arquivo na mídia", "Guardou um arquivo na mídia"),
   media_update: row("🖼️", "ajustar mídia", "Ajustando um item de mídia", "Ajustou um item de mídia"),
   media_view: row("👁️", "olhar mídia", "Olhando uma imagem da mídia", "Olhou uma imagem da mídia"),
+  // Quadros
+  board_guide: row("📊", "ler guia do quadro", "Lendo o guia dos quadros", "Leu o guia dos quadros"),
+  board_list: row("📊", "listar quadros", "Olhando os quadros", "Listou os quadros"),
+  board_save: row("📊", "montar quadro", "Montando um quadro", "Montou um quadro"),
+  board_set_data: row("📊", "atualizar dados do quadro", "Atualizando os dados de um quadro", "Atualizou os dados de um quadro"),
+  board_patch_data: row("📊", "ajustar dados do quadro", "Ajustando os dados de um quadro", "Ajustou os dados de um quadro"),
+  board_read_data: row("📊", "ler dados do quadro", "Lendo os dados de um quadro", "Leu os dados de um quadro"),
   // Rotinas e acompanhamentos
   routine_list: row("⏰", "listar rotinas", "Olhando as rotinas", "Listou as rotinas"),
   routine_status: row("⏰", "ver rotina", "Conferindo uma rotina", "Conferiu uma rotina"),

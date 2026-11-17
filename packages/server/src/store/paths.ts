@@ -1,5 +1,5 @@
 import path from "node:path";
-import { GLOBAL_BRAIN_ID, isSafeId } from "@cyno/shared";
+import { BOARD_ID_PATTERN, GLOBAL_BRAIN_ID, isSafeId } from "@cyno/shared";
 
 export type DataPaths = {
   root: string;
@@ -35,6 +35,10 @@ export type DataPaths = {
   mediaDir: string;
   mediaFile: string;
   mediaFilesDir: string;
+  /** Quadros: índice (boards/boards.json) e, por quadro, boards/<id>/page.html e data.json. */
+  boardsDir: string;
+  boardsFile: string;
+  boardDir: (boardId: string) => string;
   brainsDir: string;
   /** Pasta do Cérebro: "global" ou o id de um quarto. */
   brainDir: (brainId: string) => string;
@@ -85,6 +89,12 @@ export function dataPaths(root: string): DataPaths {
     mediaDir: path.join(root, "media"),
     mediaFile: path.join(root, "media", "media.json"),
     mediaFilesDir: path.join(root, "media", "files"),
+    boardsDir: path.join(root, "boards"),
+    boardsFile: path.join(root, "boards", "boards.json"),
+    boardDir(boardId) {
+      if (!BOARD_ID_PATTERN.test(boardId)) throw new Error(`id de quadro inválido: "${boardId}"`);
+      return path.join(root, "boards", boardId);
+    },
     brainsDir,
     brainDir(brainId) {
       if (brainId !== GLOBAL_BRAIN_ID && !isSafeId(brainId)) {

@@ -70,6 +70,6 @@ describe("abas no endereço", () => {
   });
 
   it("as páginas de workspace do menu", () => {
-    expect(PAGES.map((page) => page.id)).toEqual(["office", "trabalho", "para-voce", "gestao"]);
+    expect(PAGES.map((page) => page.id)).toEqual(["office", "trabalho", "para-voce", "quadro", "gestao"]);
   });
 });

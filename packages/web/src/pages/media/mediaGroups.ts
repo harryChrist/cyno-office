@@ -106,7 +106,7 @@ export function entryMatches(entry: GalleryEntry, filters: MediaFilters, showDis
     if (filters.status !== "todos" && item.status !== filters.status) return false;
     if (filters.agent !== "todos" && item.createdBy !== filters.agent) return false;
     if (!needle) return true;
-    const text = [item.title, item.fileName, item.note, item.where, agents(ws, item.createdBy), ...(item.tags ?? [])].filter(Boolean).join(" ");
+    const text = [item.title, item.fileName, item.note, item.where, item.folder, agents(ws, item.createdBy), ...(item.tags ?? [])].filter(Boolean).join(" ");
     return text
       .normalize("NFD")
       .replace(/\p{Diacritic}/gu, "")

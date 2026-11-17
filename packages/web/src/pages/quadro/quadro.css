@@ -1,0 +1,848 @@
+/* Quadro: abas com os quadros do workspace, cabeçalho compacto e o iframe isolado ocupando o resto. */
+
+/* A página inteira é a tela do quadro: sem a margem das outras páginas, altura toda (também no celular). */
+.page.quadro {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
+.quadro :focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.quadro .quadro__tabs {
+  padding: 8px 16px 0;
+}
+
+.quadro .pagetabs__tab {
+  min-height: 38px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quadro__panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.quadro-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 16px 16px;
+}
+
+/* ---------- Cabeçalho do quadro ---------- */
+.quadro-head {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.quadro-head__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.quadro-head__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ui-text);
+}
+
+.quadro-head__desc {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.quadro-head__meta {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: center;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.quadro-head__dot {
+  color: var(--ui-border-strong);
+}
+
+.quadro-head__actions {
+  display: flex;
+  flex: none;
+  order: 3;
+  margin-left: auto;
+  gap: 2px;
+  align-items: center;
+}
+
+.quadro-head__actions .ui-icon-button {
+  width: 34px;
+  height: 34px;
+}
+
+.quadro-head__danger:hover {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+}
+
+/* "Como é atualizado": um detalhe que abre um cartinho sobre o conteúdo. */
+.quadro-how summary {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  list-style: none;
+  border-radius: 4px;
+}
+
+.quadro-how summary::-webkit-details-marker {
+  display: none;
+}
+
+.quadro-how summary:hover {
+  color: var(--ui-text);
+}
+
+.quadro-how__body {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  box-sizing: border-box;
+  width: min(460px, 100%);
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow);
+}
+
+/* ---------- Palco do iframe ---------- */
+.quadro-stage {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: #0b0d1a;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+/* Tela cheia: cobre a janela toda (o navegador também entra em tela cheia quando deixa). */
+.quadro-stage--full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  border: 0;
+  border-radius: 0;
+}
+
+/* A barra lateral (e a do celular) ficam por cima das páginas: em tela cheia somem, como no mapa do Escritório. */
+:root.is-quadro-cheio .sidenav,
+:root.is-quadro-cheio .mbar {
+  display: none;
+}
+
+:root.is-quadro-cheio:has(.sidenav),
+:root.is-quadro-cheio:has(.mbar) {
+  --nav-w: 0px;
+}
+
+.quadro-stage__bar {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 4px 16px;
+  background: var(--ui-surface-solid);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.quadro-stage__name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quadro-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.quadro-frame__iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0b0d1a;
+}
+
+.quadro-frame__loading,
+.quadro-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-size: 14px;
+  color: var(--ui-text-2);
+  text-align: center;
+}
+
+.quadro-frame__loading {
+  position: absolute;
+  inset: 0;
+  background: #0b0d1a;
+}
+
+.quadro-state p {
+  max-width: 460px;
+  margin: 0;
+}
+
+.quadro-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ui-border-strong);
+  border-top-color: var(--ui-accent);
+  border-radius: 50%;
+  animation: quadro-spin 0.8s linear infinite;
+}
+
+@keyframes quadro-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quadro-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* Aviso discreto de erro de script da página do agente: fica numa faixa embaixo, sem esconder o quadro. */
+.quadro-frame__warn {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text);
+  background: color-mix(in srgb, var(--ui-surface-solid) 90%, var(--ui-warn) 10%);
+  border: 1px solid color-mix(in srgb, var(--ui-warn) 55%, transparent);
+  border-radius: var(--ui-radius-sm);
+  box-shadow: var(--ui-shadow);
+}
+
+.quadro-frame__warn-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Faixa de exemplo ---------- */
+.quadro-banner {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ui-text-2);
+  background: var(--ui-accent-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.quadro-banner__text {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.quadro-banner strong {
+  color: var(--ui-text);
+}
+
+.quadro-example__tag {
+  flex: none;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+  background: var(--ui-accent-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+  border-radius: var(--ui-radius-pill);
+}
+
+/* ---------- Estado vazio ---------- */
+.quadro-empty {
+  flex: 1;
+  width: 100%;
+  max-width: 980px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 28px 16px 40px;
+  overflow: auto;
+}
+
+.quadro-empty__eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-accent);
+}
+
+.quadro-empty__title {
+  margin: 0 0 10px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.quadro-empty__text {
+  max-width: 680px;
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ui-text-2);
+}
+
+.quadro-empty__text strong {
+  color: var(--ui-text);
+}
+
+.quadro-empty__sub {
+  margin: 26px 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.quadro-examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quadro-example {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 16px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.quadro-example__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ui-text);
+}
+
+.quadro-example__blurb,
+.quadro-example__ask {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.quadro-example__ask {
+  flex: 1;
+  color: var(--ui-text-3);
+}
+
+.quadro-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: min(420px, 78vw);
+}
+
+@media (max-width: 760px) {
+  .quadro .quadro__tabs {
+    padding: 6px 8px 0;
+  }
+
+  .quadro-view {
+    padding: 10px 8px 8px;
+  }
+
+  .quadro-head__title {
+    font-size: 16px;
+  }
+
+  /* Em linhas quebradas os pontinhos ficariam pendurados: some o separador, o espaço basta. */
+  .quadro-head__dot {
+    display: none;
+  }
+
+  .quadro-head__meta {
+    gap: 2px 12px;
+  }
+
+  .quadro-head__actions .ui-icon-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .quadro-stage {
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    margin: 0 -8px;
+  }
+
+  .quadro-empty {
+    padding: 20px 14px 32px;
+  }
+
+  .quadro-empty__title {
+    font-size: 21px;
+  }
+}
+
+/* ---------- Tela inicial: cartões ---------- */
+/* As oito cores de destaque dos cartões (as mesmas dos gráficos do kit; as variáveis do kit só existem dentro do iframe). */
+.quadro {
+  --q-c1: #86b5f2;
+  --q-c2: #62c6c6;
+  --q-c3: #94d077;
+  --q-c4: #bba0f2;
+  --q-c5: #e9a067;
+  --q-c6: #ee8bba;
+  --q-c7: #e8b552;
+  --q-c8: #a2acf2;
+}
+
+.quadro-home {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+  overflow: auto;
+}
+
+.quadro-home__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.quadro-home__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ui-text);
+}
+
+.quadro-home__count {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.quadro-home__tools {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.quadro-search {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 300px;
+}
+
+.quadro-search svg {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  color: var(--ui-text-3);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.quadro-search .ui-input {
+  min-height: 38px;
+  padding-left: 34px;
+}
+
+.quadro-sort {
+  flex: none;
+  width: 200px;
+}
+
+.quadro-sort .ui-input {
+  min-height: 38px;
+}
+
+.quadro-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quadro-card-item {
+  display: flex;
+  min-width: 0;
+}
+
+.quadro-card {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 16px 16px 14px;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  transition:
+    border-color var(--ui-fast),
+    background-color var(--ui-fast),
+    transform var(--ui-fast);
+}
+
+/* O detalhe que diferencia os cartões sem carregar o quadro: uma faixa e um selo na cor do quadro. */
+.quadro-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: var(--q-accent);
+}
+
+.quadro-card:hover {
+  background: var(--ui-surface-2);
+  border-color: color-mix(in srgb, var(--q-accent) 55%, transparent);
+  transform: translateY(-1px);
+}
+
+.quadro-card__badge {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--q-accent);
+  background: color-mix(in srgb, var(--q-accent) 16%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+.quadro-card__title {
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.quadro-card__desc {
+  display: -webkit-box;
+  flex: 1;
+  min-height: 2.9em;
+  overflow: hidden;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.quadro-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.quadro-home__none {
+  padding: 48px 16px;
+}
+
+.quadro-notice {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 8px 8px 8px 14px;
+  font-size: 13.5px;
+  color: var(--ui-text);
+  background: var(--ui-accent-bg);
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+  border-radius: var(--ui-radius-sm);
+}
+
+/* ---------- Dentro do quadro: voltar e seletor ---------- */
+.quadro-head__line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.quadro-back {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  align-items: center;
+  padding: 4px 10px 4px 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.quadro-back:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
+.quadro .quadro-head__title {
+  min-width: 0;
+}
+
+.quadro-picker {
+  position: relative;
+}
+
+.quadro-picker__button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  margin-left: -8px;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+}
+
+.quadro-picker__button:hover,
+.quadro-picker__button[aria-expanded="true"] {
+  background: var(--ui-hover);
+  border-color: var(--ui-border);
+}
+
+.quadro-picker__title {
+  /* Sem porcentagem: ela, num pai sem largura própria, cortava o título por meio pixel. */
+  max-width: min(560px, 62vw);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quadro-picker__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: -8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 24px));
+  padding: 8px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+}
+
+.quadro-picker__list {
+  max-height: min(340px, 50vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.quadro-picker__item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text);
+  cursor: pointer;
+  border-radius: var(--ui-radius-sm);
+}
+
+.quadro-picker__item.is-active {
+  background: var(--ui-hover);
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+.quadro-picker__item.is-current .quadro-picker__name {
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+.quadro-picker__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quadro-picker__now {
+  flex: none;
+  font-size: 11px;
+  color: var(--ui-text-3);
+}
+
+.quadro-picker__none {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ui-text-3);
+}
+
+@media (max-width: 760px) {
+  .quadro-home {
+    padding: 14px 12px 28px;
+  }
+
+  .quadro-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quadro-home__tools {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .quadro-search {
+    flex: 1 1 100%;
+    width: auto;
+  }
+
+  .quadro-sort .ui-input {
+    width: 100%;
+  }
+
+  /* Celular: voltar e ações na primeira linha, o título (seletor) na linha de baixo, com a largura toda. */
+  .quadro-head__line .quadro-back {
+    order: 1;
+  }
+
+  .quadro-head__actions {
+    order: 2;
+  }
+
+  .quadro .quadro-head__title {
+    flex: 1 0 100%;
+    order: 3;
+  }
+
+  .quadro-head__line {
+    position: relative;
+  }
+
+  .quadro-picker {
+    position: static;
+  }
+
+  .quadro-picker__title {
+    max-width: calc(100vw - 80px);
+  }
+
+  .quadro-picker__pop {
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    width: auto;
+  }
+
+  .quadro-sort {
+    width: 100%;
+  }
+}

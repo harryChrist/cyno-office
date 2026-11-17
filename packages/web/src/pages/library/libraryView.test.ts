@@ -1,6 +1,7 @@
 import type { LibraryConnector, LibraryWorkspaceInfo } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import {
+  LIBRARY_TABS,
   applyLibraryEvent,
   describeDraftChange,
   draftOf,
@@ -55,11 +56,13 @@ const off = connector({ id: "velho", enabled: false, status: { state: "disabled"
 const all = [fetchTool, docs, broken, off];
 
 describe("endereço da Biblioteca", () => {
-  it("monta e lê #/biblioteca/<aba>/<workspace>; aba desconhecida ou 'em breve' volta para Conectores", () => {
-    expect(libraryHash()).toBe("#/biblioteca/conectores");
+  it("monta e lê #/biblioteca/<aba>/<workspace>; sem aba, ou com aba desconhecida, abre no Cérebro", () => {
+    expect(libraryHash()).toBe("#/biblioteca/cerebro");
     expect(libraryHash({ tab: "conectores", workspaceId: "meu ws" })).toBe("#/biblioteca/conectores/meu%20ws");
     expect(parseLibraryHash("#/biblioteca/conectores/principal")).toEqual({ tab: "conectores", workspaceId: "principal" });
-    expect(parseLibraryHash("#/biblioteca")).toEqual({ tab: "conectores", workspaceId: null });
+    expect(parseLibraryHash("#/biblioteca")).toEqual({ tab: "cerebro", workspaceId: null });
+    expect(parseLibraryHash("#/biblioteca/nao-existe")).toEqual({ tab: "cerebro", workspaceId: null });
+    expect(LIBRARY_TABS.map((tab) => tab.id)).toEqual(["cerebro", "midia", "apps", "conectores", "skills"]);
     expect(parseLibraryHash("#/biblioteca/midia")).toEqual({ tab: "midia", workspaceId: null });
     expect(parseLibraryHash("#/biblioteca/cerebro/principal/global/a.md")).toEqual({ tab: "cerebro", workspaceId: "principal" });
     expect(libraryHash({ tab: "midia", workspaceId: "principal" })).toBe("#/biblioteca/midia/principal");

@@ -1,8 +1,11 @@
-import { WORK_FOLDER_LIMITS, type Workspace, type WorkFolder, type WorkFolderMode } from "@cyno/shared";
+import { WORK_FOLDER_LIMITS, type StorageFolder, type Workspace, type WorkFolder, type WorkFolderMode } from "@cyno/shared";
 import { useId, useState } from "react";
 import { api } from "../../api/client";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
+import { StorageCard } from "./StorageCard";
+import { storageLabel, storageTitle } from "./storageView";
+import { useStorage } from "./useStorage";
 import "./foldersSettings.css";
 
 const MODE_LABELS: Record<WorkFolderMode, string> = { read: "Só leitura", write: "Leitura e escrita" };
@@ -31,40 +34,44 @@ export function FolderModePicker({ value, onChange, disabled, label, testId }: {
 
 /**
  * Seção do workspace "Pastas de trabalho": pastas reais do computador (um projeto, um vault do Obsidian…) que os agentes
- * usam. Cada uma tem nome, caminho, "para que serve" (os agentes leem isso nas instruções) e o modo: só leitura ou leitura
- * e escrita. Cada agente só pode ter menos (painel dele). Trocar reinicia os terminais quando estiverem livres.
+ * usam. Cada uma é uma linha compacta com nome, caminho, "para que serve" (os agentes leem isso nas instruções) e o modo: só
+ * leitura ou leitura e escrita. Cada agente só pode ter menos (painel dele). Trocar reinicia os terminais quando estiverem livres.
  */
 export function FoldersSettings({ workspace, panel = false }: { workspace: Workspace; panel?: boolean }) {
   const folders = workspace.folders ?? [];
+  // Uma única consulta de espaço em disco serve as linhas e o cartão (no painel da barra só as linhas).
+  const storage = useStorage(workspace.id, folders.map((folder) => folder.id).join(","));
   const full = folders.length >= WORK_FOLDER_LIMITS.max;
+  const [adding, setAdding] = useState(false);
+  const addButton = (
+    <button type="button" className="ui-button ui-button--small folders__add-btn" aria-expanded={adding} aria-controls="folders-add-form" onClick={() => setAdding((open) => !open)} data-testid="settings-folder-add-toggle">
+      <span aria-hidden="true">{adding ? "−" : "+"}</span> {adding ? "Fechar" : "Adicionar pasta"}
+    </button>
+  );
   return (
     <div className={`settings__groups${panel ? " folders--panel" : ""}`} data-testid="settings-folders">
-      <section className="settings__card">
-        <header className="settings__card-head">
-          {!panel && <h4 className="settings__card-title">Pastas que os agentes usam</h4>}
-          <p className="settings__card-hint">
-            Pastas do seu computador onde os agentes (o Maestro também) leem e trabalham. A pasta própria de cada agente continua sendo só rascunho. Tirar uma pasta daqui não apaga nada do disco. Trocar reinicia o terminal de cada agente quando ele estiver livre.
-          </p>
+      <section className="settings__card folders">
+        <header className="folders__head">
+          <div className="folders__head-text">
+            {!panel && <h4 className="settings__card-title">Pastas que os agentes usam</h4>}
+            <p className="settings__card-hint">Pastas do seu computador onde os agentes (o Maestro também) leem e trabalham. Tirar uma pasta daqui não apaga nada do disco.</p>
+            <details className="folders__more">
+              <summary>Mais detalhes</summary>
+              <p className="settings__card-hint">A pasta própria de cada agente continua sendo só rascunho. Trocar uma pasta reinicia o terminal de cada agente quando ele estiver livre.</p>
+            </details>
+          </div>
+          {!full && folders.length > 0 && addButton}
         </header>
         {folders.length === 0 ? (
           <div className="folders__empty" data-testid="settings-folders-empty">
             <p className="folders__empty-title">Nenhuma pasta cadastrada</p>
-            <p className="settings__card-hint">
-              Cadastre a pasta de um projeto de código para os agentes lerem e editarem os arquivos reais, ou a de um vault do Obsidian para consultarem (ou anotarem em) suas notas. Em cada pasta você escreve para que ela serve e escolhe se os agentes só leem ou também escrevem.
-            </p>
-            <ul className="folders__examples">
-              <li>
-                <code>/home/voce/projetos/meu-app</code> <span>Código do app. Leitura e escrita para os desenvolvedores.</span>
-              </li>
-              <li>
-                <code>/home/voce/Obsidian/Vault</code> <span>Minhas notas. Só leitura: consultar antes de responder.</span>
-              </li>
-            </ul>
+            <p className="folders__empty-hint">Cadastre a pasta de um projeto ou de um vault de notas para os agentes lerem (ou editarem) os arquivos reais.</p>
+            {!adding && addButton}
           </div>
         ) : (
           <ul className="folders__list" aria-label="Pastas de trabalho" data-testid="settings-folders-list">
             {folders.map((folder) => (
-              <FolderRow key={`${folder.id}:${folder.name}:${folder.purpose ?? ""}`} workspaceId={workspace.id} folder={folder} />
+              <FolderRow key={`${folder.id}:${folder.name}:${folder.purpose ?? ""}`} workspaceId={workspace.id} folder={folder} size={storage.data?.folders.find((item) => item.id === folder.id)} onRefreshSize={storage.refresh} />
             ))}
           </ul>
         )}
@@ -73,14 +80,20 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
             Em pastas de leitura e escrita os agentes podem criar, alterar e apagar arquivos de verdade. Se for um projeto, vale ter o Git ou uma cópia antes.
           </p>
         )}
-        {full ? <p className="settings__card-hint">O limite é de {WORK_FOLDER_LIMITS.max} pastas por workspace. Tire alguma para cadastrar outra.</p> : <AddFolderForm workspaceId={workspace.id} />}
+        {full && <p className="settings__card-hint">O limite é de {WORK_FOLDER_LIMITS.max} pastas por workspace. Tire alguma para cadastrar outra.</p>}
+        {!full && adding && <AddFolderForm id="folders-add-form" workspaceId={workspace.id} onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />}
       </section>
+      {!panel && <StorageCard workspace={workspace} data={storage.data} failed={storage.failed} onRefresh={storage.refresh} />}
     </div>
   );
 }
 
-/** Uma pasta cadastrada: nome e "para que serve" editáveis (salvam ao sair do campo), modo e remover. */
-function FolderRow({ workspaceId, folder }: { workspaceId: string; folder: WorkFolder }) {
+/**
+ * Uma pasta cadastrada, em linhas curtas: nome e "para que serve" editam no lugar (salvam ao sair do campo), o caminho
+ * aparece truncado (inteiro no title), o modo é um controle pequeno e "Tirar" é discreto. À direita fica o tamanho em disco
+ * (`settings-folder-size`): "calculando…" enquanto o servidor mede, "sem acesso" se a pasta não abre; o title tem arquivos e hora.
+ */
+function FolderRow({ workspaceId, folder, size, onRefreshSize }: { workspaceId: string; folder: WorkFolder; size: StorageFolder | undefined; onRefreshSize: () => void }) {
   const { pending, error, run } = useAsyncAction();
   const [name, setName] = useState(folder.name);
   const [purpose, setPurpose] = useState(folder.purpose ?? "");
@@ -89,45 +102,56 @@ function FolderRow({ workspaceId, folder }: { workspaceId: string; folder: WorkF
   const save = (body: Parameters<typeof api.updateWorkFolder>[2]) => void run(() => api.updateWorkFolder(workspaceId, folder.id, body));
   return (
     <li className="folder-row" data-testid="settings-folder" data-folder-id={folder.id}>
-      <div className="folder-row__top">
-        <div className="folder-row__field folder-row__field--name">
-          <label htmlFor={nameId} className="folder-row__label">
-            Nome
-          </label>
-          <input
-            id={nameId}
-            className="ui-input"
-            value={name}
-            maxLength={WORK_FOLDER_LIMITS.name}
-            onChange={(event) => setName(event.currentTarget.value)}
-            onBlur={() => {
-              const next = name.trim();
-              if (!next) setName(folder.name);
-              else if (next !== folder.name) save({ name: next });
-            }}
-            data-testid="settings-folder-name"
-          />
-        </div>
+      <div className="folder-row__head">
+        <label htmlFor={nameId} className="sr-only">
+          Nome da pasta
+        </label>
+        <input
+          id={nameId}
+          className="folder-row__name"
+          value={name}
+          maxLength={WORK_FOLDER_LIMITS.name}
+          title="Clique para renomear"
+          onChange={(event) => setName(event.currentTarget.value)}
+          onBlur={() => {
+            const next = name.trim();
+            if (!next) setName(folder.name);
+            else if (next !== folder.name) save({ name: next });
+          }}
+          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
+          data-testid="settings-folder-name"
+        />
         <FolderModePicker value={folder.mode} label={`Modo da pasta ${folder.name}`} disabled={pending} onChange={(mode) => save({ mode })} testId="settings-folder-mode" />
-        <button type="button" className="ui-button ui-button--secondary ui-button--small folder-row__remove" disabled={pending} onClick={() => void run(() => api.removeWorkFolder(workspaceId, folder.id))} aria-label={`Tirar a pasta ${folder.name} (não apaga nada do disco)`} title="Tira do workspace; não apaga nada do disco" data-testid="settings-folder-remove">
-          Tirar
+        <span className="folder-row__size" aria-live="polite" data-state={size?.state} title={size ? storageTitle(size) : undefined} data-testid="settings-folder-size">
+          {size ? storageLabel(size) : ""}
+        </span>
+        <button type="button" className="folder-row__refresh" disabled={size?.state === "computing"} onClick={onRefreshSize} aria-label={`Recalcular o tamanho da pasta ${folder.name}`} title="Recalcular o tamanho" data-testid="settings-folder-size-refresh">
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false">
+            <path d="M16 10a6 6 0 1 1-1.9-4.4M16 3.5v3.3h-3.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button type="button" className="folder-row__remove" disabled={pending} onClick={() => void run(() => api.removeWorkFolder(workspaceId, folder.id))} aria-label={`Tirar a pasta ${folder.name} (não apaga nada do disco)`} title="Tirar do workspace (não apaga nada do disco)" data-testid="settings-folder-remove">
+          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+            <path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
-      <p className="folder-row__path" title={folder.path} data-testid="settings-folder-path">
-        <code>{folder.path}</code>
-      </p>
-      <div className="folder-row__field">
-        <label htmlFor={purposeId} className="folder-row__label">
+      <div className="folder-row__meta">
+        <p className="folder-row__path" title={folder.path} data-testid="settings-folder-path">
+          <code>{folder.path}</code>
+        </p>
+        <label htmlFor={purposeId} className="sr-only">
           Para que serve
         </label>
         <input
           id={purposeId}
-          className="ui-input"
+          className="folder-row__purpose"
           value={purpose}
           maxLength={WORK_FOLDER_LIMITS.purpose}
-          placeholder="Ex.: código do app; minhas notas pessoais"
+          placeholder="Para que serve? (os agentes leem isto)"
           onChange={(event) => setPurpose(event.currentTarget.value)}
           onBlur={() => purpose.trim() !== (folder.purpose ?? "") && save({ purpose: purpose.trim() })}
+          onKeyDown={(event) => event.key === "Enter" && event.currentTarget.blur()}
           data-testid="settings-folder-purpose"
         />
       </div>
@@ -136,39 +160,39 @@ function FolderRow({ workspaceId, folder }: { workspaceId: string; folder: WorkF
   );
 }
 
-/** Formulário de cadastro: o caminho é digitado; o servidor confere e o erro aparece aqui, no lugar. */
-function AddFolderForm({ workspaceId }: { workspaceId: string }) {
+/** Formulário de cadastro (recolhido atrás de "Adicionar pasta"): o caminho é digitado; o servidor confere e o erro aparece aqui, no lugar. */
+function AddFolderForm({ id, workspaceId, onDone, onCancel }: { id: string; workspaceId: string; onDone: () => void; onCancel: () => void }) {
   const { pending, error, run, clearError } = useAsyncAction();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [purpose, setPurpose] = useState("");
   const [mode, setMode] = useState<WorkFolderMode>("read");
-  const id = useId();
   const add = async () => {
     const result = await run(() => api.addWorkFolder(workspaceId, { name, path, ...(purpose.trim() ? { purpose } : {}), mode }));
-    if (result) {
-      setName("");
-      setPath("");
-      setPurpose("");
-      setMode("read");
-    }
+    if (result) onDone();
   };
   return (
     <form
+      id={id}
       className="folder-add"
       onSubmit={(event) => {
         event.preventDefault();
         void add();
       }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
       data-testid="settings-folder-add"
     >
-      <h5 className="folder-add__title">Adicionar uma pasta</h5>
       <div className="folder-add__grid">
         <div className="folder-row__field">
           <label htmlFor={`${id}-name`} className="folder-row__label">
             Nome
           </label>
-          <input id={`${id}-name`} className="ui-input" value={name} maxLength={WORK_FOLDER_LIMITS.name} placeholder="Ex.: Projeto do app" onChange={(event) => (clearError(), setName(event.currentTarget.value))} data-testid="settings-folder-add-name" />
+          <input id={`${id}-name`} className="ui-input" value={name} maxLength={WORK_FOLDER_LIMITS.name} placeholder="Ex.: Projeto do app" autoFocus onChange={(event) => (clearError(), setName(event.currentTarget.value))} data-testid="settings-folder-add-name" />
         </div>
         <div className="folder-row__field">
           <label htmlFor={`${id}-path`} className="folder-row__label">
@@ -179,15 +203,20 @@ function AddFolderForm({ workspaceId }: { workspaceId: string }) {
       </div>
       <div className="folder-row__field">
         <label htmlFor={`${id}-purpose`} className="folder-row__label">
-          Para que serve
+          Para que serve (opcional)
         </label>
-        <input id={`${id}-purpose`} className="ui-input" value={purpose} maxLength={WORK_FOLDER_LIMITS.purpose} placeholder="Ex.: código do app; minhas notas pessoais, consultar antes de responder" onChange={(event) => setPurpose(event.currentTarget.value)} data-testid="settings-folder-add-purpose" />
+        <input id={`${id}-purpose`} className="ui-input" value={purpose} maxLength={WORK_FOLDER_LIMITS.purpose} placeholder="Ex.: código do app; minhas notas, consultar antes de responder" onChange={(event) => setPurpose(event.currentTarget.value)} data-testid="settings-folder-add-purpose" />
       </div>
       <div className="folder-add__actions">
         <FolderModePicker value={mode} label="Modo da nova pasta" onChange={setMode} testId="settings-folder-add-mode" />
-        <button type="submit" className="ui-button ui-button--small" disabled={pending || !name.trim() || !path.trim()} aria-busy={pending} data-testid="settings-folder-add-submit">
-          {pending ? "Conferindo…" : "Adicionar pasta"}
-        </button>
+        <div className="folder-add__buttons">
+          <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onCancel} data-testid="settings-folder-add-cancel">
+            Cancelar
+          </button>
+          <button type="submit" className="ui-button ui-button--small" disabled={pending || !name.trim() || !path.trim()} aria-busy={pending} data-testid="settings-folder-add-submit">
+            {pending ? "Conferindo…" : "Adicionar pasta"}
+          </button>
+        </div>
       </div>
       <ErrorText testId="settings-folder-add-error">{error}</ErrorText>
     </form>

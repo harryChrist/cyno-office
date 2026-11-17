@@ -29,6 +29,15 @@ describe("pageFromHash", () => {
 });
 
 describe("Cyno (página do app inteiro)", () => {
+  it("o Quadro vive em `#/<ws>/quadro[/<id>]` e vem antes da Gestão no menu de páginas", () => {
+    expect(parseHash("#/principal/quadro")).toEqual({ workspaceId: "principal", page: "quadro" });
+    expect(parseHash("#/principal/quadro/Q-0002")).toEqual({ workspaceId: "principal", page: "quadro", sub: "Q-0002" });
+    expect(hashFor({ workspaceId: "principal", page: "quadro", sub: "Q-0002" })).toBe("#/principal/quadro/Q-0002");
+    expect(pageLabel("quadro")).toBe("Quadro");
+    const ids = PAGES.map((page) => page.id) as string[];
+    expect(ids.indexOf("quadro")).toBe(ids.indexOf("gestao") - 1);
+  });
+
   it("#/cyno abre a página do Cyno sem workspace, e o endereço dela nunca leva workspace", () => {
     expect(parseHash("#/cyno")).toEqual({ workspaceId: null, page: "cyno" });
     expect(pageFromHash("#/principal/cyno")).toBe("cyno");

@@ -22,6 +22,7 @@ import { ShortcutsSettings } from "./ShortcutsSettings";
 import { PasswordSettings } from "./PasswordSettings";
 import { VersionSettings } from "./VersionSettings";
 import { OptionHead, Seal, StateBadge } from "./SettingsOption";
+import { SettingsMobileNav, useIsPhone } from "./SettingsSheet";
 import { SettingsSummary } from "./SettingsSummary";
 import { useSettingsLayout } from "./settingsLayout";
 import "./settings.css";
@@ -150,6 +151,7 @@ export function SettingsPage() {
   const [active, setActive] = useState<SettingsSectionId>(() => settingsSectionFromHash(window.location.hash));
   const titleRef = useRef<HTMLHeadingElement>(null);
   const layout = useSettingsLayout();
+  const phone = useIsPhone();
   useEscapeToOffice();
 
   // Sem workspace no endereço, o primeiro da lista vale (os conectores e o resto dependem de um aberto).
@@ -224,7 +226,7 @@ export function SettingsPage() {
   const wsColor = workspaceColor(workspace?.name ?? workspaceId ?? "");
   const noWorkspace = workspaces !== null && workspaces.length === 0;
 
-  const navButton = (id: SettingsSectionId) => {
+  const navButton = (id: SettingsSectionId, onPick: () => void = () => undefined) => {
     const section = settingsSection(id);
     return (
       <button
@@ -232,7 +234,10 @@ export function SettingsPage() {
         type="button"
         className="settings__nav-item"
         aria-current={id === active ? "true" : undefined}
-        onClick={() => jump(id)}
+        onClick={() => {
+          jump(id);
+          onPick();
+        }}
         data-testid={`settings-nav-${id}`}
       >
         <span className="settings__nav-label">{section.label}</span>
@@ -240,6 +245,65 @@ export function SettingsPage() {
       </button>
     );
   };
+
+  /** Busca e seções por área: o índice lateral do computador e o corpo da folha do celular. */
+  const navBody = (onPick: () => void) => (
+    <>
+      <div className="settings__search">
+        <input
+          type="search"
+          className="ui-input"
+          value={query}
+          placeholder="Buscar uma opção…"
+          aria-label="Buscar uma opção das configurações"
+          maxLength={80}
+          onChange={(event) => setQuery(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape" && query) {
+              event.preventDefault();
+              event.stopPropagation();
+              setQuery("");
+            }
+          }}
+          data-testid="settings-search"
+        />
+      </div>
+      {searching ? (
+        <div className="settings__results" role="group" aria-label="Opções encontradas" data-testid="settings-results">
+          {matches.length === 0 ? (
+            <p className="settings__nav-empty" role="status" data-testid="settings-search-empty">
+              Nenhuma opção com esse nome.
+            </p>
+          ) : (
+            <>
+              <p className="settings__nav-empty" role="status">
+                {matches.length === 1 ? "1 opção encontrada" : `${matches.length} opções encontradas`}
+              </p>
+              {matches.map((option) => (
+                <button key={option.id} type="button" className="settings__nav-item" onClick={() => { jump(option.section); onPick(); }} data-testid={`settings-result-${option.id}`}>
+                  <span className="settings__nav-label">{option.title}</span>
+                  <span className="settings__nav-hint">
+                    {settingsSection(option.section).label} · {SEAL_LABELS[option.seal]}
+                  </span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      ) : (
+        (["plataforma", "workspace"] as const).map((area) => (
+          <div key={area} className="settings__nav-group" role="group" aria-label={AREA_LABELS[area]}>
+            <p className="settings__nav-group-title">
+              {area === "workspace" && <span className="settings__ws-dot" aria-hidden="true" style={{ ["--ws-color" as string]: wsColor }} />}
+              <span className="settings__nav-group-label">{AREA_LABELS[area]}</span>
+              {area === "workspace" && workspace && <span className="settings__nav-group-name">{workspace.name}</span>}
+            </p>
+            {settingsSectionsOf(area).map((section) => navButton(section.id, onPick))}
+          </div>
+        ))
+      )}
+    </>
+  );
 
   return (
     <section className="page page--settings page--fill" aria-labelledby="page-title-configuracoes" data-testid="page-configuracoes">
@@ -252,61 +316,15 @@ export function SettingsPage() {
         </div>
       </header>
       <div className="settings" data-cols={layout.columns} data-split={layout.split} style={{ ["--settings-max" as string]: `${layout.maxWidth}px` }} data-testid="settings-layout">
-        <nav className="settings__nav" aria-label="Seções das configurações">
-          <div className="settings__search">
-            <input
-              type="search"
-              className="ui-input"
-              value={query}
-              placeholder="Buscar uma opção…"
-              aria-label="Buscar uma opção das configurações"
-              maxLength={80}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && query) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setQuery("");
-                }
-              }}
-              data-testid="settings-search"
-            />
-          </div>
-          {searching ? (
-            <div className="settings__results" role="group" aria-label="Opções encontradas" data-testid="settings-results">
-              {matches.length === 0 ? (
-                <p className="settings__nav-empty" role="status" data-testid="settings-search-empty">
-                  Nenhuma opção com esse nome.
-                </p>
-              ) : (
-                <>
-                  <p className="settings__nav-empty" role="status">
-                    {matches.length === 1 ? "1 opção encontrada" : `${matches.length} opções encontradas`}
-                  </p>
-                  {matches.map((option) => (
-                    <button key={option.id} type="button" className="settings__nav-item" onClick={() => jump(option.section)} data-testid={`settings-result-${option.id}`}>
-                      <span className="settings__nav-label">{option.title}</span>
-                      <span className="settings__nav-hint">
-                        {settingsSection(option.section).label} · {SEAL_LABELS[option.seal]}
-                      </span>
-                    </button>
-                  ))}
-                </>
-              )}
-            </div>
-          ) : (
-            (["plataforma", "workspace"] as const).map((area) => (
-              <div key={area} className="settings__nav-group" role="group" aria-label={AREA_LABELS[area]}>
-                <p className="settings__nav-group-title">
-                  {area === "workspace" && <span className="settings__ws-dot" aria-hidden="true" style={{ ["--ws-color" as string]: wsColor }} />}
-                  <span className="settings__nav-group-label">{AREA_LABELS[area]}</span>
-                  {area === "workspace" && workspace && <span className="settings__nav-group-name">{workspace.name}</span>}
-                </p>
-                {settingsSectionsOf(area).map((section) => navButton(section.id))}
-              </div>
-            ))
-          )}
-        </nav>
+        {phone ? (
+          <SettingsMobileNav current={settingsSection(active).label} onClosed={() => setQuery("")}>
+            {({ close }) => <div className="settings-sheet__body">{navBody(close)}</div>}
+          </SettingsMobileNav>
+        ) : (
+          <nav className="settings__nav" aria-label="Seções das configurações">
+            {navBody(() => undefined)}
+          </nav>
+        )}
         <div id="settings-panel" className="settings__panel">
           <SettingsSummary items={summary} warnings={warnings} onJump={jump} />
           {searching && matches.length > 0 && (

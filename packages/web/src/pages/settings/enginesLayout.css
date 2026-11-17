@@ -430,3 +430,18 @@
 .oneshot__check--bad .oneshot__hint {
   color: var(--ui-text);
 }
+
+/* Celular: o nome do motor nunca é cortado pelo selo de estado; o selo é que encolhe e quebra em duas linhas. */
+@media (max-width: 767px) {
+  .engine-row__name {
+    flex: 0 0 auto;
+    overflow: visible;
+    white-space: nowrap;
+  }
+
+  .engine-row__state {
+    min-width: 0;
+    text-align: left;
+    white-space: normal;
+  }
+}

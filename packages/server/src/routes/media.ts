@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { bringMediaBodySchema, listMediaQuerySchema, MEDIA_MAX_BYTES, MEDIA_USER_CREATOR, mediaKindOf, mediaParamsSchema, updateMediaBodySchema, uploadMediaQuerySchema, type MediaItem } from "@cyno/shared";
+import { bringMediaBodySchema, createMediaFolderBodySchema, deleteMediaFolderQuerySchema, listMediaQuerySchema, MEDIA_USER_CREATOR, mediaParamsSchema, moveMediaBodySchema, renameMediaFolderBodySchema, updateMediaBodySchema, uploadMediaQuerySchema, type MediaFoldersResponse, type MediaItem } from "@cyno/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { HttpError } from "../platform/http/errors";
 import { cleanMime } from "../workspace/media/media-service";
@@ -11,14 +11,19 @@ import type { WorkspaceRuntime } from "../workspace/runtime";
 /** Workspace da requisição (`:ws`). */
 export type RuntimeOf = (request: FastifyRequest) => WorkspaceRuntime;
 
-/** Maior corpo aceito num envio (o limite de cada tipo é conferido durante o recebimento). */
-const UPLOAD_BODY_LIMIT = Math.max(...Object.values(MEDIA_MAX_BYTES)) + 1024 * 1024;
+/** Sem limite de tamanho: o corpo do envio é um fluxo gravado direto em disco (o bodyLimit do Fastify só vale para corpos lidos na memória). */
+const UPLOAD_BODY_LIMIT = Number.MAX_SAFE_INTEGER;
 
 /**
  * Tipos servidos como texto puro (nunca como página): HTML, Markdown e afins não executam nada no
  * navegador, mesmo abertos direto pelo endereço.
  */
-const AS_TEXT = new Set(["text/html", "text/markdown", "text/plain", "text/csv", "application/json"]);
+const AS_TEXT = new Set(["text/html", "text/markdown", "text/plain", "text/csv", "application/json", "application/xml"]);
+
+/** O que a página sabe exibir direto no navegador; todo o resto (docx, xlsx, zip, desconhecidos...) vai sempre como download. */
+export function isInlineMime(mime: string): boolean {
+  return mime.startsWith("image/") || mime.startsWith("video/") || mime.startsWith("audio/") || mime === "application/pdf" || AS_TEXT.has(mime);
+}
 
 /** "bytes=0-99", "bytes=500-", "bytes=-200" -> faixa dentro do arquivo; null = inválida (416). */
 export function parseRange(header: string, size: number): { start: number; end: number } | null {
@@ -49,13 +54,47 @@ function disposition(kind: "inline" | "attachment", fileName: string): string {
  * - GET    /media?kind=&agentId=&taskId=&status=&q=&limit= -> MediaItem[] (mais novos primeiro)
  * - GET    /media/:id                                      -> MediaItem
  * - GET    /media/:id/file[?download=1]                    -> os bytes (com Range para vídeo); sempre nosniff + CSP sandbox
- * - POST   /media?fileName=&title=                         -> 201 MediaItem (corpo = bytes crus; Content-Type = mime do arquivo)
+ * - POST   /media?fileName=&title=&folder=                 -> 201 MediaItem (corpo = bytes crus gravados em fluxo, sem limite de tamanho; qualquer tipo)
+ * - GET    /media/folders                                  -> { folders: string[] }
+ * - POST   /media/folders                                  -> 201 { folders, folder } (cria { name, parent? })
+ * - PATCH  /media/folders                                  -> { folders, folder } (renomeia { path, name })
+ * - DELETE /media/folders?path=                            -> { folders, folder } (os itens e as subpastas sobem; nenhum arquivo é apagado)
+ * - POST   /media/move                                     -> { items } (move { ids, folder | null })
  * - POST   /media/bring                                    -> 201 MediaItem (copia a mídia de OUTRO workspace para este: { workspace, mediaId })
  * - PATCH  /media/:id                                      -> MediaItem (title, status, publishedUrl, where, note, tags)
  * - DELETE /media/:id                                      -> 204 (só você: apaga o arquivo e a entrada)
  */
 export function registerMediaRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf, manager?: Pick<WorkspaceManager, "get" | "list">): void {
   scope.get("/media", async (request): Promise<MediaItem[]> => runtimeOf(request).media.list(listMediaQuerySchema.parse(request.query ?? {})));
+
+  const foldersOf = (request: FastifyRequest): string[] => runtimeOf(request).media.folders();
+
+  scope.get("/media/folders", async (request): Promise<MediaFoldersResponse> => ({ folders: foldersOf(request) }));
+
+  scope.post("/media/folders", async (request, reply) => {
+    const body = createMediaFolderBodySchema.parse(request.body ?? {});
+    const folder = runtimeOf(request).media.createFolder(body.name, body.parent ?? "");
+    reply.code(201);
+    return { folders: foldersOf(request), folder };
+  });
+
+  scope.patch("/media/folders", async (request) => {
+    const body = renameMediaFolderBodySchema.parse(request.body ?? {});
+    const folder = runtimeOf(request).media.renameFolder(body.path, body.name);
+    return { folders: foldersOf(request), folder };
+  });
+
+  scope.delete("/media/folders", async (request) => {
+    const query = deleteMediaFolderQuerySchema.parse(request.query ?? {});
+    const folder = runtimeOf(request).media.deleteFolder(query.path);
+    return { folders: foldersOf(request), folder };
+  });
+
+  scope.post("/media/move", async (request) => {
+    const body = moveMediaBodySchema.parse(request.body ?? {});
+    const items = runtimeOf(request).media.move(body.ids, body.folder);
+    return { items, folders: foldersOf(request) };
+  });
 
   scope.get("/media/:id", async (request): Promise<MediaItem> => runtimeOf(request).media.get(mediaParamsSchema.parse(request.params).id));
 
@@ -65,7 +104,8 @@ export function registerMediaRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf
     const file = media.fileOf(item);
     const info = await stat(file).catch(() => undefined);
     if (!info?.isFile()) throw new HttpError(404, `O arquivo de "${item.id}" não está mais no disco`);
-    const download = (request.query as { download?: string } | undefined)?.download === "1";
+    // O que o app não sabe exibir vai sempre como download, mesmo sem ?download=1.
+    const download = (request.query as { download?: string } | undefined)?.download === "1" || !isInlineMime(item.mime);
     const etag = `"${item.id}-${info.size}-${Math.round(info.mtimeMs)}"`;
     reply
       .header("X-Content-Type-Options", "nosniff")
@@ -123,17 +163,14 @@ export function registerMediaRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf
     upload.addContentTypeParser("*", (_request, payload, done) => done(null, payload));
     upload.post("/media", { bodyLimit: UPLOAD_BODY_LIMIT }, async (request: FastifyRequest, reply: FastifyReply) => {
       const query = uploadMediaQuerySchema.parse(request.query ?? {});
+      // Qualquer arquivo entra: o tipo vem do Content-Type ou da extensão; sem os dois, vira "other".
       const mime = cleanMime(request.headers["content-type"]);
-      const kind = mediaKindOf(mime);
-      if (!kind) throw new HttpError(415, `Tipo de arquivo não aceito: ${mime || "(sem Content-Type)"}`);
-      // Recusa logo, antes de receber, quando o tamanho declarado já passa do limite do tipo.
-      const declared = Number(request.headers["content-length"] ?? 0);
-      if (declared > MEDIA_MAX_BYTES[kind]) throw new HttpError(413, `Arquivo grande demais para ${kind} (máximo ${Math.round(MEDIA_MAX_BYTES[kind] / 1024 / 1024)} MB)`);
       const item = await runtimeOf(request).media.addStream(request.body as NodeJS.ReadableStream as never, mime, {
         title: query.title ?? (path.parse(query.fileName).name || query.fileName),
         createdBy: MEDIA_USER_CREATOR,
         origin: "upload",
         fileName: query.fileName,
+        ...(query.folder ? { folder: query.folder } : {}),
       });
       return reply.code(201).send(item);
     });

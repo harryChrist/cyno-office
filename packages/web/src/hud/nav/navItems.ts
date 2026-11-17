@@ -37,8 +37,9 @@ export const PAGE_HINTS: Partial<Record<PageId, string>> = {
   office: "O time ao vivo e o chat com o Maestro",
   trabalho: "O que está sendo feito e por quem",
   "para-voce": "O que espera a sua resposta",
+  quadro: "Os dados que os agentes montam para você",
   gestao: "Rotinas, metas, gastos e histórico",
-  biblioteca: "Apps, conectores, skills, mídia e notas",
+  biblioteca: "Notas, mídia, apps, conectores e skills",
   agenda: "Seus compromissos e os do time",
   navegador: "O navegador que os agentes usam",
 };
@@ -57,11 +58,11 @@ export const GESTAO_CHILDREN: NavChildDef[] = [
 
 /** Os destinos da Biblioteca (Mídia e Cérebro são de um workspace só). */
 export const BIBLIOTECA_CHILDREN: NavChildDef[] = [
-  { sub: "apps", label: "Apps", testId: "nav-biblioteca-apps" },
-  { sub: "conectores", label: "Conectores (MCP)", testId: "nav-biblioteca-conectores", isDefault: true },
-  { sub: "skills", label: "Skills", testId: "nav-biblioteca-skills" },
+  { sub: "cerebro", label: "Cérebro (notas)", testId: "nav-biblioteca-cerebro", needsWorkspace: true, carriesWorkspace: true, isDefault: true },
   { sub: "midia", label: "Mídia", testId: "nav-biblioteca-midia", needsWorkspace: true, carriesWorkspace: true },
-  { sub: "cerebro", label: "Cérebro (notas)", testId: "nav-biblioteca-cerebro", needsWorkspace: true, carriesWorkspace: true },
+  { sub: "apps", label: "Apps", testId: "nav-biblioteca-apps" },
+  { sub: "conectores", label: "Conectores (MCP)", testId: "nav-biblioteca-conectores" },
+  { sub: "skills", label: "Skills", testId: "nav-biblioteca-skills" },
 ];
 
 /** O menu: as páginas do workspace, e a Biblioteca (da plataforma) logo abaixo. Configurações fica no rodapé. */
@@ -72,6 +73,7 @@ export const NAV_SECTIONS: { title: string | null; items: NavItemDef[] }[] = [
       { page: "office", icon: "office", testId: "nav-office", hint: PAGE_HINTS.office },
       { page: "trabalho", icon: "tarefas", testId: "nav-trabalho", hint: PAGE_HINTS.trabalho },
       { page: "para-voce", icon: "para-voce", testId: "nav-para-voce", hint: PAGE_HINTS["para-voce"] },
+      { page: "quadro", icon: "quadro", testId: "nav-quadro", hint: PAGE_HINTS.quadro },
       { page: "gestao", icon: "gestao", testId: "nav-gestao", hint: PAGE_HINTS.gestao, children: GESTAO_CHILDREN },
     ],
   },
@@ -131,7 +133,7 @@ export function childSub(child: NavChildDef, workspaceId: string | null): string
 }
 
 /**
- * Para onde o clique no ícone de um grupo leva na barra RECOLHIDA: a primeira página do grupo (Painel, Apps), não a
+ * Para onde o clique no ícone de um grupo leva na barra RECOLHIDA: a primeira página do grupo (Painel, Cérebro), não a
  * última aberta nem a de abertura. A barra aberta não usa isto (o item continua levando à abertura da página).
  */
 export function railGroupSub(item: NavItemDef, empty: boolean, workspaceId: string | null): string | undefined {

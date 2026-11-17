@@ -86,9 +86,10 @@ describe("envio", () => {
     expect(mimeForFile({ name: "nota.md", type: "" })).toBe("text/markdown");
   });
   it("recusa tipo desconhecido, vazio e grande demais", () => {
-    expect(uploadProblem({ name: "a.exe", type: "application/x-msdownload", size: 10 })).toMatch(/não aceito/);
+    // Qualquer tipo e qualquer tamanho passam: só arquivo vazio é recusado.
+    expect(uploadProblem({ name: "a.exe", type: "application/x-msdownload", size: 10 })).toBeNull();
+    expect(uploadProblem({ name: "livro.epub", type: "", size: 5 * 1024 ** 3 })).toBeNull();
     expect(uploadProblem({ name: "a.png", type: "image/png", size: 0 })).toMatch(/vazio/);
-    expect(uploadProblem({ name: "a.png", type: "image/png", size: 30 * 1024 * 1024 })).toMatch(/grande demais/);
     expect(uploadProblem({ name: "a.png", type: "image/png", size: 1000 })).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import { useAgentLogStore } from "./agentLogStore";
 import { useAgentUsageStore } from "./agentUsageStore";
 import { useCalendarStore } from "./calendarStore";
 import { isBrowserEvent, useBrowserStore } from "./browserStore";
+import { isBoardEvent, useBoardStore } from "./boardStore";
 import { isMediaEvent, useMediaStore } from "./mediaStore";
 import { useGoalHitsStore } from "./goalHitsStore";
 import { isRoutineEvent, useRoutinesStore } from "./routinesStore";
@@ -131,6 +132,7 @@ export const useOfficeStore = create<OfficeStoreState>()((set, get) => ({
     useTodayStore.getState().reset();
     useGoalHitsStore.getState().reset();
     useMediaStore.getState().reset();
+    useBoardStore.getState().reset();
   },
 
   applyEvent(event) {
@@ -165,6 +167,11 @@ export const useOfficeStore = create<OfficeStoreState>()((set, get) => ({
     // Biblioteca de mídia: store próprio (a página Mídia e as miniaturas do Para você).
     if (isMediaEvent(event)) {
       useMediaStore.getState().apply(event);
+      return;
+    }
+    // Quadros do workspace: store próprio (a página Quadro).
+    if (isBoardEvent(event)) {
+      useBoardStore.getState().apply(event);
       return;
     }
     // Terminais de CLI (status, modo interativo e Remote Control do Maestro): store próprio.

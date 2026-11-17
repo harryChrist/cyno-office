@@ -94,7 +94,7 @@ async function videoFrames(item: MediaItem, file: string, dir: string, deps: Pre
  * se passar de 1024 px; vídeo: três quadros; o resto não tem prévia visual.
  */
 export async function writePreview(item: MediaItem, file: string, agentDir: string, deps: PreviewDeps = {}): Promise<Preview> {
-  if (item.kind !== "image" && item.kind !== "video") return { files: [], note: `A ${item.kind} cannot be viewed as an image (media_list shows its details).` };
+  if (item.kind !== "image" && item.kind !== "video") return { files: [], note: `This ${item.kind} file (${item.mime}) has no visual preview. To read it, copy the original into your folder with media_get_file("${item.id}") and open that copy with your file tools.` };
   const dir = path.join(agentDir, PREVIEW_DIR);
   await mkdir(dir, { recursive: true });
   let preview: Preview | undefined;

@@ -121,6 +121,10 @@ export function applyServerEvent(office: OfficeState, event: ServerEvent): Offic
     case "media:deleted":
       // Biblioteca de mídia: fica fora do escritório (ver mediaStore.ts).
       return office;
+    case "board:upserted":
+    case "board:deleted":
+      // Quadros do workspace: ficam fora do escritório (a tela dos Quadros cuida deles).
+      return office;
     case "activity:appended":
       // Atividade: store próprio (ver activityLogStore.ts).
       return office;

@@ -28,6 +28,9 @@ const ICON_PATHS = {
   eye: ["M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z", "M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6Z"],
   filter: ["M22 3H2l8 9.46V19l4 2v-8.54z"],
   grid: ["M3 3h7v7H3z", "M14 3h7v7h-7z", "M14 14h7v7h-7z", "M3 14h7v7H3z"],
+  folder: ["M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"],
+  folderPlus: ["M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z", "M12 11v6", "M9 14h6"],
+  arrow: ["M5 12h14", "m13 6 6 6-6 6"],
   dense: ["M3 3h4v4H3z", "M10 3h4v4h-4z", "M17 3h4v4h-4z", "M3 10h4v4H3z", "M10 10h4v4h-4z", "M17 10h4v4h-4z", "M3 17h4v4H3z", "M10 17h4v4h-4z", "M17 17h4v4h-4z"],
 } satisfies Record<string, string[]>;
 export type MIconName = keyof typeof ICON_PATHS;
@@ -61,9 +64,15 @@ export function formatDuration(seconds: number): string {
 
 const KIND_ICON: Record<MediaItem["kind"], MIconName> = { image: "image", video: "video", audio: "music", document: "file", other: "file" };
 
+/** O navegador consegue mostrar este arquivo direto (imagem, vídeo, áudio, PDF, texto)? O resto o servidor entrega só como download. */
+export const canDisplay = (item: Pick<MediaItem, "mime">): boolean => /^(image|video|audio)\//.test(item.mime) || item.mime === "application/pdf" || isTextualMime(item.mime);
+
 const TEXT_MIMES = new Set(["text/plain", "text/markdown", "text/csv", "application/json", "text/html"]);
 /** Texto que dá para mostrar (o servidor entrega como texto puro, nunca como página). */
 export const isTextual = (item: Pick<MediaItem, "mime">): boolean => TEXT_MIMES.has(item.mime);
+function isTextualMime(mime: string): boolean {
+  return TEXT_MIMES.has(mime) || mime === "application/xml";
+}
 
 const snippets = new Map<string, Promise<string | null>>();
 /** O começo do texto de um arquivo (pede só os primeiros bytes); undefined enquanto carrega, null se não deu. */
@@ -220,10 +229,17 @@ export function MediaFull({ item, workspaceId, onOpen }: { item: MediaItem; zoom
         {KIND_LABELS_SINGULAR[item.kind]} · {extensionLabel(item)} · {formatBytes(item.size)}
       </span>
       {item.mime === "application/pdf" && <span className="md-full__muted">A prévia de PDF não fica aqui; abra o arquivo em outra aba.</span>}
-      <a className="ui-button" href={url} target="_blank" rel="noreferrer noopener">
-        <MIcon name="eye" />
-        Abrir em nova aba
-      </a>
+      {canDisplay(item) ? (
+        <a className="ui-button" href={url} target="_blank" rel="noreferrer noopener">
+          <MIcon name="eye" />
+          Abrir em nova aba
+        </a>
+      ) : (
+        <a className="ui-button" href={mediaFileUrl(workspaceId ?? useNavStore.getState().workspaceId ?? "", item.id, true)}>
+          <MIcon name="download" />
+          Baixar
+        </a>
+      )}
     </div>
   );
 }
@@ -296,13 +312,16 @@ export function MediaStage({ item, workspaceId, onFullscreen }: { item: MediaIte
         {KIND_LABELS_SINGULAR[item.kind]} · {extensionLabel(item)} · {formatBytes(item.size)}
       </span>
       {pdf && <span className="md-full__muted">O navegador abre o PDF numa aba própria, por segurança; aqui ficam os dados e os botões.</span>}
+      {!canDisplay(item) && <span className="md-full__muted">Sem prévia para este tipo de arquivo. Baixe para abrir no seu computador.</span>}
       <span className="md-stage__actions">
-        <a className="ui-button" href={url} target="_blank" rel="noreferrer noopener">
-          <MIcon name="eye" />
-          Abrir em nova aba
-        </a>
+        {canDisplay(item) && (
+          <a className="ui-button" href={url} target="_blank" rel="noreferrer noopener">
+            <MIcon name="eye" />
+            Abrir em nova aba
+          </a>
+        )}
         {download && (
-          <a className="ui-button ui-button--secondary" href={download}>
+          <a className={`ui-button${canDisplay(item) ? " ui-button--secondary" : ""}`} href={download} data-testid="media-stage-download">
             <MIcon name="download" />
             Baixar
           </a>

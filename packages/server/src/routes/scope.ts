@@ -12,7 +12,10 @@ import { registerCalendarRoutes } from "./calendar";
 import { registerConnectorRoutes } from "./connectors";
 import { registerForYouRoutes, registerForYouTypeRoutes } from "./for-you";
 import { registerMaestroTerminalRoute } from "./maestro-terminal";
+import { registerBoardRoutes } from "./board";
 import { registerMediaRoutes } from "./media";
+import { registerStorageRoutes } from "./storage";
+import { DiskMeter } from "../platform/storage/disk-meter";
 import { registerPlanRoutes } from "./plans";
 import { registerRoomRoutes } from "./rooms";
 import { registerPlatformRoutineRoutes, registerRoutineRoutes } from "./routines";
@@ -40,6 +43,8 @@ export const WORKSPACE_PREFIX = "/api/w/:ws";
  */
 export function registerWorkspaceScopedRoutes(app: FastifyInstance, manager: WorkspaceManager, now: () => Date = () => new Date()): void {
   registerPlatformRoutineRoutes(app, manager);
+  // Medidor de espaço em disco: cache em memória, só mede quando a tela pede.
+  const diskMeter = new DiskMeter();
   const runtimes = new WeakMap<FastifyRequest, WorkspaceRuntime>();
   const runtimeOf = (request: FastifyRequest): WorkspaceRuntime => {
     const runtime = runtimes.get(request);
@@ -74,6 +79,8 @@ export function registerWorkspaceScopedRoutes(app: FastifyInstance, manager: Wor
       registerWorkspaceRetroRoutes(scope, runtimeOf);
       registerWorkspaceTimelineRoutes(scope, runtimeOf);
       registerMediaRoutes(scope, runtimeOf, manager);
+      registerBoardRoutes(scope, runtimeOf);
+      registerStorageRoutes(scope, runtimeOf, manager, diskMeter);
       registerAgentLogRoutes(scope, (request) => runtimeOf(request).agentLog);
       registerTerminalRoutes(scope, (request) => runtimeOf(request).terminals, (request) => runtimeOf(request).agentChat);
       registerMaestroTerminalRoute(scope, (request) => runtimeOf(request).terminals);

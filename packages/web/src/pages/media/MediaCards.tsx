@@ -1,6 +1,8 @@
+import type { DragEvent } from "react";
 import { formatAgo } from "../../ui/format";
 import { carouselTitle, commonStatus, entryAuthor, type GalleryEntry } from "./mediaGroups";
 import { MediaThumb, MIcon } from "./MediaParts";
+import { DRAG_TYPE } from "./mediaFolders";
 import { cameFrom, STATUS_LABELS, statusTone } from "./mediaView";
 
 type CardProps = {
@@ -14,13 +16,21 @@ type CardProps = {
   bring?: { label: string; done: boolean; busy: boolean; onBring: () => void };
   /** Mostra "veio de X" (itens trazidos), "Compartilhada" etc. */
   workspaceName?: string;
+  /** Na busca e nos filtros (todas as pastas): em que pasta o item está ("" = raiz). Ausente = não mostra. */
+  folderLabel?: string;
+  /** Modo de seleção: o clique marca em vez de abrir. */
+  selecting?: boolean;
+  checked?: boolean;
+  onToggle?: () => void;
+  /** Ids que o arraste leva (vazio/ausente = o cartão não é arrastável). */
+  dragIds?: () => string[];
 };
 
 /**
  * Um cartão da galeria: miniatura de caixa fixa 4:3 com a peça inteira (nada cortado, nada esticado), título em uma linha e, abaixo,
  * o estado, quem fez e há quanto tempo. Carrossel vira uma pilha; vídeo mostra play e duração.
  */
-export function MediaCard({ entry, selected, agentName, onOpen, onView, bring }: CardProps) {
+export function MediaCard({ entry, selected, agentName, onOpen, onView, bring, folderLabel, selecting = false, checked = false, onToggle, dragIds }: CardProps) {
   const main = entry.main;
   const item = main.item;
   const status = commonStatus(entry);
@@ -29,8 +39,29 @@ export function MediaCard({ entry, selected, agentName, onOpen, onView, bring }:
   const versions = entry.type === "single" && entry.versions.length > 0 ? entry.versions.length + 1 : 0;
   const shared = entry.type === "single" && !!item.shared;
   return (
-    <li className="md-card" data-status={status ?? "misto"} data-kind={entry.type === "carousel" ? "carousel" : item.kind}>
-      <button type="button" className="md-card__open" aria-current={selected ? "true" : undefined} onClick={onOpen} onDoubleClick={onView} data-testid={`media-card-${item.id}`}>
+    <li
+      className={`md-card${checked ? " md-card--checked" : ""}`}
+      data-status={status ?? "misto"}
+      data-kind={entry.type === "carousel" ? "carousel" : item.kind}
+      {...(dragIds && !bring
+        ? {
+            draggable: true,
+            onDragStart: (event: DragEvent) => {
+              event.dataTransfer.setData(DRAG_TYPE, JSON.stringify(dragIds()));
+              event.dataTransfer.effectAllowed = "move";
+            },
+          }
+        : {})}
+    >
+      <button
+        type="button"
+        className="md-card__open"
+        aria-current={selected ? "true" : undefined}
+        aria-pressed={selecting ? checked : undefined}
+        onClick={selecting ? onToggle : onOpen}
+        onDoubleClick={selecting ? undefined : onView}
+        data-testid={`media-card-${item.id}`}
+      >
         <span className={`md-card__stage${entry.type === "carousel" ? " md-card__stage--stack" : ""}`}>
           <MediaThumb item={item} workspaceId={main.ws} showDuration backdrop />
         </span>
@@ -48,6 +79,12 @@ export function MediaCard({ entry, selected, agentName, onOpen, onView, bring }:
             <span className="md-card__who">{entryAuthor(entry, agentName)}</span>
             <span className="md-card__when">{formatAgo(entry.time)}</span>
           </span>
+          {folderLabel !== undefined && (
+            <span className="md-card__folder" title={folderLabel ? `Pasta: ${folderLabel}` : "Na raiz da biblioteca"} data-testid={`media-card-folder-${item.id}`}>
+              <MIcon name="folder" size={11} />
+              {folderLabel || "Biblioteca"}
+            </span>
+          )}
           {(origin || versions > 0 || shared) && (
             <span className="md-card__tags">
               {origin && <span className="md-tag">veio de {origin.workspace}</span>}
@@ -62,6 +99,11 @@ export function MediaCard({ entry, selected, agentName, onOpen, onView, bring }:
           )}
         </span>
       </button>
+      {selecting && (
+        <span className={`md-card__check${checked ? " md-card__check--on" : ""}`} aria-hidden="true">
+          {checked && <MIcon name="check" size={13} />}
+        </span>
+      )}
       <button type="button" className="md-card__expand" onClick={onView} aria-label={`Ver ${title} em tela cheia`} title="Ver em tela cheia" data-testid={`media-expand-${item.id}`}>
         <MIcon name="zoom" size={14} />
       </button>

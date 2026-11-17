@@ -12,6 +12,8 @@ export const PAGES = [
   { id: "office", label: "Escritório" },
   { id: "trabalho", label: "Projetos e tarefas" },
   { id: "para-voce", label: "Aprovações" },
+  // O Quadro (`#/<ws>/quadro[/<id>]`): os dados que os agentes montam para o dono olhar; fica logo antes da Gestão.
+  { id: "quadro", label: "Quadro" },
   { id: "gestao", label: "Gestão" },
 ] as const;
 /** Páginas que não viram item da lista de workspace (botão, atalho ou página do app inteiro). */
