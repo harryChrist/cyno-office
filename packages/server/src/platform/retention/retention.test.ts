@@ -162,10 +162,10 @@ describe("retenção do histórico", () => {
     expect(service.settings()).toEqual(DEFAULT_RETENTION);
     await service.update({ logsDays: 30 });
     const saved = JSON.parse(await readFile(path.join(dataDir, "settings.json"), "utf8")) as { retention: unknown };
-    expect(saved.retention).toEqual({ transcriptsDays: 7, logsDays: 30 });
+    expect(saved.retention).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7 });
     const reloaded = make();
     await reloaded.load();
-    expect(reloaded.settings()).toEqual({ transcriptsDays: 7, logsDays: 30 });
+    expect(reloaded.settings()).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7 });
     await expect(reloaded.update({ logsDays: -1 })).rejects.toThrow();
 
     const snapshot = await reloaded.snapshot();
@@ -173,6 +173,22 @@ describe("retenção do histórico", () => {
     expect(snapshot.usage.logs.files).toBe(4);
     expect(snapshot.usage.brains.files).toBe(1);
     expect(snapshot.transcriptsManaged).toBe(true);
+  });
+
+  it("settings.json antigo sem o prazo das aprovações vale 7; o prazo novo é gravado e avisa quem escuta", async () => {
+    const { dataDir, make } = await setup();
+    await writeFile(path.join(dataDir, "settings.json"), JSON.stringify({ retention: { transcriptsDays: 3, logsDays: 30 } }), "utf8");
+    const service = make();
+    await service.load();
+    expect(service.settings()).toEqual({ transcriptsDays: 3, logsDays: 30, approvalsLiveDays: 7 });
+    const changes: [number, number][] = [];
+    service.onChange((settings, before) => changes.push([before.approvalsLiveDays, settings.approvalsLiveDays]));
+    await service.update({ approvalsLiveDays: 30 });
+    await service.update({ approvalsLiveDays: 0 });
+    expect(changes).toEqual([[7, 30], [30, 0]]);
+    const saved = JSON.parse(await readFile(path.join(dataDir, "settings.json"), "utf8")) as { retention: { approvalsLiveDays: number } };
+    expect(saved.retention.approvalsLiveDays).toBe(0);
+    await expect(service.update({ approvalsLiveDays: -1 })).rejects.toThrow();
   });
 });
 
@@ -187,7 +203,7 @@ describe("API /api/settings/retention", () => {
     expect((await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { outra: 1 } })).statusCode).toBe(400);
     const patched = await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { transcriptsDays: 3 } });
     expect(patched.statusCode).toBe(200);
-    expect(patched.json<RetentionResponse>().settings).toEqual({ transcriptsDays: 3, logsDays: 90 });
+    expect(patched.json<RetentionResponse>().settings).toEqual({ transcriptsDays: 3, logsDays: 90, approvalsLiveDays: 7 });
 
     const cleaned = await app.inject({ method: "POST", url: RETENTION_CLEANUP_PATH });
     expect(cleaned.statusCode).toBe(200);

@@ -45,7 +45,7 @@ function harness() {
     } as never,
     agentLog: { append: vi.fn() } as never,
     orchestrator: { enqueue: vi.fn(), cancelTask: vi.fn(), retryWaiting: vi.fn() },
-    forYou: { openSpecial: vi.fn((input: Record<string, unknown>) => ({ id: "A-0001", status: "pendente", ...input }) as unknown as ForYouItem), close: vi.fn(async () => undefined) },
+    forYou: { openSpecial: vi.fn((input: Record<string, unknown>) => ({ id: "A-0001", status: "pendente", ...input }) as unknown as ForYouItem), close: vi.fn(async () => undefined), isArchived: vi.fn(() => false) },
     host: () => host,
     settings: () => ({ maxRunning: 3, perAgent: 1 }),
     log: { info: vi.fn(), error: vi.fn() },

@@ -47,6 +47,7 @@ function harness(options: { commit?: ProjectServiceDeps["state"]["commit"] } = {
       calls.push(`close:${id}`);
       return undefined;
     }),
+    isArchived: vi.fn(() => false),
   };
   const wakes: { kind: string; build: () => string; plan?: () => Project | undefined }[] = [];
   const host: ProjectHost = {

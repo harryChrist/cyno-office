@@ -50,12 +50,13 @@ export class MaestroSession extends ConversationSession {
     this.remember(`- ${body.from === "user" ? "Usuário" : "Você"}: ${shorten(body.text.replace(/\s+/g, " "), SEED_CHAT.chars)}`, SEED_CHAT.lines);
   }
 
-  /** Briefing e índice do global e de cada quarto (o contexto do Cérebro do Maestro, com os tetos de sempre). */
+  /** As regras e o briefing do Maestro, do lobby e de cada quarto, mais os títulos das notas (o contexto do Cérebro do Maestro, com os tetos de sempre). */
   private async brainText(): Promise<string> {
     const room = findMaestroRoom(this.core.deps.state.read());
     if (!room || !this.core.deps.brain) return "";
     try {
-      return shorten((await this.core.deps.brain.buildContext(room.id, "")).text.trim(), SEED_LIMITS.brainChars);
+      const maestro = findMaestroAgent(this.core.deps.state.read());
+      return shorten((await this.core.deps.brain.buildContext(room.id, "", maestro ? { id: maestro.id, name: maestro.name } : undefined)).text.trim(), SEED_LIMITS.brainChars);
     } catch {
       return "";
     }
@@ -63,7 +64,7 @@ export class MaestroSession extends ConversationSession {
 
   /**
    * Resumo para a conversa nova do Maestro, montado só com o que o server já sabe: os últimos
-   * pedidos fechados (pedido → resultado), os abertos com as subtarefas e o briefing/índice dos
+   * pedidos fechados (pedido → resultado), os abertos com as subtarefas e as regras e o briefing dos
    * quartos (Cérebro). Tem teto.
    */
   private seed(currentId: string, brain: string): string {
@@ -85,7 +86,7 @@ export class MaestroSession extends ConversationSession {
       closed.length > 0 ? `## Últimos pedidos fechados\n${closed.join("\n")}` : "",
       open.length > 0 ? `## Pedidos em aberto\n${open.join("\n")}` : "",
       this.recentChat.length > 0 ? `## Conversa recente com o usuário\n${this.recentChat.join("\n")}` : "",
-      brain ? `## Cérebro (briefing e índice)\n${brain}` : "",
+      brain ? `## Cérebro (regras, briefing e títulos das notas)\n${brain}` : "",
       "Para detalhes antigos: `get_task(id)`, `search_notes` e `read_note`.",
     ]
       .filter(Boolean)

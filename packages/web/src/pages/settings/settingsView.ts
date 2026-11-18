@@ -25,7 +25,7 @@ export const SETTINGS_SECTIONS = [
   { id: "cyno-ajustes", area: "plataforma", label: "Cyno", hint: "Sono, teto de turnos e resumo", seal: "plataforma" },
   { id: "avisos", area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", seal: "plataforma" },
   { id: "conectores-locais", area: "plataforma", label: "Conectores locais", hint: "Comandos e apps nesta máquina", seal: "plataforma" },
-  { id: "historico", area: "plataforma", label: "Histórico guardado", hint: "Conversas e logs no disco", seal: "plataforma" },
+  { id: "historico", area: "plataforma", label: "Histórico guardado", hint: "Conversas, logs e aprovações antigas", seal: "plataforma" },
   { id: "versao", area: "plataforma", label: "Versão e atualizações", hint: "Qual versão roda e se há novidade", seal: "plataforma" },
   { id: "escritorio", area: "plataforma", label: "Aparência", hint: "Sons e bichos do escritório", seal: "navegador" },
   { id: "atalhos", area: "plataforma", label: "Atalhos do teclado", hint: "Abrir o chat do Maestro pelo teclado", seal: "navegador" },
@@ -138,6 +138,7 @@ export const SETTINGS_OPTIONS: readonly SettingsOption[] = [
   { id: "conectores-locais", section: "conectores-locais", title: "Permitir conectores locais", line: "Conectores de comando e apps rodam programas nesta máquina. Liga ou desliga aqui; sem escolha, vale o .env.", seal: "plataforma", keywords: "stdio comando local apps instalar máquina segurança env" },
   { id: "hist-conversas", section: "historico", title: "Guardar as conversas das CLIs", line: "Por quanto tempo ficam as conversas internas do Claude Code no disco.", seal: "plataforma", keywords: "histórico apagar retenção disco dias conversas" },
   { id: "hist-logs", section: "historico", title: "Guardar os logs das tarefas", line: "Por quanto tempo fica o passo a passo de cada tarefa.", seal: "plataforma", keywords: "histórico apagar retenção disco dias logs" },
+  { id: "hist-aprovacoes", section: "historico", title: "Aprovações decididas", line: "Por quanto tempo uma aprovação decidida fica na lista antes de ir para o arquivo.", seal: "plataforma", keywords: "aprovações arquivo arquivar antigas lista dias decididas mais antigos" },
   { id: "hist-limpar", section: "historico", title: "Limpar o histórico agora", line: "Apaga já o que passou do prazo (tarefas e Cérebro nunca são apagados).", seal: "plataforma", keywords: "apagar limpar histórico disco espaço" },
   { id: "versao-instalada", section: "versao", title: "Versão instalada", line: "A versão do projeto, o número do build (commits) e o commit que roda agora.", seal: "plataforma", keywords: "versão build commit hash ramo branch release" },
   { id: "versao-atualizacao", section: "versao", title: "Atualizações no GitHub", line: "Avisa quando o ramo estável tem commits novos e mostra como atualizar. O app só avisa; quem atualiza é você.", seal: "plataforma", keywords: "atualizar atualização novidade github git pull docker pm2 verificar" },
@@ -280,9 +281,12 @@ export function formatBytes(bytes: number): string {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: value < 10 ? 1 : 0 })} ${units[unit]}`;
 }
 
-/** Rótulo de uma opção de retenção: 0 = nunca apagar. */
-export function retentionLabel(days: number): string {
-  if (days <= 0) return "Nunca apagar";
+/**
+ * Rótulo de uma opção de retenção: 0 = nunca apagar. Nas aprovações decididas nada é apagado (só sai da lista para o
+ * arquivo), então o 0 vira "Sempre" (na lista para sempre).
+ */
+export function retentionLabel(days: number, kind?: keyof typeof RETENTION_DAY_OPTIONS): string {
+  if (days <= 0) return kind === "approvals" ? "Sempre" : "Nunca apagar";
   if (days === 1) return "1 dia";
   if (days % 365 === 0) return days === 365 ? "1 ano" : `${days / 365} anos`;
   return `${days} dias`;

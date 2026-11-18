@@ -1,6 +1,8 @@
-import type { BrainNoteSummary, BrainSummary, OfficeState } from "@cyno/shared";
+import { brainShelf, type BrainNoteSummary, type BrainShelf, type BrainSummary, type OfficeState } from "@cyno/shared";
 import { useId } from "react";
 import { countLabel } from "../../ui/format";
+import { AgentRulesBlock } from "./AgentRules";
+import { BrainActions } from "./BrainActions";
 import { BRAIN_KIND_ICONS, BrainIcon, NOTE_KIND_ICONS } from "./brainIcons";
 import {
   absoluteDate,
@@ -15,6 +17,8 @@ import {
   noteKind,
   plainTitle,
   relativeDate,
+  SHELF_LABELS,
+  shelfHint,
 } from "./brainView";
 
 type ItemProps = { workspaceId: string; brainId: string; note: BrainNoteSummary; activeFile: string | null; now: number; pinned?: boolean };
@@ -32,6 +36,8 @@ export function RelativeTime({ iso, now, className }: { iso: string; now: number
 function NoteItem({ workspaceId, brainId, note, activeFile, now, pinned }: ItemProps) {
   const kind = noteKind(note);
   const excerpt = cleanExcerpt(note.excerpt, note.title);
+  // Nota curta que é regra (a fixa `_regras.md` já está na prateleira certa e não precisa do selo).
+  const isRule = note.layer !== "fixed" && brainShelf(note) === "regra";
   return (
     <li>
       <a
@@ -45,7 +51,14 @@ function NoteItem({ workspaceId, brainId, note, activeFile, now, pinned }: ItemP
           <BrainIcon name={NOTE_KIND_ICONS[kind]} size={15} />
         </span>
         <span className="brain-note__main">
-          <span className="brain-note__title">{pinned ? fixedName(note) : plainTitle(note.title)}</span>
+          <span className="brain-note__title">
+            {pinned ? fixedName(note) : plainTitle(note.title)}
+            {isRule && (
+              <span className="brain-rule-badge" data-testid="brain-rule-badge">
+                regra
+              </span>
+            )}
+          </span>
           {!pinned && (note.date || note.tags.length > 0) && (
             <span className="brain-note__meta">
               {note.date && <RelativeTime className="brain-note__date" iso={note.date} now={now} />}
@@ -63,15 +76,30 @@ function NoteItem({ workspaceId, brainId, note, activeFile, now, pinned }: ItemP
   );
 }
 
+/** Título de uma prateleira, com a dica de uma linha embaixo. */
+function ShelfTitle({ shelf, lobby, count }: { shelf: BrainShelf; lobby: boolean; count: number }) {
+  return (
+    <>
+      <p className="brain-group__title">
+        {shelf === "regra" && <BrainIcon name="fixa" size={13} />}
+        {SHELF_LABELS[shelf]} <span className="brain-group__count">{count}</span>
+      </p>
+      <p className="brain-group__hint">{shelfHint(shelf, lobby)}</p>
+    </>
+  );
+}
+
 /**
- * Coluna do meio: as notas do Cérebro escolhido em camadas — as fixas (regras, briefing e índice,
- * que entram em toda tarefa) no topo, as notas curtas e o histórico de tarefas fechado embaixo
- * (abre sozinho quando a busca acha algo nele ou a nota aberta é dele). Busca por título, tags e trecho.
+ * Coluna do meio: as notas do Cérebro escolhido em três prateleiras: Regras (entram em toda tarefa),
+ * Referência (o agente só vê o título) e Histórico (só por busca; fechado, abre sozinho quando a busca
+ * acha algo nele ou a nota aberta é dele). Busca por título, tags e trecho.
  */
 export function NoteList({
   workspaceId,
   brain,
   activeFile,
+  activeAgentId,
+  rulesVersion,
   query,
   onQueryChange,
   now,
@@ -81,6 +109,10 @@ export function NoteList({
   brain: BrainSummary;
   office: OfficeState | null;
   activeFile: string | null;
+  /** Agente cujas regras estão abertas no leitor. */
+  activeAgentId: string | null;
+  /** Muda quando uma regra de agente é salva (a lista do bloco recarrega). */
+  rulesVersion: number;
   query: string;
   onQueryChange: (query: string) => void;
   now: number;
@@ -91,8 +123,9 @@ export function NoteList({
   const searching = query.trim() !== "";
   const audience = brainAudience(brain, office);
   const groups = groupNotes(found);
-  const latestHistory = latestDate(groups.history);
-  const historyOpen = (searching && groups.history.length > 0) || groups.history.some((note) => note.file === activeFile);
+  const lobby = brain.kind === "lobby";
+  const historyOpen = (searching && groups.registro.length > 0) || groups.registro.some((note) => note.file === activeFile);
+  const latestHistory = latestDate(groups.registro);
   const item = (note: BrainNoteSummary, pinned = false) => (
     <NoteItem key={note.file} workspaceId={workspaceId} brainId={brain.id} note={note} activeFile={activeFile} now={now} pinned={pinned} />
   );
@@ -124,6 +157,7 @@ export function NoteList({
           <span aria-hidden="true">·</span>
           <span className="brain-notes__crew">{audience}</span>
         </p>
+        <BrainActions brain={brain} />
         <div className="brain-search">
           <label htmlFor={searchId} className="sr-only">
             Buscar notas
@@ -146,38 +180,34 @@ export function NoteList({
           <p className="brain-empty">{searching ? "Nenhuma nota com esse texto." : "Sem notas ainda. Decisões e documentos que os agentes salvarem aparecem aqui."}</p>
         ) : (
           <>
-            {groups.fixed.length > 0 && (
-              <div className="brain-group brain-group--fixed" data-testid="brain-group-fixed">
-                <p className="brain-group__title" title="Regras, briefing e índice entram em toda tarefa dos agentes deste Cérebro.">
-                  <BrainIcon name="fixa" size={13} />
-                  Sempre no contexto
-                </p>
-                <ul className="brain-notes brain-notes--fixed">{groups.fixed.map((note) => item(note, true))}</ul>
+            {groups.regra.length > 0 && (
+              <div className="brain-group brain-group--fixed" data-testid="brain-group-regra">
+                <ShelfTitle shelf="regra" lobby={lobby} count={groups.regra.length} />
+                <ul className="brain-notes brain-notes--fixed">{groups.regra.map((note) => item(note, note.layer === "fixed"))}</ul>
               </div>
             )}
-            {groups.notes.length > 0 && (
-              <div className="brain-group" data-testid="brain-group-notes">
-                <p className="brain-group__title">
-                  Notas <span className="brain-group__count">{groups.notes.length}</span>
-                </p>
+            {!searching && !lobby && <AgentRulesBlock workspaceId={workspaceId} brainId={brain.id} office={office} activeAgentId={activeAgentId} version={rulesVersion} />}
+            {groups.referencia.length > 0 && (
+              <div className="brain-group" data-testid="brain-group-referencia">
+                <ShelfTitle shelf="referencia" lobby={lobby} count={groups.referencia.length} />
                 <ul className="brain-notes" data-testid="brain-notes">
-                  {groups.notes.map((note) => item(note))}
+                  {groups.referencia.map((note) => item(note, note.layer === "fixed"))}
                 </ul>
               </div>
             )}
-            {groups.history.length > 0 && (
+            {groups.registro.length > 0 && (
               <details className="brain-group brain-group--history" open={historyOpen || undefined} data-testid="brain-group-history">
                 <summary className="brain-group__title">
                   <BrainIcon name="historico" size={14} className="brain-group__icon" />
-                  Histórico de tarefas <span className="brain-group__count">{groups.history.length}</span>
+                  {SHELF_LABELS.registro} <span className="brain-group__count">{groups.registro.length}</span>
                   {latestHistory && (
                     <span className="brain-group__latest">
                       último <RelativeTime iso={latestHistory} now={now} />
                     </span>
                   )}
                 </summary>
-                <p className="brain-group__hint">Resultados das tarefas: não entram no contexto dos agentes (eles acham pela busca).</p>
-                <ul className="brain-notes">{groups.history.map((note) => item(note))}</ul>
+                <p className="brain-group__hint">{shelfHint("registro", lobby)}</p>
+                <ul className="brain-notes">{groups.registro.map((note) => item(note))}</ul>
               </details>
             )}
           </>

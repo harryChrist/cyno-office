@@ -110,7 +110,7 @@ export async function seedHistory(options: Options): Promise<{ tasks: number; fo
   // Para você: os ids da semente continuam depois dos que já existem (a semente anterior sai primeiro).
   const store = await OfficeStore.open(workspaceDir);
   const keptForYou = store.forYouSnapshot().filter((item) => item.meta.seed !== "1");
-  const highest = Math.max(0, ...keptForYou.map((item) => Number(item.id.slice(2))));
+  const highest = Number(store.forYouArchive.nextId(keptForYou).slice(2)) - 1;
   const renamed = new Map(history.forYou.map((item, index) => [item.id, `A-${String(highest + index + 1).padStart(4, "0")}`]));
   const forYou: ForYouItem[] = history.forYou.map((item) => ({ ...item, id: renamed.get(item.id)! }));
   const activity: ActivityEntry[] = history.activity.map((entry) => (entry.refs?.forYouId ? { ...entry, refs: { ...entry.refs, forYouId: renamed.get(entry.refs.forYouId) ?? entry.refs.forYouId } } : entry));

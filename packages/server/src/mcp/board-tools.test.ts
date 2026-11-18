@@ -45,7 +45,7 @@ async function setup() {
     if (!response.result) throw new Error(response.error?.message);
     return { isError: response.result.isError, text: response.result.content.map((block) => block.text ?? "").join("\n") };
   };
-  return { dir, work, boards, agentDir, call };
+  return { dir, work, boards, agentDir, call, deps };
 }
 
 describe("ferramentas board_*", () => {
@@ -55,6 +55,13 @@ describe("ferramentas board_*", () => {
       expect((await call(agent, "board_list")).text).toBe("No boards yet.");
       expect((await call(agent, "board_guide")).text).toContain("# Board guide");
     }
+  });
+
+  it("nenhuma ferramenta board_* cita compartilhamento (só o dono cria links)", async () => {
+    const { deps } = await setup();
+    const tools = officeToolsFor("clara", deps).filter((tool) => tool.name.startsWith("board_"));
+    expect(tools.length).toBeGreaterThan(3);
+    for (const tool of tools) expect(JSON.stringify(tool).toLowerCase(), tool.name).not.toContain("share");
   });
 
   it("board_save cria (exige título, descrição e página), atualiza e aceita html_path; board_list mostra", async () => {

@@ -1,6 +1,6 @@
 import type { Board } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { accentIndex, applyBoardEvent, boardCountLabel, filterBoards, initialOf, moveIndex, normalizeText, resolveRoute, sortBoards, touchedAt, authorLabel, boardIdFromSub, dataAgeLabel, deleteMessage, liveAction, parseFrameMessage, pickBoard, relativeTime } from "./quadroView";
+import { accentIndex, applyBoardEvent, boardCountLabel, filterBoards, initialOf, moveIndex, normalizeText, resolveRoute, sortBoards, touchedAt, authorLabel, boardIdFromSub, dataAgeLabel, deleteMessage, liveAction, parseFrameMessage, pickBoard, relativeTime, currentExpiryOption, expiryOptionLabel, isLocalHostname, shareExpiryLabel, shareLink } from "./quadroView";
 
 const board = (id: string, title = id): Board => ({ id, title, description: "", createdBy: "clara", createdAt: "2026-11-16T10:00:00.000Z", pageUpdatedAt: "2026-11-16T10:00:00.000Z", dataUpdatedAt: "2026-11-16T10:00:00.000Z", pageBytes: 10, dataBytes: 10 });
 
@@ -143,5 +143,54 @@ describe("textos", () => {
     const text = deleteMessage("Obras");
     expect(text).toContain("página e os dados");
     expect(text).not.toMatch(/[—→]/);
+  });
+});
+
+describe("mensagem de exportação do iframe", () => {
+  const base = { type: "quadro:export-result", requestId: "exp-1", format: "md" };
+  it("aceita o resultado com texto e o erro", () => {
+    expect(parseFrameMessage({ ...base, ok: true, text: "# Título" })).toEqual({ type: "export-result", result: { type: "quadro:export-result", requestId: "exp-1", format: "md", ok: true, text: "# Título" } });
+    expect(parseFrameMessage({ ...base, format: "csv", ok: true, text: "" })).toMatchObject({ result: { ok: true, text: "" } });
+    expect(parseFrameMessage({ ...base, ok: false, error: "  falhou  " })).toMatchObject({ result: { ok: false, error: "falhou" } });
+    expect(parseFrameMessage({ ...base, ok: false })).toMatchObject({ result: { ok: false, error: "Não deu para exportar o quadro." } });
+  });
+  it("recusa campos inválidos", () => {
+    expect(parseFrameMessage({ ...base, ok: true })).toBeNull();
+    expect(parseFrameMessage({ ...base, ok: true, text: 5 })).toBeNull();
+    expect(parseFrameMessage({ ...base, ok: "sim", text: "x" })).toBeNull();
+    expect(parseFrameMessage({ ...base, requestId: "", ok: true, text: "x" })).toBeNull();
+    expect(parseFrameMessage({ ...base, requestId: 3, ok: true, text: "x" })).toBeNull();
+    expect(parseFrameMessage({ ...base, format: "pdf", ok: true, text: "x" })).toBeNull();
+  });
+});
+
+describe("compartilhar por link", () => {
+  it("reconhece endereços que só funcionam na rede local", () => {
+    for (const host of ["localhost", "127.0.0.1", "10.0.0.5", "172.16.0.1", "172.31.255.1", "192.168.1.20", "[::1]"]) expect(isLocalHostname(host)).toBe(true);
+    for (const host of ["app.exemplo.com", "172.15.0.1", "172.32.0.1", "8.8.8.8", "192.169.0.1", "10.exemplo.com", ""]) expect(isLocalHostname(host)).toBe(false);
+  });
+  it("monta o link completo", () => {
+    expect(shareLink("https://app.exemplo.com", "/api/share/abc")).toBe("https://app.exemplo.com/api/share/abc");
+    expect(shareLink("https://app.exemplo.com/", "api/share/abc")).toBe("https://app.exemplo.com/api/share/abc");
+  });
+  it("rotula a validade", () => {
+    expect(shareExpiryLabel({ shared: false })).toBe("Sem validade");
+    expect(shareExpiryLabel({ shared: true, token: "t", path: "/p", createdAt: "2026-11-18T10:00:00.000Z" })).toBe("Sem validade");
+    const expiresAt = new Date(2026, 10, 25, 14, 30).toISOString();
+    expect(shareExpiryLabel({ shared: true, token: "t", path: "/p", createdAt: "2026-11-18T10:00:00.000Z", expiresAt })).toBe("Vale até 25/11/2026 às 14:30");
+  });
+  it("rotula as opções de validade", () => {
+    expect([0, 1, 7, 30].map(expiryOptionLabel)).toEqual(["Sem validade", "1 dia", "7 dias", "30 dias"]);
+  });
+  it("marca no seletor a opção mais próxima da validade atual", () => {
+    const now = new Date("2026-11-18T10:00:00.000Z");
+    const share = (days: number) => ({ shared: true as const, token: "t", path: "/p", createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + days * 86_400_000).toISOString() });
+    expect(currentExpiryOption({ shared: false }, [0, 1, 7, 30], now)).toBe(0);
+    expect(currentExpiryOption(share(7), [0, 1, 7, 30], now)).toBe(7);
+    expect(currentExpiryOption(share(29.9), [0, 1, 7, 30], now)).toBe(30);
+  });
+  it("a confirmação de apagar avisa do link só quando há compartilhamento", () => {
+    expect(deleteMessage("X")).not.toContain("link compartilhado");
+    expect(deleteMessage("X", true)).toContain("O link compartilhado deste quadro para de funcionar.");
   });
 });

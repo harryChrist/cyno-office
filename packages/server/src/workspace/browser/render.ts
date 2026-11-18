@@ -32,10 +32,18 @@ let tail: Promise<unknown> = Promise.resolve();
  * para as fontes da web carregarem), viewport limitado a 4096 px e prazo de 20 s no total.
  */
 export function renderHtml(input: RenderInput, policy: Pick<UrlPolicy, "allowsRequest">, launch: RenderLauncher = defaultLauncher): Promise<Buffer> {
-  const run = tail.then(() => render(input, policy, launch));
+  return enqueueRender(() => render(input, policy, launch));
+}
+
+/** Entra na mesma fila de uma renderização por vez (o PDF do Quadro usa a mesma, para não subir dois Chromium juntos). */
+export function enqueueRender<T>(task: () => Promise<T>): Promise<T> {
+  const run = tail.then(task);
   tail = run.catch(() => undefined);
   return run;
 }
+
+/** O lançador padrão (os testes e o PDF do Quadro reaproveitam). */
+export const launchRenderBrowser: RenderLauncher = defaultLauncher;
 
 async function render(input: RenderInput, policy: Pick<UrlPolicy, "allowsRequest">, launch: RenderLauncher): Promise<Buffer> {
   const width = Math.min(RENDER_MAX_SIDE, Math.max(1, Math.round(input.width)));

@@ -1,6 +1,7 @@
-import { findOfficeRuleViolations, type ForYouItem, type OfficeState, type Project, type ServerEvent, type Task } from "@cyno/shared";
+import { compactForYouItem, findOfficeRuleViolations, type ForYouItem, type OfficeState, type Project, type ServerEvent, type Task } from "@cyno/shared";
 import type { EventHub } from "../platform/events/hub";
 import type { OfficeStructure } from "./files";
+import type { ForYouArchive } from "./for-you-archive";
 import type { OfficeStore } from "./office-store";
 
 export type StateChange = {
@@ -33,6 +34,11 @@ export class StateManager {
     return this.store.snapshot();
   }
 
+  /** O arquivo do "Para você" (itens decididos há mais tempo que o prazo; índice em memória). */
+  get forYouArchive(): ForYouArchive {
+    return this.store.forYouArchive;
+  }
+
   /** Cópia dos itens do "Para você" (mesma regra de `read`). */
   readForYou(): ForYouItem[] {
     return this.store.forYouSnapshot();
@@ -49,6 +55,10 @@ export class StateManager {
       const violations = findOfficeRuleViolations(change.office);
       if (violations.length > 0) throw new Error(`Estado inválido: ${violations.join("; ")}`);
     }
+    // Ponto único da compactação: o que é gravado, publicado e devolvido pela API sai sem `originalText` repetido
+    // (troca no próprio objeto, para quem ainda segura o item enxergar a forma compacta).
+    if (change.forYou) for (const item of change.forYou) compactInPlace(item);
+    for (const event of change.events) if (event.type === "foryou:upserted") compactInPlace(event.item);
     const writes: Promise<void>[] = [];
     if (change.office) writes.push(this.store.commitOffice(change.office));
     if (change.tasks) writes.push(this.store.commitTasks(change.tasks));
@@ -62,6 +72,11 @@ export class StateManager {
   publish(event: ServerEvent): void {
     this.hub.publish(event);
   }
+}
+
+/** Tira o `originalText` do item quando ele repete `text` (mesma regra de `compactForYouItem`, no próprio objeto). */
+function compactInPlace(item: ForYouItem): void {
+  if (compactForYouItem(item) !== item) delete item.originalText;
 }
 
 export function officeStructure(state: OfficeState): OfficeStructure {

@@ -36,7 +36,7 @@ export type ForYouTypesDeps = {
   /** A mesma fila de escrita do workspace. */
   queue: WriteQueue;
   /** Itens do "Para você" (excluir/juntar tipos move os itens) e o hub do workspace. */
-  state: Pick<StateManager, "readForYou" | "commit" | "publish">;
+  state: Pick<StateManager, "readForYou" | "commit" | "publish" | "forYouArchive">;
   log: Pick<FastifyBaseLogger, "error">;
   now: () => Date;
 };
@@ -270,7 +270,9 @@ export class ForYouTypesService {
     const items = this.deps.state.readForYou();
     const moved = items.filter((item) => item.type === id);
     for (const item of moved) item.type = movedTo;
-    const writes: Promise<void>[] = [];
+    const writes: Promise<unknown>[] = [];
+    // Os itens já arquivados do tipo que sai também passam para o novo (o arquivo não pode ficar com um tipo que não existe mais).
+    writes.push(this.deps.state.forYouArchive.retype(id, movedTo));
     if (moved.length > 0) {
       writes.push(this.deps.state.commit({ forYou: items, events: moved.map((item): ServerEvent => ({ type: "foryou:upserted", item })) }));
     }

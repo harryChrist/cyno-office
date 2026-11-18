@@ -44,6 +44,8 @@ export function isAuthExempt(method: string, pathname: string): boolean {
   if (pathname === AUTH_LOGIN_2FA_PATH && method === "POST") return true;
   if (pathname === AUTH_SETUP_PATH && method === "POST") return true;
   if (pathname === "/api/health" && (method === "GET" || method === "HEAD")) return true;
+  // Link público de um Quadro: só GET/HEAD; o token é conferido dentro da rota (veja routes/board-share.ts).
+  if ((method === "GET" || method === "HEAD") && /^\/api\/share\/[^/]{1,128}$/.test(pathname)) return true;
   // O MCP continua só com o token do agente (e só de 127.0.0.1): veja mcp/route.ts.
   return pathname === OFFICE_MCP_PATH;
 }

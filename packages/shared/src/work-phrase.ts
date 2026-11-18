@@ -239,6 +239,7 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   search_notes: row("🧠", "buscar notas", "Buscando no Cérebro", "Buscou no Cérebro"),
   read_note: row("🧠", "ler nota", "Lendo uma nota do Cérebro", "Leu uma nota do Cérebro"),
   save_note: row("🧠", "salvar nota", "Anotando no Cérebro", "Salvou uma nota no Cérebro"),
+  save_agent_rule: row("🧠", "salvar regra do agente", "Anotando uma regra de agente", "Salvou uma regra de agente"),
   // Navegador compartilhado
   browser_open: row("🧭", "abrir site", "Abrindo um site", "Abriu um site"),
   browser_tabs: row("🧭", "ver abas", "Conferindo as abas do navegador", "Conferiu as abas do navegador"),
@@ -303,6 +304,7 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   get_day_stats: row("📊", "ver a diária", "Olhando como foi o dia", "Consultou a diária"),
   get_metrics: row("📈", "ver os números", "Olhando os números da Gestão", "Consultou os números da Gestão"),
   get_report: row("📑", "ver o relatório", "Olhando o relatório da Gestão", "Consultou o relatório da Gestão"),
+  propose_brain_cleanup: row("🧹", "propor organização", "Montando a proposta de organização do Cérebro", "Propôs a organização do Cérebro para o dono aprovar"),
   propose_rule: row("📜", "propor regra", "Redigindo uma regra para o dono aprovar", "Propôs uma regra para o dono aprovar"),
   get_away_summary: row("🚪", "ver a ausência", "Olhando o que aconteceu na sua ausência", "Consultou a sua ausência"),
   get_workspace_card: row("🏢", "ver workspace", "Olhando um workspace", "Viu um workspace"),

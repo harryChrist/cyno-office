@@ -8,6 +8,7 @@ export * from "./events";
 export * from "./api";
 export * from "./brain";
 export * from "./brain-browser";
+export * from "./brain-organize";
 export * from "./runner";
 export * from "./maestro";
 export * from "./calendar";

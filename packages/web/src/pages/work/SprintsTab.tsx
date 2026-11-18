@@ -229,7 +229,9 @@ function Lane({ lane, project, agents, editable, collapsed, onToggle, actions, o
   const closing = sprint.status === "fechando";
   const delivery = closed || closing ? deliveryView(project, sprint) : null;
   // O cartão da entrega continua em Aprovações depois de decidido: dá para reabri-lo daqui.
-  const hasCard = useOfficeStore((state) => closed && sprint.forYouId !== undefined && (state.forYou ?? []).some((item) => item.id === sprint.forYouId));
+  // Decidido há mais tempo que o prazo, o cartão sai da lista viva e passa a abrir em só leitura, vindo do arquivo.
+  const hasCard = closed && sprint.forYouId !== undefined;
+  const cardLive = useOfficeStore((state) => hasCard && (state.forYou ?? []).some((item) => item.id === sprint.forYouId));
   const canDelete = sprint.status === "planejada" || lane.tasks.length === 0;
   // Plano ainda esperando o OK (ou sendo refeito): nada começa antes de aprovar.
   const awaitingPlan = project.status === "proposto" || project.status === "ajustando";
@@ -295,7 +297,7 @@ function Lane({ lane, project, agents, editable, collapsed, onToggle, actions, o
           <p className="sp-done__dates">{[delivery.range, delivery.closedLabel].filter(Boolean).join(" · ")}</p>
           {hasCard && (
             <button type="button" className="ui-link sp-done__card" onClick={() => useForYouFocus.getState().open(sprint.forYouId!)} data-testid={`sprint-reopen-card-${sprint.id}`}>
-              Reabrir o cartão da entrega
+              {cardLive ? "Reabrir o cartão da entrega" : "Ver o cartão da entrega"}
             </button>
           )}
           {delivery.decision && (

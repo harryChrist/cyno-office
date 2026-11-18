@@ -150,10 +150,10 @@ function engineRules(agent: Agent, access: EffectiveAccess, conversation = false
 /** Como usar o Cérebro (vale para o Maestro e os agentes de time). */
 const BRAIN_RULES = [
   "## Cérebro (a documentação viva do workspace)",
-  "- O contexto traz as regras, o briefing e o índice e as notas mais relevantes; o que não coube aparece em \"Também existem\" (com o caminho).",
-  "- `search_notes(query)`: procura nas notas e no histórico de tarefas que você pode ver. Busque antes de supor e ANTES de perguntar ao usuário um fato do projeto (cliente, público, tom, prazos, decisões): se está no Cérebro, use; só pergunte o que não está lá.",
-  "- `read_note(path)`: lê uma nota inteira (ex.: `projetox/decisoes-tecnicas.md`).",
-  "- `save_note(title, content, kind)`: guarda uma decisão, um aprendizado, uma preferência ou um doc curto (fatos duráveis em poucas linhas, não o entregável; kind: decision, doc, learning, preference ou other). Para atualizar uma nota, passe `replace` com o caminho dela em vez de criar outra.",
+  "- O contexto traz só as REGRAS (as suas, as da sala e as do workspace) e o briefing: SIGA as regras. As outras notas vêm numa lista de títulos com o caminho: leia com `read_note(path)` as que forem úteis para a tarefa, em vez de adivinhar pelo título. `search_notes(query)` acha notas e o histórico de tarefas.",
+  "- Busque no Cérebro antes de supor e ANTES de perguntar ao usuário um fato do projeto (cliente, público, tom, prazos, decisões): se está lá, use; só pergunte o que não está.",
+  "- `save_note(title, content, kind)`: guarde só o que ajuda tarefas FUTURAS (como algo funciona, uma decisão e o motivo, uma preferência do usuário; kind: decision, doc, learning, preference ou other). NÃO guarde relato do que você fez nesta tarefa, conferência, resultado de etapa nem o estado do momento: o resultado da tarefa já vai para o histórico sozinho e `search_notes` o encontra. Antes de criar uma nota, busque: se já existe uma do assunto, atualize-a com `replace` (caminho dela).",
+  "- Instrução permanente do usuário (\"sempre…\", \"nunca…\") é REGRA: `save_note` com kind `rule` (a sala inteira segue) ou `save_agent_rule` (vale só para um agente). Uma ou duas linhas.",
 ];
 
 /**
@@ -210,6 +210,7 @@ const MANAGE_RULES = [
   "- `message_agent(agent, text)`: fala com um agente sem abrir pedido (corrigir o rumo de uma tarefa em andamento vira nota ao vivo; agente livre = conversa, não trabalho novo). A resposta dele NÃO chega para você numa mensagem: veja com `get_agent_activity(agent)`.",
   "- Acompanhar: `list_requests(status?)`, `list_plans(status?)`, `get_agent_activity(agent)`, `get_today()` (o que acontece hoje no workspace: o que roda, projetos, rotinas, o que espera o dono), `get_day_stats(day?)` (como foi o dia: quanto os agentes esperaram o dono, tempo por estado, comparações), `get_metrics(window?, group_by?, metrics?)` (os números da Gestão já calculados: entregas por semana, tempo até entregar, espera pelo OK, recusa por agente, edição, custo por entrega; cite sempre o n e não refaça a conta) `get_report(kind, period?, format?)` (o relatório congelado do dia, da semana ou do mês, já calculado por código: \"como foi a semana?\" é uma chamada dele e uma frase sua; cite o n, a coluna \"vs. semana passada\" só tem seta com 5 amostras, o dólar é equivalente à API e se lê com a cota) e `get_usage()` (cota da assinatura por motor e quem gastou mais). Não fique conferindo à toa: use quando o usuário perguntar ou algo parecer parado.",
   "- Retrospectiva (`propose_rule`): só quando o dono clica em \"Escrever as regras com o Maestro\" chega um pedido com grupos de padrões achados por código nas decisões dele (cada um com `group_id`). Para CADA grupo chame `propose_rule(group_id, text, scope)` uma vez: `text` = a regra em UMA frase curta, em português, no imperativo e geral o bastante para orientar o trabalho futuro do agente; `scope` = \"agent\" (padrão de um agente só) ou \"global\" (de dois ou mais). Depois chame `complete_request`. Você NÃO aprova nada: o dono aprova, edita ou recusa o cartão da regra, e nada entra no Cérebro sem esse clique.",
+  "- Organizar o Cérebro (`propose_brain_cleanup`): só quando o dono clica em \"Organizar\" num Cérebro chega um pedido com o inventário dele. Leia com `read_note` o que tiver dúvida, classifique (regra, referência a juntar ou encurtar, histórico) e chame `propose_brain_cleanup` UMA vez com todas as ações e um resumo curto; depois `complete_request`. Nada é apagado (o que sai da raiz vai para o histórico) e nada muda sem o dono aprovar o cartão.",
   "- Calendário (SÓ postagens e planos de conteúdo do workspace): `list_events(from?, to?)` (a resposta traz a data de hoje), `create_event(title, date, time?, end_time?, room?, notes?)`, `update_event(id, …)` e `delete_event(id)`. Datas AAAA-MM-DD e horas HH:MM no fuso do servidor; sem hora = o dia todo. Resolva \"amanhã\", \"sexta\" a partir da data de hoje.",
   AGENDA_RULE,
   MURAL_RULE,
@@ -227,7 +228,7 @@ export function maestroPrompt(agent: Agent, workspaceName: string, options: Prom
       "## Conversa primeiro, pedido só quando for para fazer",
       "- Toda mensagem do usuário é CONVERSA. Nada vira pedido sozinho: você decide. Enquanto ele cumprimenta, pergunta, pensa alto, troca ideias ou planeja, só converse (responda direto, sem ferramentas de pedido).",
       "- Abra um pedido (`open_request`) só quando ele quer que algo seja FEITO: pediu claramente (\"escreve…\", \"manda o time fazer…\", \"pode fazer\") ou confirmou quando você ofereceu (\"quer que eu já coloque isso para o time fazer?\"). Na dúvida, pergunte em vez de abrir.",
-      "- Fatos do projeto (cliente, público, tom, produto, prazos, o que já foi decidido) estão no briefing e no índice das salas (no contexto do Cérebro) e nas notas: confira ali e use `search_notes` ANTES de perguntar ao usuário. Nunca pergunte o que o Cérebro já diz.",
+      "- Fatos do projeto (cliente, público, tom, produto, prazos, o que já foi decidido) estão no briefing das salas (no contexto do Cérebro) e nas notas: confira ali e use `search_notes` / `read_note` ANTES de perguntar ao usuário. Nunca pergunte o que o Cérebro já diz.",
       "- ANTES de abrir o pedido e delegar, PERGUNTE sempre que não entender, faltar informação que muda o resultado (objetivo, público, formato, tamanho, tom, prazo, onde vai sair, restrições, referências) ou der para escrever um briefing bem melhor. Perguntas curtas e objetivas, no máximo 3 por vez; se der, ofereça opções ou um padrão (\"se não tiver preferência, faço X\"). Pedido já claro: não faça interrogatório, siga.",
       "- Faltam VÁRIAS informações (ou o usuário vai precisar pensar)? Use `ask_user(questions, request_id?)`: vira um questionário no \"Para você\" (com opções e um padrão por pergunta), ele responde no tempo dele e as respostas chegam JUNTAS numa mensagem. Termine o turno depois. Se você perguntar algo na conversa dentro de um pedido, o pedido fica esperando a resposta.",
       "- Um pedido por entregável coerente. Na `description` do `open_request`, escreva o briefing completo com tudo o que foi combinado na conversa (os agentes não veem a conversa). Ao abrir, conte ao usuário o título do pedido.",
@@ -311,8 +312,8 @@ export function maestroPrompt(agent: Agent, workspaceName: string, options: Prom
     ],
     [
       ...BRAIN_RULES,
-      "- Você enxerga o `_briefing` e o `_indice` de cada sala; as notas deles, pela busca. Você pode salvar em qualquer sala (`brain`: id da sala ou \"global\").",
-      "- Ao fechar um marco (projeto novo, decisão importante), atualize o `_briefing` e o `_indice` da sala (e do global) com `save_note(..., replace)`: curtos, eles entram em toda tarefa.",
+      "- Você enxerga o `_briefing` de cada sala e os títulos das notas; o texto delas, com `read_note`. Você pode salvar em qualquer sala (`brain`: id da sala ou \"global\"). Regra para UM agente: `save_agent_rule(text, agent)` (id ou nome do agente).",
+      "- Ao fechar um marco (projeto novo, decisão importante), atualize o `_briefing` da sala (e do global) com `save_note(..., replace)`: curto, ele entra em toda tarefa.",
       "- Sua conversa é renovada quando fica grande: o que precisa durar vai para o Cérebro.",
     ],
     options.browser ? browserRules(policy) : undefined,
@@ -421,7 +422,7 @@ export function workerPrompt(agent: Agent, office: Structure, workspaceName: str
     ],
     subagentRules(agent, subagent),
     options.browser ? browserRules(policy) : undefined,
-    [...BRAIN_RULES, "- Você salva no Cérebro da sua sala. Se algo importante do projeto mudou, atualize o `_briefing` ou o `_indice` dele (com `replace`)."],
+    [...BRAIN_RULES, "- Você salva no Cérebro da sua sala. Se algo importante do projeto mudou, atualize o `_briefing` dele (com `replace`)."],
   );
 }
 

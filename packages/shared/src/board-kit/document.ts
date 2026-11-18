@@ -29,6 +29,12 @@ import { BOARD_KIT_JS } from "./js";
 /** Sem rede: nada de fetch/XHR/WebSocket/formulário; imagens só https/data/blob; fonte só data:. */
 export const BOARD_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src https: data: blob:; font-src data:; base-uri 'none'; form-action 'none'";
 
+/**
+ * A CSP do documento servido como PÁGINA (o link público), no cabeçalho HTTP: `sandbox allow-scripts` dá à página uma
+ * origem opaca (sem cookies e sem acesso ao app, como o iframe da tela), o que um `<meta>` não consegue fazer.
+ */
+export const BOARD_CSP_HEADER = `sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; ${BOARD_CSP}`;
+
 /** O que a página enxerga em `Quadro.meta` (um recorte do Board: tudo opcional, para pré-visualizações). */
 export type BoardMeta = Partial<Pick<Board, "id" | "title" | "description" | "source" | "createdBy" | "createdAt" | "pageUpdatedAt" | "dataUpdatedAt" | "pageBytes" | "dataBytes">>;
 

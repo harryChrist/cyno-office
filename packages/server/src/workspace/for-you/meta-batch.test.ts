@@ -1,3 +1,4 @@
+import { nextForYouId } from "@cyno/shared";
 import path from "node:path";
 import { emptyRoutinesData, type Agent, type ForYouItem, type OfficeState, type ServerEvent, type Task } from "@cyno/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +33,8 @@ async function setup(options: { target: number; auto?: boolean; stopOnHit?: bool
   const task = { id: "t1", roomId: "r", teamId: "time", agentId: "clara", routineId: "R-0001", status: "waiting_approval", work: { projectId: "t1", step: 0, ref: "T1" } } as unknown as Task;
   const office = { rooms: [], teams: [], agents: [CLARA], tasks: [task] } as unknown as OfficeState;
   const state = {
+    // Sem arquivo em disco nestes testes: nenhum id arquivado.
+    forYouArchive: { has: () => false, nextId: (live: readonly { id: string }[]) => nextForYouId(live) },
     read: () => office,
     readForYou: () => items,
     commit: async (change: { forYou?: ForYouItem[]; events?: ServerEvent[] }) => {

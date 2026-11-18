@@ -1,4 +1,4 @@
-import type { BrainNoteResponse, BrainSummary, OfficeState } from "@cyno/shared";
+import { BRAIN_FIXED_FILES, type BrainNoteResponse, type BrainSummary, type OfficeState } from "@cyno/shared";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api, ApiRequestError, describeError } from "../../api/client";
 import { BRAIN_KIND_ICONS, BrainIcon, NOTE_KIND_ICONS } from "./brainIcons";
@@ -15,6 +15,7 @@ import {
   resolveWiki,
   type NoteRef,
 } from "./brainView";
+import { RulesEditor } from "./RulesEditor";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { headingOutline, parseMarkdown } from "../../ui/markdown/markdown";
 
@@ -35,6 +36,7 @@ export function NoteReader({
   office,
   wikiIndex,
   now,
+  onRulesSaved,
 }: {
   workspaceId: string;
   brainId: string;
@@ -44,8 +46,11 @@ export function NoteReader({
   wikiIndex: Map<string, NoteRef[]>;
   /** Agora (ms), para as datas relativas. */
   now: number;
+  /** O `_regras.md` foi salvo: a lista de notas recarrega. */
+  onRulesSaved: () => void;
 }) {
   const [state, setState] = useState<NoteState>({ note: null, error: null });
+  const [editing, setEditing] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
 
@@ -103,6 +108,7 @@ export function NoteReader({
   const summary = brain?.notes.find((item) => item.file === note.file);
   const kind = noteKind(summary ?? { file: note.file, layer: note.file.startsWith("historico/") ? "history" : "note" });
   const fixed = summary?.layer === "fixed";
+  const isRulesFile = note.file === BRAIN_FIXED_FILES.regras;
   // Sumário (títulos h2/h3) para notas longas; só aparece em tela larga.
   const outline = headingOutline(parseMarkdown(clean.body), titleId);
 
@@ -120,7 +126,7 @@ export function NoteReader({
               <BrainIcon name={NOTE_KIND_ICONS[kind]} size={14} />
               {noteTypeLabel(frontmatter, kind)}
             </span>
-            {fixed && <span className="brain-reader__fixed">Sempre no contexto</span>}
+            {fixed && (isRulesFile || note.file === BRAIN_FIXED_FILES.briefing) && <span className="brain-reader__fixed">Entra em toda tarefa</span>}
           </p>
           <h3 id={titleId} ref={titleRef} tabIndex={-1} className="brain-reader__title" data-testid="brain-reader-title">
             {plainTitle(note.title)}
@@ -131,6 +137,13 @@ export function NoteReader({
             <span aria-hidden="true">/</span>
             <span className="brain-reader__file">{note.file}</span>
           </p>
+          {isRulesFile && !editing && (
+            <div className="brain-reader__tools">
+              <button type="button" className="ui-button ui-button--small ui-button--secondary" onClick={() => setEditing(true)} data-testid="brain-rules-edit">
+                Editar
+              </button>
+            </div>
+          )}
           {(chips.length > 0 || tags.length > 0) && (
             <ul className="brain-chips" aria-label="Dados da nota">
               {chips.map((chip) => (
@@ -153,9 +166,24 @@ export function NoteReader({
             </ul>
           )}
         </header>
-        <div className="brain-reader__body" data-testid="brain-reader-body">
-          {clean.body.trim() ? <Markdown source={clean.body} resolveWiki={wikiHref} idPrefix={titleId} /> : <p className="brain-empty">Esta nota está vazia.</p>}
-        </div>
+        {isRulesFile && editing ? (
+          <RulesEditor
+            testId="brain-rules-editor"
+            label={`Regras de ${brain?.name ?? "esta sala"}`}
+            initial={clean.body.trim()}
+            onCancel={() => setEditing(false)}
+            onSave={async (content) => {
+              const saved = await api.setBrainRules(brainId, content);
+              setState({ note: saved, error: null });
+              setEditing(false);
+              onRulesSaved();
+            }}
+          />
+        ) : (
+          <div className="brain-reader__body" data-testid="brain-reader-body">
+            {clean.body.trim() ? <Markdown source={clean.body} resolveWiki={wikiHref} idPrefix={titleId} /> : <p className="brain-empty">Esta nota está vazia.</p>}
+          </div>
+        )}
         {outline.length >= TOC_MIN_HEADINGS && (
           <nav className="brain-toc" aria-label="Nesta nota" data-testid="brain-toc">
             <p className="brain-toc__title">Nesta nota</p>

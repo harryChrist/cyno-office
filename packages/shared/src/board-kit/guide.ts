@@ -45,5 +45,12 @@ export const BOARD_GUIDE = [
   BOARD_EXAMPLE_STUDY_HTML,
   "```",
   "",
+  "## Download and sharing",
+  "The owner can download the Board (HTML, PDF, Markdown, CSV, JSON) and share it by a public link. So:",
+  "- Never put secrets or private data in the page or in the data (tokens, passwords, personal details): anyone with the link or the file can read both.",
+  "- Prefer Quadro.table and Quadro.chart.*: they export by themselves (Markdown and CSV carry ALL the rows, not just the visible page). Chart options take an optional `title`, used only in the export. Quadro.stat cards export as \"Label: value\".",
+  "- For very free-form HTML, register a better Markdown: Quadro.exportMarkdown(function () { return \"# Title\\n\\n...\"; }) (return a Markdown string; it is called at download time).",
+  "- The page can be printed (PDF, A4 landscape, light theme): avoid fixed heights and position: fixed, and keep content inside the page width.",
+  "",
   "These are only starting points: pick the structure, sections and charts that make THIS data easiest for the owner to understand. A few focused numbers and one good table beat a crowded page.",
 ].join("\n");

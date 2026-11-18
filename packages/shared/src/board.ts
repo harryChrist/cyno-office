@@ -79,6 +79,69 @@ export const boardPath = (id: string) => `/boards/${encodeURIComponent(id)}`;
 export const boardPagePath = (id: string) => `${boardPath(id)}/page`;
 export const boardDataPath = (id: string) => `${boardPath(id)}/data`;
 
+// ---------- Compartilhar por link e baixar ----------
+
+/**
+ * Link público de um Quadro: quem tem o link vê SÓ aquele quadro (uma foto do momento a cada abertura), sem senha e sem
+ * mais nada do app. Só o dono liga, troca e desliga (os agentes não têm ferramenta para isso). O token NUNCA entra em
+ * `Board` nem em evento: fica num arquivo da plataforma e só sai pelas rotas do dono.
+ */
+export const BOARD_SHARE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+/** Validade do link em dias, escolhida ao compartilhar; 0 = sem validade. */
+export const BOARD_SHARE_EXPIRY_DAY_OPTIONS = [0, 1, 7, 30] as const;
+
+/** Estado do compartilhamento de um Quadro (rotas do dono). `path` é o caminho público, a juntar com o endereço do app. */
+export type BoardShare = { shared: false } | { shared: true; token: string; path: string; createdAt: string; expiresAt?: string };
+
+/** PUT /boards/:id/share: liga (cria o link se não houver) ou troca a validade. Sem `expiresInDays`, ou 0, o link não vence. */
+export const setBoardShareBodySchema = z.strictObject({ expiresInDays: z.number().int().min(0).max(365).optional() });
+export type SetBoardShareBody = z.input<typeof setBoardShareBodySchema>;
+
+/** Rotas do dono (dentro de /api/w/:ws): GET e PUT e DELETE em `boardSharePath`; POST em `boardShareRotatePath` troca o token. */
+export const boardSharePath = (id: string) => `${boardPath(id)}/share`;
+export const boardShareRotatePath = (id: string) => `${boardSharePath(id)}/rotate`;
+
+/** Rota pública (fora de /api/w/:ws e fora da senha): devolve o documento HTML pronto do quadro. */
+export const PUBLIC_BOARD_PATH_PREFIX = "/api/share/";
+export const publicBoardPath = (token: string) => `${PUBLIC_BOARD_PATH_PREFIX}${token}`;
+
+/** O que um documento público (link ou arquivo baixado) leva do quadro: nada de ids, agentes, origem dos dados ou tamanhos. */
+export type PublicBoardMeta = { title: string; description: string; dataUpdatedAt: string };
+export function publicBoardMeta(board: Pick<Board, "title" | "description" | "dataUpdatedAt">): PublicBoardMeta {
+  return { title: board.title, description: board.description, dataUpdatedAt: board.dataUpdatedAt };
+}
+
+/** Formatos que o SERVIDOR gera (GET `boardExportPath`, download). HTML, JSON, Markdown e CSV saem na própria tela. */
+export const BOARD_SERVER_EXPORT_FORMATS = ["pdf"] as const;
+export type BoardServerExportFormat = (typeof BOARD_SERVER_EXPORT_FORMATS)[number];
+export const boardExportQuerySchema = z.object({ format: z.enum(BOARD_SERVER_EXPORT_FORMATS) });
+export const boardExportPath = (id: string, format: BoardServerExportFormat) => `${boardPath(id)}/export?format=${format}`;
+
+/**
+ * Exportação feita pelo kit dentro do iframe (ele é isolado: a tela só conversa por postMessage).
+ *   mãe para o iframe:  { type: "quadro:export", requestId, format: "md" | "csv" }
+ *   iframe para a mãe:  { type: "quadro:export-result", requestId, format, ok: true, text } ou { ..., ok: false, error }
+ * No kit: `Quadro.toMarkdown()`, `Quadro.toCsv()`, `Quadro.expandAll()` (mostra todas as linhas das tabelas, para imprimir),
+ * `Quadro.exportMarkdown(fn)` (a página do agente escreve o próprio Markdown) e `window.__quadroSettled === true` quando o
+ * primeiro desenho terminou (o servidor espera por isso antes de gerar o PDF).
+ */
+export const BOARD_KIT_EXPORT_FORMATS = ["md", "csv"] as const;
+export type BoardKitExportFormat = (typeof BOARD_KIT_EXPORT_FORMATS)[number];
+export type BoardExportRequestMessage = { type: "quadro:export"; requestId: string; format: BoardKitExportFormat };
+export type BoardExportResultMessage = { type: "quadro:export-result"; requestId: string; format: BoardKitExportFormat } & ({ ok: true; text: string } | { ok: false; error: string });
+
+/** Nome do arquivo baixado: o título em minúsculas sem acento, com hífens, e a extensão ("obras-do-site.pdf"). */
+export function boardFileName(title: string, extension: string): string {
+  const slug = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${slug || "quadro"}.${extension}`;
+}
+
 /** Mais mexido por último: o Quadro que o dono viu mudar mais recentemente vem primeiro. */
 export function boardActivityAt(board: Pick<Board, "pageUpdatedAt" | "dataUpdatedAt" | "createdAt">): string {
   return [board.pageUpdatedAt, board.dataUpdatedAt, board.createdAt].reduce((a, b) => (a > b ? a : b));

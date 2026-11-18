@@ -19,7 +19,7 @@ function fakeStorage(seed: Record<string, string> = {}): Storage {
 describe("navGroupsStore", () => {
   beforeEach(() => {
     vi.stubGlobal("window", { localStorage: fakeStorage() });
-    useNavGroupsStore.setState({ collapsed: [], movedDismissed: false });
+    useNavGroupsStore.setState({ collapsed: [] });
   });
 
   it("os grupos começam abertos", () => {
@@ -58,14 +58,5 @@ describe("navGroupsStore", () => {
     });
     useNavGroupsStore.getState().toggle("nav-gestao");
     expect(useNavGroupsStore.getState().isOpen("nav-gestao")).toBe(false);
-    useNavGroupsStore.getState().dismissMoved();
-    expect(useNavGroupsStore.getState().movedDismissed).toBe(true);
-  });
-
-  it("a dica de onde foi parar some ao dispensar e fica guardada", () => {
-    expect(useNavGroupsStore.getState().movedDismissed).toBe(false);
-    useNavGroupsStore.getState().dismissMoved();
-    expect(useNavGroupsStore.getState().movedDismissed).toBe(true);
-    expect(window.localStorage.getItem("cyno:nav-moved-hint-dismissed")).toBe("1");
   });
 });

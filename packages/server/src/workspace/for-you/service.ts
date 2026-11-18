@@ -2,14 +2,19 @@ import { randomUUID } from "node:crypto";
 import {
   batchPlan,
   formatAnswers,
+  DEFAULT_FOR_YOU_LIVE_DAYS,
   forYouKind,
+  forYouOriginalText,
+  batchHistoryKeepers,
+  isForYouArchivable,
   isMaestroTask,
   MAX_REWORK,
-  nextForYouId,
   normalizeSources,
   type ForYouActor,
+  type ForYouArchiveSummary,
   type ForYouAnswer,
   type ForYouItem,
+  type BrainOrganizePlan,
   type ForYouRule,
   type ForYouRuleScope,
   type ForYouQuestion,
@@ -48,6 +53,13 @@ export type ForYouDeps = {
   state: StateManager;
   log: Pick<FastifyBaseLogger, "error">;
   now: () => Date;
+  /** Dias que um item decidido fica na lista viva antes de ir para o arquivo (0 = nunca; ausente = o padrão). Lido a cada varredura, então a configuração vale na hora. */
+  liveDays?: () => number;
+  /**
+   * Itens que precisam continuar na lista viva mesmo decididos há tempo (a Meta de uma rotina conta as aprovações do
+   * período, que pode ser o mês). Chamada uma vez por varredura; devolve o teste por item.
+   */
+  holdLive?: () => (item: ForYouItem) => boolean;
   /** Biblioteca de mídia: liga as mídias do pedido ao item e aprova as em rascunho quando o item é aprovado. */
   media?: { linkForYou(ids: readonly string[], forYouId: string): void; approve(ids: readonly string[]): void };
   /** Tipos do workspace: um tipo desconhecido no pedido é criado na hora (nunca falha). */
@@ -64,6 +76,11 @@ export type ForYouDeps = {
    * decide é o RetroService; o item fecha aqui.
    */
   decideRule?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado"; rule?: { text?: string; scope?: ForYouRuleScope } }) => Promise<void>;
+  /**
+   * Decisão num cartão "organizacao" (organizar o Cérebro): aprovar aplica as ações que o dono deixou marcadas (as que
+   * falham ficam registradas no cartão), recusar não muda nada. Só o clique do dono chega aqui: o item fecha aqui.
+   */
+  decideOrganize?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado"; organize?: { skip?: number[] } }) => Promise<void>;
   /** Decisão num cartão "rotina" (criar/ajustar): quem decide é o RoutineService; o item fecha aqui. */
   decideRoutine?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; response?: string; routine?: DecisionInput["routine"] }) => Promise<void>;
   /** Questionário do Maestro enviado: as respostas vão numa mensagem só para ele (pedido ou conversa). */
@@ -155,6 +172,20 @@ export const BACKFILL_WHY = "Esta tarefa pediu aprovação antes do Para você e
 
 /** Motivo gravado nas opções de uma Meta que sobraram quando ela fechou. */
 export const DISMISSED_REASON = "Dispensado: meta batida";
+
+/** Itens que já podem ir para o arquivo: os decididos há mais que o prazo; num lote, só quando o lote inteiro pode. */
+export function dueForArchive(items: readonly ForYouItem[], nowMs: number, liveDays: number, hold?: (item: ForYouItem) => boolean): ForYouItem[] {
+  // Ficam sempre na lista viva: os cartões de regra (são poucos e a retrospectiva lista as já decididas), a aprovação
+  // individual mais recente de cada agente em convite e post (é ela que libera o lote: veja batchHistoryKeepers) e o cartão
+  // de sprint cancelado (o fechamento da sprint o refaz enquanto a sprint estiver fechando).
+  const keepers = batchHistoryKeepers(items);
+  const stays = (item: ForYouItem) => forYouKind(item) === "regra" || keepers.has(item.id) || (item.status === "cancelado" && forYouKind(item) === "sprint");
+  const archivable = items.filter((item) => isForYouArchivable(item, nowMs, liveDays) && !hold?.(item) && !stays(item));
+  if (archivable.length === 0) return [];
+  const ok = new Set(archivable);
+  const blockedGroups = new Set(items.filter((item) => item.groupId !== undefined && !ok.has(item)).map((item) => item.groupId));
+  return archivable.filter((item) => item.groupId === undefined || !blockedGroups.has(item.groupId));
+}
 
 /** Tira os campos undefined (o item fica igual ao que volta do JSON). */
 function compact<T extends object>(value: T): T {
@@ -313,7 +344,7 @@ export class ForYouService implements ApprovalInbox {
     // O projeto da tarefa: o que a executa (`work`; para um pedido simples, o "Avulsas"), senão o pedido.
     const projectId = task.work?.projectId ?? task.projectId ?? (isMaestroTask(state, task) ? task.id : undefined);
     return compact({
-      id: nextForYouId(items),
+      id: this.nextId(items),
       taskId: task.id,
       agentId: task.agentId ?? "",
       roomId: task.roomId,
@@ -325,7 +356,6 @@ export class ForYouService implements ApprovalInbox {
       why: draft?.why ?? question,
       meta: draft?.meta ?? {},
       text,
-      originalText: text,
       editedByUser: false,
       kind: asked ? ("questionario" as const) : undefined,
       mediaIds: draft?.mediaIds && draft.mediaIds.length > 0 ? [...new Set(draft.mediaIds)] : undefined,
@@ -343,7 +373,7 @@ export class ForYouService implements ApprovalInbox {
    * pedido (o questionário de uma conversa não tem pedido).
    */
   openSpecial(input: {
-    kind: "plano" | "questionario" | "rotina" | "sprint" | "regra";
+    kind: "plano" | "questionario" | "rotina" | "sprint" | "regra" | "organizacao";
     agentId: string;
     roomId: string;
     taskId?: string;
@@ -355,11 +385,12 @@ export class ForYouService implements ApprovalInbox {
     questions?: ForYouQuestion[];
     routine?: RoutineProposalPayload;
     rule?: ForYouRule;
+    organize?: BrainOrganizePlan;
   }): ForYouItem {
     const items = this.deps.state.readForYou();
     const text = input.text ?? (input.questions ? formatAnswers(input.questions) : input.title);
     const item: ForYouItem = compact({
-      id: nextForYouId(items),
+      id: this.nextId(items),
       taskId: input.taskId,
       agentId: input.agentId,
       roomId: input.roomId,
@@ -369,7 +400,6 @@ export class ForYouService implements ApprovalInbox {
       why: input.why,
       meta: {},
       text,
-      originalText: text,
       editedByUser: false,
       kind: input.kind,
       projectId: input.projectId ?? input.taskId,
@@ -377,6 +407,7 @@ export class ForYouService implements ApprovalInbox {
       routineId: input.routine?.routineId,
       routine: input.routine,
       rule: input.rule,
+      organize: input.organize,
       questions: input.questions,
       answers: input.questions ? {} : undefined,
       createdAt: this.deps.now().toISOString(),
@@ -392,7 +423,18 @@ export class ForYouService implements ApprovalInbox {
     const current = this.require(items, id);
     if (forYouKind(current) !== "regra") throw new HttpError(409, `O item ${id} não é uma regra`);
     current.rule = rule;
+    this.keepDraft(current);
     current.text = rule.text;
+    await this.save(items, [current]);
+    return current;
+  }
+
+  /** Grava no cartão "organizacao" o que valeu na aprovação (as ações desmarcadas e as que não deram para aplicar). */
+  async updateOrganize(id: string, plan: BrainOrganizePlan): Promise<ForYouItem> {
+    const items = this.deps.state.readForYou();
+    const current = this.require(items, id);
+    if (forYouKind(current) !== "organizacao") throw new HttpError(409, `O item ${id} não é uma organização do Cérebro`);
+    current.organize = plan;
     await this.save(items, [current]);
     return current;
   }
@@ -420,6 +462,7 @@ export class ForYouService implements ApprovalInbox {
       next[questionId] = compact({ text: answer.text, skipped: answer.skipped || undefined });
     }
     current.answers = next;
+    this.keepDraft(current);
     current.text = formatAnswers(current.questions ?? [], next);
     await this.save(items, [current]);
     return current;
@@ -456,6 +499,7 @@ export class ForYouService implements ApprovalInbox {
     if (kind === "plano") throw new HttpError(409, `O item ${id} é um plano: mande uma versão nova do plano`);
     if (kind === "sprint") throw new HttpError(409, `O item ${id} é o resumo de uma sprint: ele se monta sozinho e só o dono decide`);
     if (kind === "regra") throw new HttpError(409, `O item ${id} é uma regra da retrospectiva: só o dono muda o texto e o escopo, ao aprovar`);
+    if (kind === "organizacao") throw new HttpError(409, `O item ${id} é uma proposta de organização do Cérebro: só o dono aprova ou recusa`);
     const title = change.title?.trim();
     const question = change.question?.trim();
     if (change.questions !== undefined) {
@@ -541,7 +585,7 @@ export class ForYouService implements ApprovalInbox {
     const at = this.deps.now().toISOString();
     const reason = input.reason?.trim() || undefined;
     const changed = items.filter(
-      (item) => item.status === "pendente" && forYouKind(item) !== "plano" && forYouKind(item) !== "sprint" && forYouKind(item) !== "regra" && ((item.taskId && taskIds.has(item.taskId)) || (item.projectId && taskIds.has(item.projectId))),
+      (item) => item.status === "pendente" && forYouKind(item) !== "plano" && forYouKind(item) !== "sprint" && forYouKind(item) !== "regra" && forYouKind(item) !== "organizacao" && ((item.taskId && taskIds.has(item.taskId)) || (item.projectId && taskIds.has(item.projectId))),
     );
     for (const item of changed) {
       Object.assign(item, compact({ status: "cancelado" as const, cancelledBy: input.by, cancelReason: reason, decidedAt: at }));
@@ -585,6 +629,19 @@ export class ForYouService implements ApprovalInbox {
       try {
         await this.deps.decideRule(item, { status: input.status, ...(input.rule ? { rule: input.rule } : {}) });
         await this.close(id, input.status, undefined, { decidedBy: "usuario", ...(input.status === "rejeitado" ? { reason: input.reason?.trim() || "Regra recusada" } : {}) });
+      } finally {
+        this.deciding.delete(id);
+      }
+      return this.require(this.deps.state.readForYou(), id);
+    }
+    if (kind === "organizacao") {
+      if (item.status !== "pendente" || this.deciding.has(id)) throw new HttpError(409, `O item ${id} já foi decidido`);
+      if (!this.deps.decideOrganize) throw new HttpError(409, "Organizar o Cérebro não está disponível neste workspace");
+      if (input.status === "respondido") throw new HttpError(400, "Aprove ou recuse a proposta");
+      this.deciding.add(id);
+      try {
+        await this.deps.decideOrganize(item, { status: input.status, ...(input.organize ? { organize: input.organize } : {}) });
+        await this.close(id, input.status, undefined, { decidedBy: "usuario", ...(input.status === "rejeitado" ? { reason: input.reason?.trim() || "Proposta recusada" } : {}) });
       } finally {
         this.deciding.delete(id);
       }
@@ -677,7 +734,10 @@ export class ForYouService implements ApprovalInbox {
       // A lista é lida de novo: decidir a tarefa pode ter aberto itens novos (o agente refez o rascunho).
       const items = this.deps.state.readForYou();
       const current = this.require(items, id);
-      const decided = { status: input.status, text, editedByUser: text !== current.originalText, response, decidedAt: this.deps.now().toISOString() };
+      // O rascunho anterior é guardado antes de `text` mudar (a gravação tira o `originalText` quando os dois ficam iguais).
+      const editedByUser = text !== forYouOriginalText(current);
+      this.keepDraft(current);
+      const decided = { status: input.status, text, editedByUser, response, decidedAt: this.deps.now().toISOString() };
       Object.assign(current, decided, { decidedBy: "usuario" as const, ...(options.viaBatch ? { viaBatch: true as const } : {}) });
       if (response === undefined) delete current.response;
       // A categoria rápida da recusa (opcional) vale mesmo sem o motivo escrito.
@@ -766,7 +826,7 @@ export class ForYouService implements ApprovalInbox {
       if (task.status !== "waiting_approval" || isMaestroTask(state, task) || !task.agentId) continue;
       if (items.some((item) => item.taskId === task.id)) continue;
       const item: ForYouItem = {
-        id: nextForYouId(items),
+        id: this.nextId(items),
         taskId: task.id,
         agentId: task.agentId,
         roomId: task.roomId,
@@ -775,7 +835,6 @@ export class ForYouService implements ApprovalInbox {
         why: BACKFILL_WHY,
         meta: {},
         text: task.prompt,
-        originalText: task.prompt,
         editedByUser: false,
         createdAt: this.deps.now().toISOString(),
       };
@@ -797,6 +856,7 @@ export class ForYouService implements ApprovalInbox {
     if (forYouKind(item) === "sprint") throw new HttpError(409, `O item ${item.id} é o resumo de uma sprint: a entrega já foi decidida`);
     if (forYouKind(item) === "rotina") throw new HttpError(409, `O item ${item.id} é uma rotina: ela já foi decidida (pause ou ajuste pela página Rotinas)`);
     if (forYouKind(item) === "regra") throw new HttpError(409, `O item ${item.id} é uma regra da retrospectiva: ela já foi decidida (a nota aprovada fica no Cérebro; recusada, a regra volta só depois de 8 semanas)`);
+    if (forYouKind(item) === "organizacao") throw new HttpError(409, `O item ${item.id} é uma proposta de organização do Cérebro: ela já foi decidida (as notas que saíram da raiz estão no histórico do Cérebro)`);
     const items = this.deps.state.readForYou();
     const current = this.require(items, item.id);
     current.status = "pendente";
@@ -825,8 +885,74 @@ export class ForYouService implements ApprovalInbox {
 
   private require(items: ForYouItem[], id: string): ForYouItem {
     const item = items.find((candidate) => candidate.id === id);
-    if (!item) throw new HttpError(404, `Item "${id}" não encontrado`);
-    return item;
+    if (item) return item;
+    // Decidido há mais tempo que o prazo: está no arquivo (só leitura), não dá para decidir, reabrir nem cancelar.
+    if (this.deps.state.forYouArchive.has(id)) throw new HttpError(409, `O item "${id}" já foi para o arquivo (decidido há mais tempo que o prazo da lista) e não pode mais ser alterado`);
+    throw new HttpError(404, `Item "${id}" não encontrado`);
+  }
+
+  /** Próximo id: um a mais que o maior entre a lista viva e o arquivo (um id arquivado nunca volta). */
+  private nextId(items: readonly ForYouItem[]): string {
+    return this.deps.state.forYouArchive.nextId(items);
+  }
+
+  /** Guarda o rascunho do agente em `originalText` antes de `text` mudar (a forma compacta não o repete). */
+  private keepDraft(item: ForYouItem): void {
+    item.originalText = forYouOriginalText(item);
+  }
+
+  /** O prazo em vigor (dias na lista viva; 0 = nunca arquivar). */
+  liveDays(): number {
+    return this.deps.liveDays?.() ?? DEFAULT_FOR_YOU_LIVE_DAYS;
+  }
+
+  /** GET /for-you/archive: o prazo e os meses do arquivo com a contagem. */
+  archiveSummary(): ForYouArchiveSummary {
+    return this.deps.state.forYouArchive.summary(this.liveDays());
+  }
+
+  /** GET /for-you/archive/:month: os itens do mês (mês sem arquivo = lista vazia). */
+  archiveMonth(month: string): Promise<ForYouItem[]> {
+    return this.deps.state.forYouArchive.readMonth(month);
+  }
+
+  /** GET /for-you/archive/find: os itens arquivados daquela tarefa e/ou daquele id. */
+  archiveFind(query: { taskId?: string; id?: string }): Promise<ForYouItem[]> {
+    return this.deps.state.forYouArchive.find(query);
+  }
+
+  /** O item foi para o arquivo? */
+  isArchived(id: string): boolean {
+    return this.deps.state.forYouArchive.has(id);
+  }
+
+  /** Lista viva mais o que o arquivo guarda a partir de `fromMs` (para quem olha para trás: métricas, Atividade do dia, retrospectiva). */
+  async listSince(fromMs: number): Promise<ForYouItem[]> {
+    const live = this.deps.state.readForYou();
+    const archived = await this.deps.state.forYouArchive.since(fromMs);
+    const liveIds = new Set(live.map((item) => item.id));
+    return [...archived.filter((item) => !liveIds.has(item.id)), ...live];
+  }
+
+  /**
+   * Varredura: os itens decididos há mais que o prazo (configuração da plataforma) vão para o arquivo e saem da lista
+   * viva (evento `foryou:archived`). Itens de um mesmo lote só vão quando TODOS do lote já podem. O arquivo é gravado
+   * PRIMEIRO: se falhar, nada sai da lista. Devolve quantos saíram.
+   */
+  async sweep(): Promise<number> {
+    const liveDays = this.liveDays();
+    const nowMs = this.deps.now().getTime();
+    const items = this.deps.state.readForYou();
+    const due = dueForArchive(items, nowMs, liveDays, this.deps.holdLive?.());
+    if (due.length === 0) return 0;
+    await this.deps.state.forYouArchive.append(due);
+    // A lista pode ter mudado enquanto o arquivo gravava (ex.: um item reaberto): relê e solta só o que continua igual ao arquivado.
+    const sent = new Map(due.map((item) => [item.id, JSON.stringify(item)]));
+    const fresh = this.deps.state.readForYou();
+    const gone = new Set(fresh.filter((item) => sent.get(item.id) === JSON.stringify(item)).map((item) => item.id));
+    if (gone.size === 0) return 0;
+    await this.deps.state.commit({ forYou: fresh.filter((item) => !gone.has(item.id)), events: [{ type: "foryou:archived", ids: [...gone] }] });
+    return gone.size;
   }
 
   /** Grava e publica foryou:upserted. A promessa nunca rejeita (a falha vai para o log). */

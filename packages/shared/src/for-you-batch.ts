@@ -1,4 +1,4 @@
-import { forYouKind, type ForYouItem } from "./for-you";
+import { forYouKind, forYouOriginalText, type ForYouItem } from "./for-you";
 
 /**
  * Aprovar em lote (Gestão, "Esperando seu OK"): as regras de quem pode entrar, num lugar só. O servidor as aplica em
@@ -27,12 +27,31 @@ export type BatchExclusion = { id: string; reason: BatchExclusionReason; text: s
 
 /** O texto foi mexido (por você, ou o rascunho foi trocado): a decisão precisa olhar o texto final. */
 export function hasPendingEdit(item: Pick<ForYouItem, "editedByUser" | "text" | "originalText">): boolean {
-  return item.editedByUser || item.text !== item.originalText;
+  return item.editedByUser || item.text !== forYouOriginalText(item);
 }
 
 /** O agente já teve um item deste tipo aprovado individualmente por você (sem Automático e sem lote)? */
 export function hasIndividualApproval(items: readonly ForYouItem[], agentId: string, type: string): boolean {
-  return items.some((other) => other.agentId === agentId && other.type === type && other.status === "aprovado" && forYouKind(other) === "aprovacao" && other.decidedBy !== "automatico" && other.viaBatch !== true);
+  return items.some((other) => other.agentId === agentId && other.type === type && isIndividualApproval(other));
+}
+
+/** O item é uma aprovação individual sua (a que libera o lote do agente naquele tipo)? */
+const isIndividualApproval = (item: ForYouItem): boolean => item.status === "aprovado" && forYouKind(item) === "aprovacao" && item.decidedBy !== "automatico" && item.viaBatch !== true;
+
+/**
+ * Ids que não podem sair da lista viva para o arquivo, senão o lote de convite e post voltaria a pedir uma aprovação
+ * individual: a aprovação individual MAIS RECENTE de cada agente em cada tipo guardado. É uma por agente e tipo, então
+ * a lista viva não cresce por causa disso.
+ */
+export function batchHistoryKeepers(items: readonly ForYouItem[]): Set<string> {
+  const latest = new Map<string, ForYouItem>();
+  for (const item of items) {
+    if (!BATCH_GUARDED_TYPES.includes(item.type) || !isIndividualApproval(item)) continue;
+    const key = `${item.agentId}\u0000${item.type}`;
+    const current = latest.get(key);
+    if (!current || (item.decidedAt ?? item.createdAt) >= (current.decidedAt ?? current.createdAt)) latest.set(key, item);
+  }
+  return new Set([...latest.values()].map((item) => item.id));
 }
 
 /** Por que um item não pode entrar no lote (undefined = pode). Não olha o tipo comum: isso é do conjunto. */

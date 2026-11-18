@@ -812,6 +812,8 @@ export class ProjectService {
     for (const sprint of closingSprints(project)) {
       const existing = sprint.forYouId ? this.deps.state.readForYou().find((item) => item.id === sprint.forYouId) : undefined;
       if (existing && existing.status !== "cancelado") continue;
+      // Cartão decidido que já foi para o arquivo: o cartão existiu e foi decidido, não se cria outro (cartão de sprint cancelado nunca é arquivado: veja dueForArchive).
+      if (!existing && sprint.forYouId && this.deps.forYou.isArchived(sprint.forYouId)) continue;
       const state = this.deps.state.read();
       const request = state.tasks.find((task) => task.id === project.id);
       const verdict = this.autoReserve({ work: { projectId: project.id, ref: "", step: 0 } }, { type: "sprint" });

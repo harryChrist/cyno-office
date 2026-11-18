@@ -1,7 +1,7 @@
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { ApiErrorBody, BrainNoteResponse, ListBrainsResponse } from "@cyno/shared";
-import { describe, expect, it } from "vitest";
+import type { ApiErrorBody, BrainNoteResponse, BrainOrganizeResponse, ListBrainsResponse } from "@cyno/shared";
+import { describe, expect, it, vi } from "vitest";
 import { call, createRoom, createTask, createWorkspace, soloTeam } from "../dev/test-api";
 import { useTestApp } from "../dev/test-app";
 import { rootPaths } from "../store/paths";
@@ -174,5 +174,53 @@ describe("API: Cérebros isolados por workspace", () => {
     await call(app, "GET", "/api/w/nao-existe/brains", undefined, 404);
     await call(app, "GET", "/api/w/nao-existe/brains/global/notes/preferencias.md", undefined, 404);
     await call(app, "GET", "/api/w/%2e%2e/brains", undefined, 404);
+  });
+});
+
+describe("API: regras do Cérebro e dos agentes", () => {
+  it("GET e PUT /agents/:id/rules: vazio no início, grava, aparado, esvazia e valida o tamanho; agente inexistente = 404", async () => {
+    const { app } = await setupApp();
+    expect(await call(app, "GET", `${API}/agents/clara/rules`)).toEqual({ agentId: "clara", content: "", updatedAt: null });
+    const saved = await call<{ agentId: string; content: string; updatedAt: string | null }>(app, "PUT", `${API}/agents/clara/rules`, { content: "  - Sempre cite a fonte.\n" });
+    expect(saved).toMatchObject({ agentId: "clara", content: "- Sempre cite a fonte." });
+    expect(saved.updatedAt).not.toBeNull();
+    expect(await call(app, "GET", `${API}/agents/clara/rules`)).toMatchObject({ content: "- Sempre cite a fonte." });
+    expect(await call(app, "GET", `${API}/agents/lia/rules`)).toMatchObject({ content: "" });
+    expect(await call(app, "PUT", `${API}/agents/clara/rules`, { content: "" })).toMatchObject({ content: "", updatedAt: null });
+    const tooLong = await app.inject({ method: "PUT", url: `${API}/agents/clara/rules`, payload: { content: "x".repeat(4001) } });
+    expect(tooLong.statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: `${API}/agents/fantasma/rules` })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PUT", url: `${API}/agents/fantasma/rules`, payload: { content: "x" } })).statusCode).toBe(404);
+  });
+
+  it("PUT /brains/:id/rules troca o corpo do _regras.md, mantém tipo: regras e devolve a nota; Cérebro desconhecido = 404", async () => {
+    const { app } = await setupApp();
+    const note = await call<BrainNoteResponse>(app, "PUT", `${API}/brains/projetox/rules`, { content: "# Regras\n\n- Sempre em pt-BR." });
+    expect(note.file).toBe("_regras.md");
+    expect(note.frontmatter.tipo).toBe("regras");
+    expect(note.frontmatter.atualizado).toBeTruthy();
+    expect(note.body).toContain("- Sempre em pt-BR.");
+    const read = await call<BrainNoteResponse>(app, "GET", `${API}/brains/projetox/notes/_regras.md`);
+    expect(read.body).toContain("- Sempre em pt-BR.");
+    expect((await call<BrainNoteResponse>(app, "PUT", `${API}/brains/global/rules`, { content: "- Regra global." })).body).toContain("Regra global.");
+    expect((await app.inject({ method: "PUT", url: `${API}/brains/nao-existe/rules`, payload: { content: "x" } })).statusCode).toBe(404);
+    expect((await app.inject({ method: "PUT", url: `${API}/brains/projetox/rules`, payload: { content: "x".repeat(4001) } })).statusCode).toBe(400);
+  });
+});
+
+describe("API: POST /brains/:brainId/organize", () => {
+  it("Cérebro que não existe é 404 e, com o Maestro fora de uma CLI, o botão é 409 em pt-BR", async () => {
+    const { app } = await setupApp();
+    const missing = await call<ApiErrorBody>(app, "POST", `${API}/brains/nao-existe/organize`, undefined, 404);
+    expect(missing.error).toContain("não encontrado");
+    const off = await call<ApiErrorBody>(app, "POST", `${API}/brains/global/organize`, undefined, 409);
+    expect(off.error).toBe("O Maestro deste workspace não roda numa CLI: ligue-o em Configurações para ele organizar o Cérebro.");
+  });
+
+  it("devolve o { taskId } do pedido aberto ao Maestro (o id do Cérebro, decodificado, chega ao serviço)", async () => {
+    const setup = await setupApp();
+    const ask = vi.spyOn(setup.workspaces.get("principal").brainOrganize, "ask").mockResolvedValue({ taskId: "T-9" });
+    expect(await call<BrainOrganizeResponse>(setup.app, "POST", `${API}/brains/global/organize`, undefined, 200)).toEqual({ taskId: "T-9" });
+    expect(ask).toHaveBeenCalledWith("global");
   });
 });

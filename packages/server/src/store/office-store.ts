@@ -1,8 +1,9 @@
 import path from "node:path";
 import { mkdir, rm } from "node:fs/promises";
-import { findOfficeRuleViolations, type ForYouItem, type OfficeState, type Project, type Task } from "@cyno/shared";
+import { compactForYouItem, findOfficeRuleViolations, type ForYouItem, type OfficeState, type Project, type Task } from "@cyno/shared";
 import { writeJsonAtomic } from "./atomic-write";
 import { monthOf, readForYouDir, readOfficeFile, readProjectsDir, readTasksDir, toOfficeFile, type OfficeStructure } from "./files";
+import { ForYouArchive } from "./for-you-archive";
 import { migrateToProjects } from "./migrate-projects";
 import { migrateToSprints } from "./migrate-sprints";
 import { dataPaths, type DataPaths } from "./paths";
@@ -74,8 +75,6 @@ class MonthlyFiles<T extends { id: string; createdAt: string }> {
  * atômica e passa por uma fila serializada; só se regrava o que mudou.
  */
 export class OfficeStore {
-  /** Fila de escrita do workspace (o calendário grava por ela também; veja CalendarService). */
-  readonly queue = new WriteQueue();
   private readonly taskFiles: MonthlyFiles<Task>;
   private readonly forYouFiles: MonthlyFiles<ForYouItem>;
   /** JSON de cada projeto já gravado. */
@@ -87,6 +86,10 @@ export class OfficeStore {
     private tasks: Task[],
     private forYou: ForYouItem[],
     private projects: Project[],
+    /** Arquivo dos itens do "Para você" decididos há mais tempo que o prazo (índice em memória; veja ForYouArchive). */
+    readonly forYouArchive: ForYouArchive,
+    /** Fila de escrita do workspace (o calendário e o arquivo do "Para você" gravam por ela também; veja CalendarService). */
+    readonly queue: WriteQueue,
   ) {
     this.taskFiles = new MonthlyFiles(paths.tasksDir, tasks);
     this.forYouFiles = new MonthlyFiles(paths.forYouDir, forYou);
@@ -106,9 +109,13 @@ export class OfficeStore {
     const tasks = await readTasksDir(paths.tasksDir);
     const forYou = await readForYouDir(paths.forYouDir);
     const projects = await readProjectsDir(paths.projectsDir);
-    const store = new OfficeStore(paths, office, tasks, forYou, projects);
+    const queue = new WriteQueue();
+    const forYouArchive = await ForYouArchive.open(paths.forYouArchiveDir, queue);
+    const store = new OfficeStore(paths, office, tasks, forYou, projects, forYouArchive, queue);
     // Arquivo num formato antigo: grava já no formato atual (o conteúdo é o mesmo).
     if (officeMigrated) await store.commitOffice(office);
+    // Itens gravados com `originalText` repetido (formato antigo): compacta uma vez e regrava só o que mudou.
+    if (forYou.some((item) => compactForYouItem(item) !== item)) await store.commitForYou(forYou);
     return store;
   }
 
@@ -139,9 +146,9 @@ export class OfficeStore {
     return structuredClone(this.forYou);
   }
 
-  /** Troca os itens do "Para você" e regrava só os meses de for-you/ que mudaram. */
+  /** Troca os itens do "Para você" e regrava só os meses de for-you/ que mudaram. Sai tudo compacto: sem `originalText` repetido. */
   commitForYou(next: ForYouItem[]): Promise<void> {
-    this.forYou = structuredClone(next);
+    this.forYou = structuredClone(next).map(compactForYouItem);
     return this.writeMonthly(this.forYouFiles, this.forYou);
   }
 

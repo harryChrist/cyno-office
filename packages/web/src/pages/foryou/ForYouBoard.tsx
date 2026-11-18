@@ -1,4 +1,4 @@
-import { findMaestroAgent, forYouKind, type ForYouDecisionStatus, type ForYouItem, type OfficeState } from "@cyno/shared";
+import { findMaestroAgent, forYouArchiveMonth, forYouKind, forYouOriginalText, type ForYouDecisionStatus, type ForYouItem, type OfficeState } from "@cyno/shared";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api, describeError } from "../../api/client";
 import { useForYouFocus } from "../../store/forYouFocus";
@@ -7,12 +7,15 @@ import { useWorkStore } from "../../store/workStore";
 import { groupByRequest, waitingLabel } from "../work/planView";
 import { RoutineCard } from "./RoutineCard";
 import { PlanItemCard, QuestionnaireCard } from "./SpecialCards";
+import { OrganizeCard } from "./OrganizeCard";
 import { RuleCard } from "./RuleCard";
 import { SprintCard } from "./SprintCard";
 import { ForYouTypesSheet } from "./ForYouTypesSheet";
 import { ForYouCard, type DecisionValues } from "./ForYouCard";
 import { ForYouRow } from "./ForYouRow";
 import { ForYouSidebar } from "./ForYouSidebar";
+import { ArchiveBlock, hasArchive } from "./ArchiveBlock";
+import { useForYouArchive } from "./useForYouArchive";
 import {
   batchLabel,
   batchOf,
@@ -99,6 +102,12 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
   const mobile = useIsMobile();
   const requestedId = useForYouFocus((state) => state.itemId);
   const typesOpen = useForYouTypesSheet((state) => state.open);
+  // "Mais antigos": o arquivo das decididas fica em estado local desta página (nunca no store global).
+  const archive = useForYouArchive();
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveMonth, setArchiveMonth] = useState<string | null>(null);
+  /** Item do arquivo aberto no detalhe (só leitura); tem prioridade sobre o item da lista viva. */
+  const [archived, setArchived] = useState<ForYouItem | null>(null);
 
   const plans = useWorkStore((state) => state.plans);
   const listed = useMemo(() => visibleItems(items, status, type), [items, status, type]);
@@ -146,6 +155,33 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
     if (requested) useForYouFocus.getState().clear();
   }, [requested]);
 
+  // "Abrir em Aprovações" de algo que já saiu da lista viva: procura no arquivo e abre em só leitura.
+  const missingRequest = requestedId && !requested ? requestedId : null;
+  const { findItem, loadMonth } = archive;
+  useEffect(() => {
+    if (!missingRequest) return;
+    let stale = false;
+    void findItem(missingRequest).then((found) => {
+      if (stale) return;
+      if (useForYouFocus.getState().itemId === missingRequest) useForYouFocus.getState().clear();
+      if (!found) {
+        push({ message: `A aprovação ${missingRequest} não está mais disponível.`, tone: "aviso" });
+        return;
+      }
+      const month = forYouArchiveMonth(found);
+      setStatus((current) => (current === "pendente" ? "todos" : current));
+      setType("todos");
+      setArchiveOpen(true);
+      setArchiveMonth(month);
+      loadMonth(month);
+      setArchived(found);
+      setDetailOpen(true);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [missingRequest, findItem, loadMonth, push]);
+
   useEffect(() => {
     if (focusId) {
       const card = cards.current.get(focusId);
@@ -175,6 +211,7 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
       if (!target) return;
       event.preventDefault();
       setSelectedId(target.id);
+      setArchived(null);
       const row = rows.current.get(target.id);
       row?.focus({ preventScroll: true });
       row?.scrollIntoView({ block: "nearest" });
@@ -232,6 +269,7 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
       // A entrega de uma sprint não reabre (a sprint já fechou): sem "Desfazer".
       if (forYouKind(item) === "sprint") push({ message: next === "rejeitado" ? `Entrega devolvida · ${item.id}` : `Entrega aprovada · ${item.id}` });
       else if (forYouKind(item) === "regra") push({ message: next === "rejeitado" ? `Regra recusada (não volta por 8 semanas) · ${item.id}` : `Regra aprovada: já vale no Cérebro · ${item.id}` });
+      else if (forYouKind(item) === "organizacao") push({ message: next === "rejeitado" ? `Proposta recusada: nada mudou · ${item.id}` : `Cérebro organizado · ${item.id}` });
       else if (movesTask) push({ message: `${label} · ${next === "rejeitado" ? "a tarefa foi encerrada" : "a tarefa seguiu"}` });
       else push({ message: label, action: { label: "Desfazer", run: () => void reopen(item.id) } });
     },
@@ -280,7 +318,7 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
 
   const undoEdit = useCallback(
     (item: ForYouItem, previous: string) => {
-      setDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], text: item.originalText } }));
+      setDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], text: forYouOriginalText(item) } }));
       push({
         message: `Edição de ${item.id} desfeita.`,
         action: { label: "Refazer", run: () => setDrafts((current) => ({ ...current, [item.id]: { ...current[item.id], text: previous } })) },
@@ -294,6 +332,7 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
   const heading = `${STATUS_VIEW_LABELS[status]}${filtered ? ` · ${typeName}` : ""}`;
 
   const select = (item: ForYouItem) => {
+    setArchived(null);
     setSelectedId(item.id);
     setDetailOpen(true);
     setFocusId(item.id);
@@ -315,6 +354,9 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
     }
     if (kind === "regra" && item.rule) {
       return <RuleCard key={item.id} item={item} rule={item.rule} agentName={names.agents.get(item.agentId)} roomName={names.rooms.get(item.roomId)} cardRef={cardRef} onDecide={decide} />;
+    }
+    if (kind === "organizacao" && item.organize) {
+      return <OrganizeCard key={item.id} item={item} plan={item.organize} agentName={names.agents.get(item.agentId)} cardRef={cardRef} onDecide={decide} />;
     }
     if (kind === "rotina" && item.routine) {
       return <RoutineCard key={item.id} item={item} routine={item.routine} agentName={names.agents.get(item.agentId)} cardRef={cardRef} onDecide={decide} onDiscard={discard} />;
@@ -385,7 +427,7 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
                 const progress = batchOf(items, item);
                 return progress ? batchLabel(progress) : undefined;
               })()}
-              selected={item.id === selected?.id}
+              selected={item.id === selected?.id && !archived}
               onSelect={select}
               rowRef={(element) => {
                 if (element) rows.current.set(item.id, element);
@@ -398,7 +440,28 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
     </section>
   );
 
-  const showDetail = !mobile || (detailOpen && !!selected);
+  const selectArchived = (item: ForYouItem) => {
+    setArchived(item);
+    setDetailOpen(true);
+  };
+  const noop = () => undefined;
+  const showDetail = !mobile || (detailOpen && (!!selected || !!archived));
+  // Com arquivo, a lista aparece mesmo sem nenhum item vivo (tudo já pode ter ido para "Mais antigos").
+  const archiveShown = status !== "pendente" && hasArchive(archive);
+  const archiveBlock = archiveShown && (
+    <ArchiveBlock
+      archive={archive}
+      types={types}
+      agentNames={names.agents}
+      roomNames={names.rooms}
+      open={archiveOpen}
+      onToggle={() => setArchiveOpen((current) => !current)}
+      month={archiveMonth}
+      onMonth={setArchiveMonth}
+      selectedId={archived?.id ?? null}
+      onSelect={selectArchived}
+    />
+  );
 
   return (
     <div className={`fy-dash${mobile && showDetail ? " fy-dash--detail" : ""}`}>
@@ -414,14 +477,14 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
         onType={setType}
         onManageTypes={() => useForYouTypesSheet.getState().setOpen(true)}
       />
-      {visible.length > 0 ? (
+      {visible.length > 0 || archiveShown ? (
         <>
           <div className="fy-main">
             <div className="fy-main__top">
               <h3 className="fy-main__title" data-testid="foryou-list-title">
                 {heading}
               </h3>
-              <span className="fy-main__sub">{visible.length === 1 ? "1 item" : `${visible.length} itens`}</span>
+              {visible.length > 0 && <span className="fy-main__sub">{visible.length === 1 ? "1 item" : `${visible.length} itens`}</span>}
             </div>
             <div className="fy-groups fy-main__scroll" data-testid="foryou-list">
               {split ? (
@@ -452,11 +515,38 @@ export function ForYouBoard({ items, types, office }: ForYouBoardProps) {
               ) : (
                 groups.map(renderGroup)
               )}
+              {archiveBlock}
             </div>
           </div>
           {showDetail && (
             <div className="fy-detail" data-testid="foryou-detail">
-              {selected ? (
+              {archived ? (
+                <>
+                  <button type="button" className="fy-back" onClick={() => setDetailOpen(false)} data-testid="foryou-back">
+                    <Icon name="back" size={14} />
+                    Voltar à lista
+                  </button>
+                  {forYouKind(archived) === "organizacao" && archived.organize ? (
+                    <OrganizeCard key={`arquivo:${archived.id}`} readOnly item={archived} plan={archived.organize} agentName={names.agents.get(archived.agentId)} onDecide={() => Promise.resolve()} />
+                  ) : (
+                  <ForYouCard
+                      key={`arquivo:${archived.id}`}
+                      readOnly
+                      item={archived}
+                      types={types}
+                      agentName={names.agents.get(archived.agentId)}
+                      roomName={names.rooms.get(archived.roomId)}
+                      linkedTask={undefined}
+                      draft={{}}
+                      onDraft={noop}
+                      onDecide={() => Promise.resolve()}
+                      onCopy={(target, text) => void copy(target, text)}
+                      onUndoEdit={noop}
+                      onDiscard={() => Promise.resolve()}
+                    />
+                  )}
+                </>
+              ) : selected ? (
                 <>
                   <button type="button" className="fy-back" onClick={() => setDetailOpen(false)} data-testid="foryou-back">
                     <Icon name="back" size={14} />

@@ -24,6 +24,13 @@ import {
   stripLeadingTitle,
   fixedName,
   groupNotes,
+  agentRulesHash,
+  agentRulesState,
+  brainAgents,
+  brainWeight,
+  ruleLineCount,
+  shelfHint,
+  weightLabel,
 } from "./brainView";
 
 const note = (file: string, title: string, extra: Partial<BrainNoteSummary> = {}): BrainNoteSummary => ({
@@ -245,9 +252,56 @@ describe("camadas da lista de notas", () => {
       note("doc.md", "Doc"),
     ];
     const groups = groupNotes(list);
-    expect(groups.fixed.map((item) => fixedName(item))).toEqual(["Regras", "Briefing"]);
-    expect(groups.notes.map((item) => item.file)).toEqual(["decisao.md", "doc.md"]);
-    expect(groups.history.map((item) => item.title)).toEqual(["Tela"]);
+    expect(groups.regra.map((item) => fixedName(item))).toEqual(["Regras"]);
+    expect(groups.referencia.map((item) => item.file)).toEqual(["_briefing.md", "decisao.md", "doc.md"]);
+    expect(groups.registro.map((item) => item.title)).toEqual(["Tela"]);
+  });
+
+  it("groupNotes: o _regras.md vem primeiro, depois as notas de regra (tag ou título); o índice vai para a referência", () => {
+    const groups = groupNotes([
+      note("a.md", "Regra: sem emoji"),
+      note("b.md", "Estilo", { tags: ["regra"] }),
+      note("_indice.md", "Índice — X", { layer: "fixed" }),
+      note("c.md", "Decisão"),
+      note("_regras.md", "Regras — X", { layer: "fixed" }),
+    ]);
+    expect(groups.regra.map((item) => item.file)).toEqual(["_regras.md", "a.md", "b.md"]);
+    expect(groups.referencia.map((item) => item.file)).toEqual(["_indice.md", "c.md"]);
+    expect(brainWeight([note("a.md", "Regra: x"), note("b.md", "B"), note("_regras.md", "R", { layer: "fixed" })])).toEqual({ reference: 1, rules: 2 });
+    expect(weightLabel({ reference: 1, rules: 2 })).toBe("1 nota de referência · 2 regras");
+  });
+
+  it("dicas das prateleiras trocam 'desta sala' por 'deste workspace' no lobby", () => {
+    expect(shelfHint("regra", false)).toBe("Entram em toda tarefa desta sala.");
+    expect(shelfHint("regra", true)).toBe("Entram em toda tarefa deste workspace.");
+    expect(shelfHint("referencia", false)).toBe("O agente só vê o título e lê quando precisa.");
+    expect(shelfHint("registro", false)).toBe("Só aparece quando o agente busca.");
+  });
+
+  it("regras do agente: conta linhas e diz o estado", () => {
+    expect(ruleLineCount("- a\n\n  \n- b\n")).toBe(2);
+    expect(agentRulesState("")).toBe("sem regras");
+    expect(agentRulesState("- a")).toBe("1 regra");
+    expect(agentRulesState("- a\n- b")).toBe("2 regras");
+  });
+
+  it("brainAgents lista os agentes dos times do quarto", () => {
+    const office = {
+      teams: [{ id: "t1", name: "Front", roomId: "sala" }, { id: "t2", name: "Back", roomId: "outra" }],
+      agents: [{ id: "a1", name: "Lia", teamId: "t1" }, { id: "a2", name: "Davi", teamId: "t2" }],
+    } as unknown as OfficeState;
+    expect(brainAgents(office, "sala")).toEqual([{ id: "a1", name: "Lia", teamName: "Front" }]);
+    expect(brainAgents(null, "sala")).toEqual([]);
+  });
+
+  it("endereço das regras de um agente: ida e volta, sem colidir com notas", () => {
+    const hash = agentRulesHash("principal", "sala", "agente 1");
+    expect(hash).toBe("#/biblioteca/cerebro/principal/sala/%40agente/agente%201");
+    expect(parseBrainHash(hash, "principal")).toEqual({ brainId: "sala", file: null, agentId: "agente 1" });
+    expect(brainLevel(parseBrainHash(hash, "principal"))).toBe("reader");
+    // Uma nota real sempre termina em .md: nunca vira "@agente".
+    expect(parseBrainHash("#/biblioteca/cerebro/principal/sala/%40agente.md", "principal")).toEqual({ brainId: "sala", file: "@agente.md" });
+    expect(parseBrainHash("#/biblioteca/cerebro/principal/sala/%40agente", "principal")).toEqual({ brainId: "sala", file: null });
   });
 
   it("wiki link [[quarto/nome]] acha a nota do histórico pelo nome sem a pasta", () => {

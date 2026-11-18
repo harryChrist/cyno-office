@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { link, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   BRAIN_FIXED_FILES,
   BRAIN_HISTORY_DIR,
+  BRAIN_RULE_TAG,
   GLOBAL_BRAIN_ID,
   isSafeId,
+  slugify,
   LOBBY_BRAIN_NAME,
   type BrainContext,
   type BrainNoteResponse,
@@ -15,13 +17,14 @@ import {
 } from "@cyno/shared";
 import type { DataPaths } from "../../store/paths";
 import { writeFileAtomic } from "../../store/atomic-write";
-import { newestFirst, summarizeNote } from "./browse";
-import { buildContext } from "./context";
-import { parseFrontmatter, renderFrontmatter, type NoteFrontmatter } from "./frontmatter";
+import { newestFirst, noteDate, noteTags, summarizeNote } from "./browse";
+import { buildContext, type ContextAgent } from "./context";
+import { parseFrontmatter, patchFrontmatter, renderFields, renderFrontmatter, replaceBody, type NoteFrontmatter } from "./frontmatter";
 import { ensureFixedFiles, moveResultsToHistory } from "./migrate";
 import {
   datedNoteFileName,
   historyFile,
+  isFixedFile as isFixedFileName,
   isNoteFileName,
   listHistoryFiles,
   listNoteFiles,
@@ -41,6 +44,8 @@ export type BrainDeps = {
   paths: DataPaths;
   /** Quartos atuais (para saber o que cada quarto pode ver). */
   rooms: () => Room[];
+  /** Regras do próprio agente (`agents/<id>/regras.md`), para o contexto das tarefas dele. */
+  readAgentRules?: (agentId: string) => Promise<string>;
   now?: () => Date;
 };
 
@@ -166,9 +171,40 @@ export class Brain {
     return { file, title: noteTitle(path.basename(file), content), frontmatter, body };
   }
 
-  /** Contexto de um agente no quarto; `query` (o texto da tarefa) escolhe as notas curtas. */
-  buildContext(roomId: string, query = ""): Promise<BrainContext> {
-    return buildContext({ rooms: this.deps.rooms, readNotes: (id) => this.readNotes(id), now: this.now }, roomId, query);
+  /**
+   * Contexto de um agente no quarto: só as regras (as do `agent`, do quarto e do lobby) e o briefing;
+   * `query` (o texto da tarefa) ordena a lista de títulos das outras notas.
+   */
+  buildContext(roomId: string, query = "", agent?: ContextAgent): Promise<BrainContext> {
+    return buildContext(
+      { rooms: this.deps.rooms, readNotes: (id) => this.readNotes(id), ...(this.deps.readAgentRules ? { readAgentRules: this.deps.readAgentRules } : {}), now: this.now },
+      roomId,
+      query,
+      agent,
+    );
+  }
+
+  /**
+   * Troca o texto do `_regras.md` de um Cérebro (o dono edita): o frontmatter fica `tipo: regras` com
+   * `atualizado`, o resto é o texto novo. Cria o arquivo se faltar. Devolve a nota como o navegador lê.
+   */
+  async setRules(brainId: string, content: string): Promise<BrainNoteResponse> {
+    if (!this.hasBrain(brainId)) throw new Error(`Cérebro "${brainId}" não existe`);
+    await this.serial(brainId, () => this.writeRules(brainId, content));
+    const note = await this.readNote(brainId, BRAIN_FIXED_FILES.regras);
+    if (!note) throw new Error("Não consegui ler o _regras.md depois de gravar");
+    return note;
+  }
+
+  /** Grava o `_regras.md` (quem chama já está na fila de escrita do Cérebro). */
+  private async writeRules(brainId: string, content: string): Promise<void> {
+    const dir = this.dir(brainId);
+    await mkdir(dir, { recursive: true });
+    const frontmatter = renderFields({ tipo: "regras", atualizado: this.now().toISOString() });
+    // A tela manda só o texto (sem o título): o título do arquivo volta aqui, para a nota não ficar sem nome.
+    const body = content.trim();
+    const heading = /^#\s+\S/.test(body) ? "" : `# Regras — ${this.scope(brainId)?.name ?? brainId}\n\n`;
+    await writeFileAtomic(path.join(dir, BRAIN_FIXED_FILES.regras), `${frontmatter}\n${heading}${body}\n`);
   }
 
   /** Cria a pasta do Cérebro de um quarto e os fixos que faltarem (sem apagar nada que já exista). */
@@ -263,6 +299,142 @@ export class Brain {
       }
       if (options.indexLine) await this.appendToIndex(dir, file, options.indexLine);
       return file;
+    });
+  }
+
+  // ---------- Organizar o Cérebro (só depois do OK do dono; nada é apagado: o que sai da raiz vai para `historico/`) ----------
+
+  /** Lê a nota da raiz inteira (sem o corte de leitura: o que vai para o histórico não pode perder texto). */
+  private async readRootFull(brainId: string, file: string): Promise<string> {
+    const dir = this.dir(brainId);
+    if (!isNoteFileName(file) || (noteLayer(file) !== "note" && file !== BRAIN_FIXED_FILES.regras)) throw new Error(`Nome de nota inválido: "${file}"`);
+    if (!(await listNoteFiles(dir)).includes(file)) throw new Error(`A nota "${brainId}/${file}" não existe mais na raiz do Cérebro`);
+    return readFile(path.join(dir, file), "utf8");
+  }
+
+  /**
+   * Grava uma cópia datada em `historico/` (nunca sobrescreve: tenta outros sufixos). A data do nome é a da
+   * própria nota, quando ela tem uma; senão, agora. Devolve "historico/<nome>.md".
+   */
+  private async writeToHistory(brainId: string, content: string, title: string, motivo: string, sourceFile = ""): Promise<string> {
+    const dir = path.join(this.dir(brainId), BRAIN_HISTORY_DIR);
+    await mkdir(dir, { recursive: true });
+    const { frontmatter } = parseFrontmatter(content);
+    const own = noteDate(sourceFile, frontmatter);
+    const date = own ? new Date(own) : this.now();
+    const archived = patchFrontmatter(content, { arquivado: this.now().toISOString(), motivo });
+    for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS; attempt++) {
+      const name = datedNoteFileName(date, title, attempt);
+      try {
+        await createFileAtomic(path.join(dir, name), archived);
+        return historyFile(name);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }
+    throw new Error(`Não foi possível escolher um nome livre para a nota em ${dir}`);
+  }
+
+  /** Tira a linha da nota (`[[nome]]`) do `_indice.md`, se ele existir. */
+  private async removeFromIndex(dir: string, file: string): Promise<void> {
+    if (!(await listNoteFiles(dir)).includes(BRAIN_FIXED_FILES.indice)) return;
+    const indexPath = path.join(dir, BRAIN_FIXED_FILES.indice);
+    const current = await readFile(indexPath, "utf8");
+    const mark = `[[${file.replace(/\.md$/i, "")}]]`;
+    const lines = current.split("\n");
+    const kept = lines.filter((line) => !line.includes(mark));
+    if (kept.length !== lines.length) await writeFileAtomic(indexPath, kept.join("\n"));
+  }
+
+  /** Move a nota da raiz para o histórico: grava a nova, depois remove a antiga (uma queda no meio nunca perde a nota). */
+  private async archiveUnlocked(brainId: string, file: string, motivo = "organizar"): Promise<string> {
+    if (isFixedFileName(file)) throw new Error(`O arquivo fixo "${file}" não vai para o histórico`);
+    const content = await this.readRootFull(brainId, file);
+    const historyName = await this.writeToHistory(brainId, content, noteTitle(file, content), motivo, file);
+    await rm(path.join(this.dir(brainId), file), { force: true });
+    await this.removeFromIndex(this.dir(brainId), file);
+    return historyName;
+  }
+
+  /** Organizar: a nota da raiz vai para `historico/` com `arquivado` e `motivo: organizar`, e sai do `_indice`. Devolve o arquivo do histórico. */
+  archiveRootNote(brainId: string, file: string): Promise<string> {
+    return this.serial(brainId, () => this.archiveUnlocked(brainId, file));
+  }
+
+  /**
+   * Organizar: a nota vira regra (tag `regra` e `tipo: regra`; o corpo fica). Com `content`, a versão atual vai para o
+   * histórico e o corpo passa a ser esse texto curto (o título `# …` fica). Devolve o arquivo do histórico, se houve.
+   */
+  makeRootNoteRule(brainId: string, file: string, content?: string): Promise<string | undefined> {
+    return this.serial(brainId, async () => {
+      const current = await this.readRootFull(brainId, file);
+      const { frontmatter } = parseFrontmatter(current);
+      const tags = [...new Set([...noteTags(frontmatter), BRAIN_RULE_TAG])];
+      const fullPath = path.join(this.dir(brainId), file);
+      if (content === undefined) {
+        await writeFileAtomic(fullPath, patchFrontmatter(current, { tipo: "regra", tags }));
+        return undefined;
+      }
+      const historyName = await this.writeToHistory(brainId, current, noteTitle(file, current), "organizar", file);
+      const title = noteTitle(file, current);
+      await writeFileAtomic(fullPath, replaceBody(current, `# ${title}\n\n${content.trim()}`, { tipo: "regra", tags, atualizado: this.now().toISOString() }));
+      return historyName;
+    });
+  }
+
+  /** Organizar: a versão atual vai para o histórico e o corpo da nota passa a ser `content` (o título e o resto do frontmatter ficam; entra `atualizado`). */
+  rewriteRootNote(brainId: string, file: string, content: string): Promise<string> {
+    return this.serial(brainId, async () => {
+      const current = await this.readRootFull(brainId, file);
+      const title = noteTitle(file, current);
+      const historyName = await this.writeToHistory(brainId, current, title, "organizar", file);
+      await writeFileAtomic(path.join(this.dir(brainId), file), replaceBody(current, `# ${title}\n\n${content.trim()}`, { atualizado: this.now().toISOString() }));
+      return historyName;
+    });
+  }
+
+  /**
+   * Organizar: cria a nota nova (`tipo: doc`, autor Maestro, tags das originais sem `regra`) com o nome do título, entra no
+   * `_indice`, e só então manda cada original para o histórico. Confere todas as originais antes de criar qualquer coisa.
+   */
+  mergeRootNotes(brainId: string, input: { files: string[]; title: string; content: string }): Promise<{ file: string; archived: string[] }> {
+    return this.serial(brainId, async () => {
+      const tags = new Set<string>();
+      for (const file of input.files) {
+        const current = await this.readRootFull(brainId, file);
+        for (const tag of noteTags(parseFrontmatter(current).frontmatter)) tags.add(tag);
+      }
+      tags.delete(BRAIN_RULE_TAG);
+      const dir = this.dir(brainId);
+      const title = input.title.replace(/\s+/g, " ").trim();
+      const content = `${renderFields({ tipo: "doc", autor: "Maestro", data: this.now().toISOString(), tags: [...tags] })}\n# ${title}\n\n${input.content.trim()}\n`;
+      const base = slugify(title, "nota").slice(0, 48).replace(/-+$/g, "");
+      let created: string | undefined;
+      for (let attempt = 1; attempt <= MAX_NAME_ATTEMPTS && !created; attempt++) {
+        const name = `${base}${attempt > 1 ? `-${attempt}` : ""}.md`;
+        if (input.files.includes(name) || isFixedFileName(name)) continue;
+        try {
+          await createFileAtomic(path.join(dir, name), content);
+          created = name;
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        }
+      }
+      if (!created) throw new Error("Não consegui um nome livre para a nota resumida");
+      await this.appendToIndex(dir, created, `- [[${created.replace(/\.md$/i, "")}]] — ${title.slice(0, 100)}`);
+      const archived: string[] = [];
+      for (const file of input.files) archived.push(await this.archiveUnlocked(brainId, file));
+      return { file: created, archived };
+    });
+  }
+
+  /** Organizar: a versão atual do `_regras.md` vai para o histórico (`regras-anteriores`) e o texto novo entra no lugar. Devolve o arquivo do histórico. */
+  replaceRulesWithHistory(brainId: string, content: string): Promise<string> {
+    return this.serial(brainId, async () => {
+      const current = await this.readRootFull(brainId, BRAIN_FIXED_FILES.regras);
+      const historyName = await this.writeToHistory(brainId, current, "regras-anteriores", "organizar");
+      await this.writeRules(brainId, content);
+      return historyName;
     });
   }
 

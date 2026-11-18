@@ -1,15 +1,19 @@
 import {
   BRAIN_FIXED_FILES,
   BRAIN_HISTORY_DIR,
+  BRAIN_RULE_LIMITS,
+  BRAIN_RULE_TAG,
   BRAIN_SOURCE_LABELS,
   GLOBAL_BRAIN_ID,
   isMaestroAgent,
   slugify,
+  type Agent,
   type BrainNoteLayer,
   type OfficeState,
   type Room,
 } from "@cyno/shared";
 import { shorten } from "../../util/text";
+import type { AgentRules } from "./agent-rules";
 import type { Brain } from "./brain";
 import { noteDate, noteExcerpt, noteTags } from "./browse";
 import { notePath, visibleSources, type VisibleSource } from "./context";
@@ -22,18 +26,25 @@ import { relevance, snippet, terms } from "./relevance";
 export type BrainViewer = { agentId: string; agentName: string; roomId: string; maestro: boolean };
 
 /** Tipos de nota curta que os agentes salvam (vai no frontmatter `tipo`). */
-export const NOTE_KINDS = ["decisao", "doc", "aprendizado", "preferencia", "outro"] as const;
+export const NOTE_KINDS = ["decisao", "doc", "aprendizado", "preferencia", "regra", "outro"] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
 
 /** Tipo da nota como os agentes mandam pelo MCP (em inglês) -> o gravado no frontmatter (pt-BR, igual às notas de antes). */
-export const NOTE_INPUT_KINDS = ["decision", "doc", "learning", "preference", "other"] as const;
+export const NOTE_INPUT_KINDS = ["decision", "doc", "learning", "preference", "rule", "other"] as const;
 export type NoteInputKind = (typeof NOTE_INPUT_KINDS)[number];
-const KIND_FROM_INPUT: Record<NoteInputKind, NoteKind> = { decision: "decisao", doc: "doc", learning: "aprendizado", preference: "preferencia", other: "outro" };
+const KIND_FROM_INPUT: Record<NoteInputKind, NoteKind> = { decision: "decisao", doc: "doc", learning: "aprendizado", preference: "preferencia", rule: "regra", other: "outro" };
 
 export type SaveNoteInput = { title: string; content: string; kind: NoteInputKind; tags?: string[]; replace?: string; brain?: string };
 
 const LAYER_LABELS: Record<BrainNoteLayer, string> = { fixed: "pinned", note: "note", history: "history" };
 const FIXED_KIND: Record<string, string> = { [BRAIN_FIXED_FILES.regras]: "regras", [BRAIN_FIXED_FILES.indice]: "indice", [BRAIN_FIXED_FILES.briefing]: "briefing" };
+
+/** Tags da nota: as que o agente passou (até 8) e, numa regra, sempre a tag "regra". */
+function noteTagsFor(input: SaveNoteInput): string[] {
+  const tags = (input.tags ?? []).map((tag) => tag.replace(/^#+/, "").trim()).filter(Boolean);
+  const unique = [...new Set(input.kind === "rule" ? [BRAIN_RULE_TAG, ...tags.filter((tag) => tag !== BRAIN_RULE_TAG)] : tags)];
+  return unique.slice(0, 8);
+}
 
 /** Agente -> quarto dele (pelo time) e papel. Sem agente ou sem quarto = undefined. */
 export function brainViewer(state: OfficeState, agentId: string): BrainViewer | undefined {
@@ -66,7 +77,7 @@ export function parseNotePath(caminho: string): { brainId: string; file: string 
  * histórico nunca é alterado por aqui.
  */
 export class BrainAccess {
-  constructor(private readonly deps: { brain: Brain; rooms: () => Room[]; now: () => Date }) {}
+  constructor(private readonly deps: { brain: Brain; rooms: () => Room[]; now: () => Date; agentRules: Pick<AgentRules, "append">; agents: () => Pick<Agent, "id" | "name">[] }) {}
 
   /** Cérebros que o agente pode ler (mesma regra do contexto). */
   readable(viewer: BrainViewer): VisibleSource[] {
@@ -137,19 +148,48 @@ export class BrainAccess {
     const fixed = isFixedFile(file);
     if (fixed && !target) throw new Error("To change a pinned note, pass replace with its path");
     if (fixed && file === BRAIN_FIXED_FILES.regras && !viewer.maestro) throw new Error("The room's rules belong to the user: propose the change in your result, do not edit `_regras`");
-    const max = fixed ? BRAIN_LIMITS.saveFixed : BRAIN_LIMITS.saveNote;
+    const isRule = input.kind === "rule" && !fixed;
+    const max = fixed ? BRAIN_LIMITS.saveFixed : isRule ? BRAIN_RULE_LIMITS.ruleNote : BRAIN_LIMITS.saveNote;
     const body = input.content.trim();
-    if (body.length > max) throw new Error(`Content too long (${body.length} characters; max ${max}). Brain notes are short: summarize.`);
+    if (body.length > max) {
+      throw new Error(
+        isRule
+          ? `Rule too long (${body.length} characters; max ${max}). A rule is loaded in every task: keep it to a few lines (one or two sentences); put the details in a separate note.`
+          : `Content too long (${body.length} characters; max ${max}). Brain notes are short: summarize.`,
+      );
+    }
 
     const at = this.deps.now().toISOString();
     const title = input.title.replace(/\s+/g, " ").trim();
     const frontmatter = fixed
       ? renderFields({ tipo: FIXED_KIND[file], autor: viewer.agentName, atualizado: at })
-      : renderFields({ tipo: KIND_FROM_INPUT[input.kind], autor: viewer.agentName, data: at, tags: (input.tags ?? []).map((tag) => tag.replace(/^#+/, "").trim()).filter(Boolean).slice(0, 8) });
+      : renderFields({ tipo: KIND_FROM_INPUT[input.kind], autor: viewer.agentName, data: at, tags: noteTagsFor(input) });
     const heading = /^#\s+\S/.test(body) ? "" : `# ${title}\n\n`;
     const content = `${frontmatter}\n${heading}${body}\n`;
     const indexLine = `- [[${file.replace(/\.md$/i, "")}]] — ${shorten(noteExcerpt(body, 100) || title, 100)}`;
     await this.deps.brain.writeRootNote(brainId, file, content, { replace: target !== null, ...(target ? {} : { indexLine }) });
     return `${target ? "Note updated" : "Note saved"}: \`${notePath(brainId, file)}\`${target ? "" : " (and listed in _indice)"}.`;
+  }
+
+  /**
+   * `save_agent_rule`: acrescenta uma regra que vale só para UM agente. O agente de time só grava a
+   * dele; o Maestro informa `agent` (id ou nome exato de qualquer agente do workspace).
+   */
+  async saveAgentRule(viewer: BrainViewer, text: string, agent?: string): Promise<string> {
+    let target = { id: viewer.agentId, name: viewer.agentName };
+    if (viewer.maestro) {
+      const wanted = agent?.trim();
+      if (!wanted) throw new Error("Pass `agent`: the id or exact name of the agent the rule is for (your own id if it is for you)");
+      const agents = this.deps.agents();
+      const found = agents.find((candidate) => candidate.id === wanted) ?? agents.find((candidate) => candidate.name === wanted) ?? agents.find((candidate) => candidate.name.toLowerCase() === wanted.toLowerCase());
+      if (!found) throw new Error(`Agent "${wanted}" not found in this workspace (use an agent id or exact name; see get_team)`);
+      target = { id: found.id, name: found.name };
+    } else if (agent && agent !== viewer.agentId && agent !== viewer.agentName) {
+      throw new Error("You can only save rules for yourself");
+    }
+    const result = await this.deps.agentRules.append(target.id, text);
+    return result.added
+      ? `Rule saved for ${target.name}: it will be loaded in every task of ${target.name} and of nobody else.`
+      : `${target.name} already has this rule (nothing changed).`;
   }
 }

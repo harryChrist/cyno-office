@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_FOR_YOU_LIVE_DAYS, FOR_YOU_LIVE_DAY_OPTIONS } from "./for-you";
 
 /**
  * Configurações do server (da instalação, não de um workspace nem do navegador), gravadas em
@@ -11,21 +12,29 @@ export const RETENTION_DAY_OPTIONS = {
   transcripts: [1, 3, 7, 14, 30, 90, 0],
   /** Logs de trabalho das tarefas (`data/workspaces/<ws>/logs/*.jsonl`). */
   logs: [7, 30, 90, 180, 365, 0],
+  /**
+   * Aprovações decididas: dias na lista viva antes de irem para o arquivo (nada é apagado; aqui 0 =
+   * nunca arquivar). Vale para todos os workspaces.
+   */
+  approvals: FOR_YOU_LIVE_DAY_OPTIONS,
 } as const;
 
 export const retentionSettingsSchema = z.object({
   transcriptsDays: z.number().int().min(0).max(3650),
   logsDays: z.number().int().min(0).max(3650),
+  /** Dias que uma aprovação decidida fica na lista viva; 0 = nunca arquivar. Ausente no arquivo antigo = o padrão. */
+  approvalsLiveDays: z.number().int().min(0).max(3650).default(DEFAULT_FOR_YOU_LIVE_DAYS),
 });
 export type RetentionSettings = z.infer<typeof retentionSettingsSchema>;
 
 /** Padrões: conversas das CLIs por 7 dias; logs das tarefas por 90 dias. Tarefas, resultados e Cérebro ficam para sempre. */
-export const DEFAULT_RETENTION: RetentionSettings = { transcriptsDays: 7, logsDays: 90 };
+export const DEFAULT_RETENTION: RetentionSettings = { transcriptsDays: 7, logsDays: 90, approvalsLiveDays: DEFAULT_FOR_YOU_LIVE_DAYS };
 
 /** PATCH /api/settings/retention (só os campos que mudam). */
 export const updateRetentionBodySchema = z.strictObject({
   transcriptsDays: retentionSettingsSchema.shape.transcriptsDays.optional(),
   logsDays: retentionSettingsSchema.shape.logsDays.optional(),
+  approvalsLiveDays: z.number().int().min(0).max(3650).optional(),
 });
 export type UpdateRetentionBody = z.input<typeof updateRetentionBodySchema>;
 

@@ -202,7 +202,7 @@ export const useOfficeStore = create<OfficeStoreState>()((set, get) => ({
     }
     const { office, progress, forYou, forYouTypes } = get();
     const next = officeReducer({ office, progress, forYou, forYouTypes }, event);
-    if (event.type === "foryou:upserted" || event.type === "foryou:deleted" || isForYouTypesEvent(event)) forYouEvents++;
+    if (event.type === "foryou:upserted" || event.type === "foryou:deleted" || event.type === "foryou:archived" || isForYouTypesEvent(event)) forYouEvents++;
     const created = createdByMaestro(event);
     if (created) {
       useNoticesStore.getState().push({ key: `foryou-type:${created.id}:${created.createdAt}`, text: `O Maestro criou o tipo “${created.name}”`, at: created.createdAt, target: "foryou-types" });

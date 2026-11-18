@@ -53,6 +53,34 @@ function RetentionCard({
   );
 }
 
+/** As aprovações decididas: quanto tempo ficam na lista viva antes de irem para o arquivo (nada é apagado). */
+function ApprovalsCard({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (days: number) => void }) {
+  const selectId = useId();
+  const testId = "settings-history-approvals";
+  return (
+    <section className="settings__card" data-testid={testId}>
+      <OptionHead
+        title="Aprovações decididas"
+        line="Depois desse prazo, a aprovação decidida sai da lista e vai para o arquivo, onde continua disponível em Mais antigos. Nada é apagado."
+        seal="plataforma"
+        state={<StateBadge tone="value">{value <= 0 ? "Nunca arquiva" : `Na lista por ${retentionLabel(value)}`}</StateBadge>}
+      />
+      <div className="settings__retention-row">
+        <label htmlFor={selectId} className="settings__retention-label">
+          Manter na lista por
+        </label>
+        <select id={selectId} className="ui-input ui-input--compact" value={value} disabled={disabled} onChange={(event) => onChange(Number(event.currentTarget.value))} data-testid={`${testId}-days`}>
+          {retentionOptions("approvals", value).map((days) => (
+            <option key={days} value={days}>
+              {retentionLabel(days, "approvals")}
+            </option>
+          ))}
+        </select>
+      </div>
+    </section>
+  );
+}
+
 /**
  * Seção "Histórico": quanto tempo o server guarda as conversas internas das CLIs dos agentes e os
  * logs das tarefas (configuração do server, para todos os navegadores), o uso de disco de cada
@@ -133,6 +161,7 @@ export function HistorySettings() {
         onChange={(days) => change({ logsDays: days })}
         testId="settings-history-logs"
       />
+      <ApprovalsCard value={data.settings.approvalsLiveDays} disabled={saving} onChange={(days) => change({ approvalsLiveDays: days })} />
       <section className="settings__card" data-testid="settings-history-kept">
         <OptionHead title="Guardados para sempre" seal="plataforma" state={<StateBadge tone="on">Nunca são apagados</StateBadge>} />
         <ul className="settings__retention-kept">

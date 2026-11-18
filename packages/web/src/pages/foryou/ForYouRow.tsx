@@ -36,6 +36,7 @@ function rowKind(item: ForYouItem, types: TypeList): { label: string; icon: Icon
   if (kind === "questionario") return { label: "Perguntas", icon: "interrogacao" };
   if (kind === "sprint") return { label: "Entrega", icon: "maleta", style: typeStyle(KIND_FILTERS.sprint) };
   if (kind === "regra") return { label: "Regra", icon: "escudo", style: typeStyle(KIND_FILTERS.regra) };
+  if (kind === "organizacao") return { label: "Organização", icon: "marcador", style: typeStyle(KIND_FILTERS.organizacao) };
   if (kind === "rotina") return { label: PROPOSAL_ROW_LABELS[proposalModeOf(item.routine)], icon: "bandeira", style: typeStyle(KIND_FILTERS.rotina) };
   const type = typeDisplay(types, item.type);
   return { label: type.name, icon: type.icon, style: typeStyle(type) };
@@ -50,10 +51,14 @@ export function ForYouRow({ item, types, agentName, roomName, requestLabel, batc
       ? (item.title ?? "Plano")
       : kindOfItem === "questionario"
         ? (item.title ?? "Perguntas para você")
+        : kindOfItem === "organizacao"
+          ? (item.title ?? `Organizar o Cérebro de ${item.organize?.brainName ?? "uma sala"}`)
         : kindOfItem === "rotina" && item.routine
           ? (item.title ?? `${PROPOSAL_TITLES[proposalModeOf(item.routine)]} · ${item.routine.title}`)
           : cardTitle(item, agentName, types);
-  const snippet = snippetOf(kindOfItem === "questionario" ? (item.questions ?? []).map((question) => question.text).join(" ") || item.text : item.text);
+  const snippet = snippetOf(
+    kindOfItem === "questionario" ? (item.questions ?? []).map((question) => question.text).join(" ") || item.text : kindOfItem === "organizacao" ? (item.organize?.summary ?? item.text) : item.text,
+  );
   const updated = updateBadge(item, agentName);
   return (
     <button

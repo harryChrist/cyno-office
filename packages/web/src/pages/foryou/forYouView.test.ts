@@ -224,6 +224,7 @@ describe("cancelar e atualizar", () => {
     expect(canDiscard(item("A-1"))).toBe(true);
     expect(canDiscard(item("A-1", { kind: "questionario" }))).toBe(true);
     expect(canDiscard(item("A-1", { kind: "plano" }))).toBe(false);
+    expect(canDiscard(item("A-1", { kind: "organizacao" }))).toBe(false);
     expect(canDiscard(item("A-1", { status: "aprovado" }))).toBe(false);
     expect(canDiscard(item("A-1", { status: "cancelado" }))).toBe(false);
   });

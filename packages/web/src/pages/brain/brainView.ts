@@ -1,8 +1,18 @@
-import type { BrainFrontmatter, BrainKind, BrainNoteSummary, BrainSummary, OfficeState, Task } from "@cyno/shared";
+import { BRAIN_SHELF_LABELS, brainShelf, type BrainFrontmatter, type BrainKind, type BrainNoteSummary, type BrainShelf, type BrainSummary, type OfficeState, type Task } from "@cyno/shared";
+import { countLabel } from "../../ui/format";
 import { inlineText, parseInline } from "../../ui/markdown/markdown";
 
-/** Nota escolhida no endereço (`#/biblioteca/cerebro/<ws>/<brainId>/<arquivo>`). */
-export type BrainSelection = { brainId: string | null; file: string | null };
+/**
+ * Nota escolhida no endereço (`#/biblioteca/cerebro/<ws>/<brainId>/<arquivo>`) ou as regras de um
+ * agente (`.../<brainId>/@agente/<agentId>`, `agentId` preenchido e `file` null).
+ */
+export type BrainSelection = { brainId: string | null; file: string | null; agentId?: string };
+
+/**
+ * Pseudo-arquivo do endereço que marca "regras de um agente". Não colide com uma nota real: toda
+ * nota termina em ".md" (e o histórico fica em "historico/").
+ */
+export const AGENT_RULES_SEGMENT = "@agente";
 
 export const NO_SELECTION: BrainSelection = { brainId: null, file: null };
 
@@ -18,9 +28,15 @@ function decode(part: string): string | null {
 /** Lê o sufixo do Cérebro no endereço; outro workspace ou outra página = nada escolhido. */
 export function parseBrainHash(hash: string, workspaceId: string | null): BrainSelection {
   const parts = hash.replace(/^#\/?/, "").split("?")[0]!.split("/").filter(Boolean).map(decode);
-  const [page, tab, ws, brainId, file] = parts;
+  const [page, tab, ws, brainId, file, extra] = parts;
   if (!workspaceId || page !== "biblioteca" || tab !== "cerebro" || ws !== workspaceId) return NO_SELECTION;
+  if (brainId && file === AGENT_RULES_SEGMENT) return extra ? { brainId, file: null, agentId: extra } : { brainId, file: null };
   return { brainId: brainId || null, file: brainId ? file || null : null };
+}
+
+/** Endereço das regras de um agente dentro do Cérebro da sala dele. */
+export function agentRulesHash(workspaceId: string, brainId: string, agentId: string): string {
+  return `#/${["biblioteca", "cerebro", workspaceId, brainId, AGENT_RULES_SEGMENT, agentId].map(encodeURIComponent).join("/")}`;
 }
 
 /** Endereço de um Cérebro (e de uma nota dele). */
@@ -44,17 +60,67 @@ export function filterNotes(notes: BrainNoteSummary[], query: string): BrainNote
   });
 }
 
-/** Camadas da lista: fixas (regras, briefing, índice) no topo, notas curtas e o histórico. A ordem de cada grupo é a do server. */
-export type NoteGroups = { fixed: BrainNoteSummary[]; notes: BrainNoteSummary[]; history: BrainNoteSummary[] };
+/**
+ * Prateleiras da lista (veja `brainShelf` no shared): regras (o `_regras.md` primeiro, depois as notas
+ * de regra), referência (briefing e índice primeiro, depois as outras notas) e histórico. A ordem
+ * dentro de cada grupo é a do server.
+ */
+export type NoteShelves = Record<BrainShelf, BrainNoteSummary[]>;
 
-export function groupNotes(notes: BrainNoteSummary[]): NoteGroups {
-  const groups: NoteGroups = { fixed: [], notes: [], history: [] };
-  for (const note of notes) {
-    if (note.layer === "fixed") groups.fixed.push(note);
-    else if (note.layer === "history") groups.history.push(note);
-    else groups.notes.push(note);
+export function groupNotes(notes: BrainNoteSummary[]): NoteShelves {
+  const shelves: NoteShelves = { regra: [], referencia: [], registro: [] };
+  for (const note of notes) shelves[brainShelf(note)].push(note);
+  const fixedFirst = (a: BrainNoteSummary, b: BrainNoteSummary) => Number(b.layer === "fixed") - Number(a.layer === "fixed");
+  shelves.regra.sort(fixedFirst);
+  shelves.referencia.sort(fixedFirst);
+  return shelves;
+}
+
+/** Dica de uma linha embaixo do título de cada prateleira ("desta sala" ou, no lobby, "deste workspace"). */
+export function shelfHint(shelf: BrainShelf, lobby: boolean): string {
+  if (shelf === "regra") return `Entram em toda tarefa ${lobby ? "deste workspace" : "desta sala"}.`;
+  if (shelf === "referencia") return "O agente só vê o título e lê quando precisa.";
+  return "Só aparece quando o agente busca.";
+}
+
+export const SHELF_LABELS = BRAIN_SHELF_LABELS;
+
+/** Peso do Cérebro (botão "Organizar" e resumo): notas de referência fora do histórico, sem o briefing e o índice, e regras (o `_regras.md` conta como uma, igual à proposta do Maestro). */
+export function brainWeight(notes: BrainNoteSummary[]): { reference: number; rules: number } {
+  const shelves = groupNotes(notes);
+  return {
+    reference: shelves.referencia.filter((note) => note.layer !== "fixed").length,
+    rules: shelves.regra.length,
+  };
+}
+
+/** "3 notas de referência · 2 regras" */
+export function weightLabel(weight: { reference: number; rules: number }): string {
+  return `${countLabel(weight.reference, "nota de referência", "notas de referência")} · ${countLabel(weight.rules, "regra", "regras")}`;
+}
+
+/** Linhas de regra de um agente (cada linha não vazia conta). */
+export function ruleLineCount(content: string): number {
+  return content.split("\n").filter((line) => line.trim() !== "").length;
+}
+
+/** "sem regras", "1 regra" ou "3 regras" (o estado de cada agente na lista). */
+export function agentRulesState(content: string): string {
+  const count = ruleLineCount(content);
+  return count === 0 ? "sem regras" : countLabel(count, "regra", "regras");
+}
+
+/** Agentes de um quarto (os dos times cujo `roomId` é o Cérebro), com id, nome e time. */
+export type CrewAgent = { id: string; name: string; teamName: string };
+
+export function brainAgents(office: Pick<OfficeState, "teams" | "agents"> | null, brainId: string): CrewAgent[] {
+  if (!office) return [];
+  const result: CrewAgent[] = [];
+  for (const team of office.teams) {
+    if (team.roomId !== brainId) continue;
+    for (const agent of office.agents) if (agent.teamId === team.id) result.push({ id: agent.id, name: agent.name, teamName: team.name });
   }
-  return groups;
+  return result;
 }
 
 /** Nome curto das fixas na lista (o título delas leva o nome do quarto). */
@@ -237,7 +303,7 @@ export function noteTypeLabel(frontmatter: BrainFrontmatter, kind: NoteKind): st
 export type BrainLevel = "brains" | "notes" | "reader";
 
 export function brainLevel(selection: BrainSelection): BrainLevel {
-  if (selection.file) return "reader";
+  if (selection.file || selection.agentId) return "reader";
   return selection.brainId ? "notes" : "brains";
 }
 

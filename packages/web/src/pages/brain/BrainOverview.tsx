@@ -1,7 +1,7 @@
 import type { BrainSummary, OfficeState } from "@cyno/shared";
 import { countLabel } from "../../ui/format";
 import { BRAIN_KIND_ICONS, BrainIcon, NOTE_KIND_ICONS } from "./brainIcons";
-import { BRAIN_KIND_LABELS, brainAudience, brainHash, fixedName, groupNotes, latestDate, noteKind } from "./brainView";
+import { BRAIN_KIND_LABELS, brainAudience, brainHash, brainWeight, fixedName, groupNotes, latestDate, noteKind, weightLabel } from "./brainView";
 import { RelativeTime } from "./NoteList";
 
 /**
@@ -11,9 +11,11 @@ import { RelativeTime } from "./NoteList";
 export function BrainOverview({ workspaceId, brain, office, now }: { workspaceId: string; brain: BrainSummary; office: OfficeState | null; now: number }) {
   const groups = groupNotes(brain.notes);
   const latest = latestDate(brain.notes);
+  const fixed = brain.notes.filter((note) => note.layer === "fixed");
+  const lobby = brain.kind === "lobby";
   const stats = [
-    countLabel(groups.notes.length, "nota", "notas"),
-    groups.history.length > 0 ? countLabel(groups.history.length, "resultado de tarefa", "resultados de tarefa") : "",
+    weightLabel(brainWeight(brain.notes)),
+    groups.registro.length > 0 ? countLabel(groups.registro.length, "item no histórico", "itens no histórico") : "",
   ].filter(Boolean);
 
   return (
@@ -37,9 +39,9 @@ export function BrainOverview({ workspaceId, brain, office, now }: { workspaceId
             </>
           )}
         </p>
-        {groups.fixed.length > 0 && (
-          <ul className="brain-overview__fixed" aria-label="Sempre no contexto">
-            {groups.fixed.map((note) => {
+        {fixed.length > 0 && (
+          <ul className="brain-overview__fixed" aria-label="Notas fixas">
+            {fixed.map((note) => {
               const kind = noteKind(note);
               return (
                 <li key={note.file}>
@@ -55,7 +57,7 @@ export function BrainOverview({ workspaceId, brain, office, now }: { workspaceId
           </ul>
         )}
         <p className="brain-overview__hint">
-          Escolha uma nota na lista para ler. As fixas entram em toda tarefa dos agentes deste Cérebro; as outras eles acham pela busca.
+          Escolha uma nota na lista para ler. Só as regras e o briefing entram em toda tarefa {lobby ? "deste workspace" : "desta sala"}; as outras notas o agente lê quando precisa e o histórico ele acha pela busca.
         </p>
       </div>
     </section>

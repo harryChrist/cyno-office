@@ -126,6 +126,7 @@ export class RetentionService {
   private timer: NodeJS.Timeout | undefined;
   private running: Promise<RetentionCleanupResult> | undefined;
   private readonly file: string;
+  private readonly listeners = new Set<(settings: RetentionSettings, before: RetentionSettings) => void>();
 
   constructor(private readonly deps: RetentionDeps) {
     this.file = path.join(deps.dataDir, "settings.json");
@@ -147,10 +148,25 @@ export class RetentionService {
     return { ...this.current };
   }
 
+  /** Avisa quando a configuração muda (o prazo das aprovações dispara a varredura do arquivo em cada workspace). Devolve quem cancela. */
+  onChange(listener: (settings: RetentionSettings, before: RetentionSettings) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   async update(change: UpdateRetentionBody): Promise<RetentionSettings> {
+    const before = this.settings();
     this.current = retentionSettingsSchema.parse({ ...this.current, ...Object.fromEntries(Object.entries(change).filter(([, value]) => value !== undefined)) });
     await this.save();
-    return this.settings();
+    const after = this.settings();
+    for (const listener of this.listeners) {
+      try {
+        listener(after, before);
+      } catch (error) {
+        this.deps.log.warn({ err: error }, "falha ao avisar a mudança da retenção");
+      }
+    }
+    return after;
   }
 
   /** Configuração, uso de disco e última limpeza (GET /api/settings/retention). */

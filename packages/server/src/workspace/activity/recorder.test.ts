@@ -97,6 +97,22 @@ describe("observeWorkspaceActivity", () => {
     expect(entries[1]).toMatchObject({ summary: "Você aprovou: Post de segunda (com a sua edição)", data: { edited: true } });
   });
 
+  it("item arquivado (saiu da lista viva por prazo) não vira registro nem conta como apagado; sem originalText não é 'editado'", () => {
+    observe();
+    const compact = (partial: Partial<ForYouItem> = {}): ForYouItem => {
+      const { originalText: _same, ...rest } = item(partial);
+      return rest as ForYouItem;
+    };
+    hub.publish({ type: "foryou:upserted", item: compact() });
+    hub.publish({ type: "foryou:upserted", item: compact({ status: "aprovado", editedByUser: true, decidedAt: "2026-11-10T12:05:00.000Z" }) });
+    const before = entries.length;
+    hub.publish({ type: "foryou:archived", ids: ["A-0001"] });
+    expect(entries).toHaveLength(before);
+    expect(entries.map((entry) => entry.action)).toEqual(["pedida", "aprovada"]);
+    // Sem originalText, o texto é o rascunho: `editedByUser` sozinho não faz a edição existir.
+    expect(entries[1]!.data).not.toMatchObject({ edited: true });
+  });
+
   it("recusa com motivo e retrabalho: o motivo vai no resumo e o retrabalho vira uma entrada", () => {
     const task0 = { ref: "T1", title: "Comentário 1", ownerId: "eco", steps: [{ agentId: "eco", taskId: "t1" }], current: 0, rework: { count: 0 } };
     snapshot = { ...snapshot, plans: [{ id: "p1", title: "Campanha", status: "ativo", tasks: [task0] } as unknown as Plan] };

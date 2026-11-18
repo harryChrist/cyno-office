@@ -241,6 +241,11 @@ describe("seção Histórico", () => {
     expect(retentionLabel(90)).toBe("90 dias");
     expect(retentionLabel(365)).toBe("1 ano");
     expect(retentionOptions("transcripts", 7)).toEqual([1, 3, 7, 14, 30, 90, 0]);
+    expect(retentionLabel(0, "approvals")).toBe("Sempre");
+    expect(retentionLabel(7, "approvals")).toBe("7 dias");
+    expect(retentionLabel(0, "logs")).toBe("Nunca apagar");
+    expect(retentionOptions("approvals", 7)).toEqual([1, 3, 7, 14, 30, 0]);
+    expect(retentionOptions("approvals", 10)).toEqual([1, 3, 7, 10, 14, 30, 0]);
     expect(retentionOptions("logs", 45)).toEqual([7, 30, 45, 90, 180, 365, 0]);
   });
 });

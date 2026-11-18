@@ -1,3 +1,4 @@
+import { nextForYouId } from "@cyno/shared";
 import type { ForYouItem, OfficeState, ServerEvent, Task } from "@cyno/shared";
 import { describe, expect, it, vi } from "vitest";
 import type { StateManager } from "../../store/state-manager";
@@ -11,6 +12,8 @@ const task = (extra: Partial<Task> = {}) => ({ id: "t1", roomId: "r", agentId: "
 function setup(options: { actions: string[]; cap: number }) {
   let items: ForYouItem[] = [];
   const state = {
+    // Sem arquivo em disco nestes testes: nenhum id arquivado.
+    forYouArchive: { has: () => false, nextId: (live: readonly { id: string }[]) => nextForYouId(live) },
     read: () => OFFICE,
     readForYou: () => items,
     commit: async (change: { forYou?: ForYouItem[]; events?: ServerEvent[] }) => {

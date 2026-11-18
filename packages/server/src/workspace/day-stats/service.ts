@@ -22,7 +22,8 @@ export type DayStatsServiceDeps = {
   tasks: () => readonly Task[];
   projects: () => readonly Project[];
   agents: () => readonly Agent[];
-  forYou: () => readonly ForYouItem[];
+  /** Itens do "Para você" decididos de `sinceMs` em diante e os pendentes (o que saiu da lista viva vem do arquivo). */
+  forYou: (sinceMs: number) => readonly ForYouItem[] | Promise<readonly ForYouItem[]>;
   /** As linhas do histórico de gastos entre dois instantes (o `UsageHistory.read`). */
   usage: (fromMs: number, toMs: number) => Promise<UsageRecord[]>;
   usdBrl: () => number;
@@ -41,9 +42,10 @@ export class DayStatsService {
     const withCompare = options.compare !== false;
     const first = withCompare ? addDays(day, -7) : day;
     const records = await this.deps.usage(dayRange(first).start, dayRange(day).end);
-    const stats = this.build(day, records);
+    const items = await this.deps.forYou(dayRange(first).start);
+    const stats = this.build(day, records, items);
     if (!withCompare) return stats;
-    const at = (offset: number) => this.build(addDays(day, offset), records);
+    const at = (offset: number) => this.build(addDays(day, offset), records, items);
     const last7 = Array.from({ length: COMPARE_AVG_DAYS }, (_, index) => at(-(index + 1)));
     stats.compare = compareDays(stats, { yesterday: last7[0]!, sameWeekday: at(-7), last7 });
     return stats;
@@ -52,8 +54,9 @@ export class DayStatsService {
   /** Os dias de `from` a `to` (inclusive), sem comparação (um só acesso ao histórico de gastos). */
   async range(from: string, to: string): Promise<DayStats[]> {
     const records = await this.deps.usage(dayRange(from).start, dayRange(to).end);
+    const items = await this.deps.forYou(dayRange(from).start);
     const out: DayStats[] = [];
-    for (let day = from; day <= to; day = addDays(day, 1)) out.push(this.build(day, records));
+    for (let day = from; day <= to; day = addDays(day, 1)) out.push(this.build(day, records, items));
     return out;
   }
 
@@ -63,7 +66,7 @@ export class DayStatsService {
     const today = dayKeyOf(now);
     const oldest = addDays(today, -DAY_STATS_RETENTION_DAYS);
     const found = new Set(this.deps.clock.days());
-    const { waits } = ownerWaits(this.deps.forYou(), this.deps.tasks(), now);
+    const { waits } = ownerWaits(await this.deps.forYou(dayRange(oldest).start), this.deps.tasks(), now);
     for (const wait of waits) {
       for (let day = dayKeyOf(wait.start); day <= dayKeyOf(wait.end); day = addDays(day, 1)) found.add(day);
     }
@@ -73,7 +76,7 @@ export class DayStatsService {
     return [...found].filter((day) => day >= oldest && day <= today).sort();
   }
 
-  private build(day: string, records: readonly UsageRecord[]): DayStats {
+  private build(day: string, records: readonly UsageRecord[], items: readonly ForYouItem[]): DayStats {
     const agents = this.deps.agents();
     const tasks = this.deps.tasks();
     const since = this.deps.clock.since();
@@ -82,7 +85,7 @@ export class DayStatsService {
       now: this.deps.now(),
       clock: this.deps.clock.read(day) ?? null,
       ...(since !== undefined ? { clockFrom: since } : {}),
-      items: this.deps.forYou(),
+      items,
       tasks,
       projects: this.deps.projects(),
       agents,

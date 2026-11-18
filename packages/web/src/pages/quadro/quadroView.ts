@@ -1,4 +1,4 @@
-import { BOARD_ID_PATTERN, type Board, type BoardChange, type ServerEvent } from "@cyno/shared";
+import { BOARD_ID_PATTERN, BOARD_KIT_EXPORT_FORMATS, type Board, type BoardChange, type BoardExportResultMessage, type BoardKitExportFormat, type BoardShare, type ServerEvent } from "@cyno/shared";
 import { BOARD_USER_CREATOR } from "@cyno/shared";
 
 /** Lógica pura da tela do Quadro (endereço, lista de abas, o que cada evento faz, mensagens do iframe e textos). */
@@ -41,7 +41,7 @@ export function liveAction(changed: readonly BoardChange[]): LiveAction {
 }
 
 /** Mensagens que o iframe manda para a página-mãe (o kit do Quadro). */
-export type FrameMessage = { type: "ready" } | { type: "height"; height: number } | { type: "error"; message: string };
+export type FrameMessage = { type: "ready" } | { type: "height"; height: number } | { type: "error"; message: string } | { type: "export-result"; result: BoardExportResultMessage };
 
 export function parseFrameMessage(data: unknown): FrameMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -49,6 +49,14 @@ export function parseFrameMessage(data: unknown): FrameMessage | null {
   if (record.type === "quadro:ready") return { type: "ready" };
   if (record.type === "quadro:height") return typeof record.height === "number" && Number.isFinite(record.height) ? { type: "height", height: record.height } : null;
   if (record.type === "quadro:error") return { type: "error", message: typeof record.message === "string" && record.message.trim() ? record.message.trim().slice(0, 400) : "A página do quadro falhou." };
+  if (record.type === "quadro:export-result") {
+    const { requestId, format } = record;
+    if (typeof requestId !== "string" || !requestId) return null;
+    if (typeof format !== "string" || !(BOARD_KIT_EXPORT_FORMATS as readonly string[]).includes(format)) return null;
+    const kind = format as BoardKitExportFormat;
+    if (record.ok === true) return typeof record.text === "string" ? { type: "export-result", result: { type: "quadro:export-result", requestId, format: kind, ok: true, text: record.text } } : null;
+    if (record.ok === false) return { type: "export-result", result: { type: "quadro:export-result", requestId, format: kind, ok: false, error: typeof record.error === "string" && record.error.trim() ? record.error.trim().slice(0, 400) : "Não deu para exportar o quadro." } };
+  }
   return null;
 }
 
@@ -81,8 +89,9 @@ export function authorLabel(createdBy: string, agents: readonly { id: string; na
 }
 
 /** O texto do aviso antes de apagar (diz o que se perde). */
-export function deleteMessage(title: string): string {
-  return `Apagar o quadro "${title}"? A página e os dados dele serão apagados e não dá para desfazer. Os agentes podem montar outro quando você pedir.`;
+export function deleteMessage(title: string, shared = false): string {
+  const base = `Apagar o quadro "${title}"? A página e os dados dele serão apagados e não dá para desfazer. Os agentes podem montar outro quando você pedir.`;
+  return shared ? `${base} O link compartilhado deste quadro para de funcionar.` : base;
 }
 
 /** Os dois quadros de exemplo do estado vazio (dados fictícios, só para mostrar como fica). */
@@ -154,4 +163,45 @@ export function resolveRoute(boards: readonly Board[], wanted: string | null): Q
   if (!wanted) return { kind: "home" };
   const board = boards.find((current) => current.id === wanted);
   return board ? { kind: "board", board } : { kind: "missing", id: wanted };
+}
+
+// ---------- Compartilhar por link e baixar ----------
+
+/** O endereço só funciona na rede local (localhost, 127.x, 10.x, 172.16 a 31.x, 192.168.x): o link não abre para quem está fora. */
+export function isLocalHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host === "::1") return true;
+  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (!match) return false;
+  const [a, b] = [Number(match[1]), Number(match[2])];
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/** O link completo: o endereço em que o app está aberto mais o caminho público devolvido pelo servidor. */
+export function shareLink(origin: string, path: string): string {
+  return `${origin.replace(/\/+$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** "Sem validade" ou "Vale até 25/11/2026 às 14:30" (no fuso de quem olha). */
+export function shareExpiryLabel(share: BoardShare): string {
+  if (!share.shared || !share.expiresAt) return "Sem validade";
+  const date = new Date(share.expiresAt);
+  if (!Number.isFinite(date.getTime())) return "Sem validade";
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `Vale até ${two(date.getDate())}/${two(date.getMonth() + 1)}/${date.getFullYear()} às ${two(date.getHours())}:${two(date.getMinutes())}`;
+}
+
+/** Rótulo de cada opção de validade: 0 é "Sem validade". */
+export function expiryOptionLabel(days: number): string {
+  if (days === 0) return "Sem validade";
+  return days === 1 ? "1 dia" : `${days} dias`;
+}
+
+/** Quantos dias faltam para a validade atual, para marcar a opção mais próxima no seletor (sem validade = 0). */
+export function currentExpiryOption(share: BoardShare, options: readonly number[], now: Date = new Date()): number {
+  if (!share.shared || !share.expiresAt) return 0;
+  const left = (Date.parse(share.expiresAt) - now.getTime()) / 86_400_000;
+  if (!Number.isFinite(left)) return 0;
+  const positive = options.filter((days) => days > 0);
+  return positive.reduce((best, days) => (Math.abs(days - left) < Math.abs(best - left) ? days : best), positive[0] ?? 0);
 }

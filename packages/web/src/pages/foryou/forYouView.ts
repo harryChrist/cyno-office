@@ -44,12 +44,13 @@ export const KIND_FILTERS = {
   rotina: { id: "@rotina", name: "Rotinas", icon: "bandeira", color: "verde", behavior: "texto" },
   sprint: { id: "@sprint", name: "Entregas", icon: "maleta", color: "ambar", behavior: "texto" },
   regra: { id: "@regra", name: "Regras", icon: "escudo", color: "rosa", behavior: "texto" },
+  organizacao: { id: "@organizacao", name: "Organização", icon: "marcador", color: "anil", behavior: "texto" },
 } as const satisfies Record<string, TypeDisplay>;
 const KIND_FILTER_IDS: readonly string[] = Object.values(KIND_FILTERS).map((kind) => kind.id);
 
 /** Em que opção do filtro o item entra: o tipo (aprovação) ou o tipo especial (plano, questionário). */
 export function filterKey(item: Pick<ForYouItem, "type" | "kind">): string {
-  if (item.kind === "plano" || item.kind === "questionario" || item.kind === "rotina" || item.kind === "sprint" || item.kind === "regra") return KIND_FILTERS[item.kind].id;
+  if (item.kind === "plano" || item.kind === "questionario" || item.kind === "rotina" || item.kind === "sprint" || item.kind === "regra" || item.kind === "organizacao") return KIND_FILTERS[item.kind].id;
   return item.type;
 }
 
@@ -84,9 +85,9 @@ export function statusCounts(items: readonly ForYouItem[]): Record<StatusFilter,
   return counts;
 }
 
-/** Dá para descartar (pendente e não é um plano, uma entrega de sprint nem uma regra: o plano tem o próprio Cancelar, a entrega só se aprova ou se devolve e a regra só se aprova ou se recusa). */
+/** Dá para descartar (pendente e não é um plano, uma entrega de sprint nem uma regra nem uma organização: o plano tem o próprio Cancelar, a entrega só se aprova ou se devolve e a regra e a organização só se aprovam ou se recusam). */
 export function canDiscard(item: Pick<ForYouItem, "status" | "kind">): boolean {
-  return isPending(item) && forYouKind(item) !== "plano" && forYouKind(item) !== "sprint" && forYouKind(item) !== "regra";
+  return isPending(item) && forYouKind(item) !== "plano" && forYouKind(item) !== "sprint" && forYouKind(item) !== "regra" && forYouKind(item) !== "organizacao";
 }
 
 /** "Cancelado pelo Maestro", "Cancelado por Clara", "Descartado por você" (null = não foi cancelado). */

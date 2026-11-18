@@ -25,6 +25,7 @@ import { maestroRoutineTools, type RoutineToolsDeps } from "./routine-tools";
 import { maestroDayStatsTool } from "./day-stats-tools";
 import { maestroMetricsTool } from "./metrics-tools";
 import { maestroReportTool } from "./report-tools";
+import { maestroBrainOrganizeTools, type BrainOrganizeToolsDeps } from "./brain-organize-tools";
 import { maestroRetroTools, type RetroToolsDeps } from "./retro-tools";
 import { maestroTodayTool } from "./today-tools";
 import { structureTools, type StructureToolsDeps } from "./structure-tools";
@@ -69,6 +70,8 @@ export type OfficeToolsDeps = {
   reports?: Parameters<typeof maestroReportTool>[0];
   /** `propose_rule` do Maestro (a retrospectiva da Gestão: o dono pede as regras com o botão; cada regra vira um cartão para ele aprovar). */
   retro?: RetroToolsDeps;
+  /** `propose_brain_cleanup` do Maestro (o dono clica em "Organizar" num Cérebro; a proposta vira um cartão para ele aprovar). */
+  brainOrganize?: BrainOrganizeToolsDeps;
   routines?: Pick<RoutineToolsDeps, "routines" | "tracking" | "now" | "forYou" | "workspaceId">;
   /** Pedir ajuda ao Cyno, o agente da plataforma (`ask_cyno`); ausente = a ferramenta não existe. Joga erro com o motivo se um limite barrar. */
   cyno?: { ask: (input: { question: string; context?: string; requestId?: string }) => string };
@@ -113,7 +116,7 @@ export function officeToolsFor(agentId: string, deps: OfficeToolsDeps): McpTool[
   return [...(isMaestroAgent(state, agent) ? maestroTools(deps) : workerTools(agentId, deps)), ...agenda, ...brain, ...browser, ...media, ...board, ...mural];
 }
 
-function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote, plans, manage, routines, media, cardSummary, cyno, today, dayStats, metrics, reports, retro }: OfficeToolsDeps): McpTool[] {
+function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote, plans, manage, routines, media, cardSummary, cyno, today, dayStats, metrics, reports, retro, brainOrganize }: OfficeToolsDeps): McpTool[] {
   return [
     defineTool({
       name: "get_team",
@@ -216,6 +219,7 @@ function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote
     ...(metrics ? [maestroMetricsTool(metrics)] : []),
     ...(reports ? [maestroReportTool(reports)] : []),
     ...(retro ? maestroRetroTools(retro) : []),
+    ...(brainOrganize ? maestroBrainOrganizeTools(brainOrganize) : []),
     approvalTypeTool(forYouTypes),
     ...structureTools({ ...structure, state }),
     ...(manage ? [...manageTools({ ...manage, state }), ...agentTools({ ...manage, state }), ...calendarTools({ ...manage, state })] : []),

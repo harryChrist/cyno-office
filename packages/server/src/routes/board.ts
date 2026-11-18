@@ -1,5 +1,6 @@
 import { boardParamsSchema, updateBoardBodySchema, type Board } from "@cyno/shared";
 import type { FastifyInstance } from "fastify";
+import type { BoardShareStore } from "../workspace/board/share-store";
 import type { RuntimeOf } from "./media";
 
 /**
@@ -13,7 +14,7 @@ import type { RuntimeOf } from "./media";
  * - DELETE /boards/:id        -> 204 (só o dono; os agentes não apagam)
  * Quem cria e atualiza são os agentes (ferramentas board_*): não há POST aqui.
  */
-export function registerBoardRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf): void {
+export function registerBoardRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf, shares?: () => BoardShareStore): void {
   scope.get("/boards", async (request): Promise<Board[]> => runtimeOf(request).boards.list());
 
   scope.get("/boards/:id", async (request): Promise<Board> => runtimeOf(request).boards.get(boardParamsSchema.parse(request.params).id));
@@ -44,7 +45,10 @@ export function registerBoardRoutes(scope: FastifyInstance, runtimeOf: RuntimeOf
   });
 
   scope.delete("/boards/:id", async (request, reply) => {
-    await runtimeOf(request).boards.delete(boardParamsSchema.parse(request.params).id);
+    const { id } = boardParamsSchema.parse(request.params);
+    await runtimeOf(request).boards.delete(id);
+    // O link público morre junto com o quadro (a rota pública também confere, por garantia).
+    await shares?.().remove((request.params as { ws: string }).ws, id);
     return reply.code(204).send();
   });
 }

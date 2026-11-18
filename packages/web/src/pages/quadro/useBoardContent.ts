@@ -8,7 +8,7 @@ import { liveAction } from "./quadroView";
 export type BoardContent =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; doc: string; payload: FramePayload; nonce: number };
+  | { status: "ready"; html: string; doc: string; payload: FramePayload; nonce: number };
 
 /**
  * Busca a página e os dados do quadro e acompanha o ao vivo: `board:upserted` com página recarrega o iframe,
@@ -32,7 +32,7 @@ export function useBoardContent(board: Board): { content: BoardContent; reload: 
         if (cancelled) return;
         const payload: FramePayload = { data, meta: boardRef.current };
         nonce.current += 1;
-        setContent({ status: "ready", doc: makeDoc(html, payload), payload, nonce: nonce.current });
+        setContent({ status: "ready", html, doc: makeDoc(html, payload), payload, nonce: nonce.current });
       },
       (error: unknown) => {
         if (!cancelled) setContent((current) => (current.status === "ready" ? current : { status: "error", message: describeError(error) }));

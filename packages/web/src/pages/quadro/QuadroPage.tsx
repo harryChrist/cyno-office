@@ -1,5 +1,6 @@
-import type { Board } from "@cyno/shared";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Board, BoardKitExportFormat } from "@cyno/shared";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { api } from "../../api/client";
 import { useBoardStore } from "../../store/boardStore";
 import { useNavStore } from "../../store/navStore";
 import { useOfficeStore } from "../../store/officeStore";
@@ -7,10 +8,10 @@ import { BotaoTelaCheia } from "../../ui/BotaoTelaCheia";
 import { useTelaCheia } from "../../ui/useTelaCheia";
 import { ConfirmDialog } from "../../ui/widgets";
 import { QuadroExample, QuadroEmpty } from "./QuadroEmpty";
-import { QuadroFrame } from "./QuadroFrame";
+import { QuadroFrame, type QuadroFrameHandle } from "./QuadroFrame";
 import { QuadroHome } from "./QuadroHome";
 import { QuadroPicker } from "./QuadroPicker";
-import { QIcon, RenameDialog, useNow } from "./QuadroParts";
+import { DownloadMenu, QIcon, RenameDialog, ShareDialog, useNow } from "./QuadroParts";
 import { authorLabel, boardIdFromSub, dataAgeLabel, deleteMessage, resolveRoute, type ExampleId } from "./quadroView";
 import { useBoardContent } from "./useBoardContent";
 import "./quadro.css";
@@ -108,6 +109,23 @@ function BoardView({ board, boards }: { board: Board; boards: readonly Board[] }
   const full = useTelaCheia({ classeNaRaiz: "is-quadro-cheio", focoAoSair: () => stageRef.current?.querySelector<HTMLElement>("[data-testid=quadro-fullscreen]") ?? null });
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  // Ao abrir a confirmação de apagar, vê se o quadro está compartilhado (para avisar que o link para de funcionar).
+  const [deleteShared, setDeleteShared] = useState(false);
+  const frameRef = useRef<QuadroFrameHandle>(null);
+  const exportAs = useCallback(
+    (format: BoardKitExportFormat) => (frameRef.current ? frameRef.current.exportAs(format) : Promise.reject(new Error("O quadro ainda está abrindo. Tente de novo em instantes."))),
+    [],
+  );
+  const downloadSource = content.status === "ready" ? { html: content.html, data: content.payload.data } : null;
+  const askDelete = () => {
+    setDeleteShared(false);
+    setDeleting(true);
+    api.getBoardShare(board.id).then(
+      (state) => setDeleteShared(state.shared),
+      () => undefined,
+    );
+  };
 
   return (
     <div className="quadro-view" data-testid="quadro-view" data-board={board.id}>
@@ -125,11 +143,15 @@ function BoardView({ board, boards }: { board: Board; boards: readonly Board[] }
               <button type="button" className="ui-icon-button" onClick={reload} aria-label="Recarregar o quadro" title="Recarregar" data-testid="quadro-reload">
                 <QIcon name="refresh" />
               </button>
+              <button type="button" className="ui-icon-button" onClick={() => setSharing(true)} aria-label="Compartilhar o quadro" title="Compartilhar" data-testid="quadro-share">
+                <QIcon name="share" />
+              </button>
+              <DownloadMenu board={board} source={downloadSource} exportAs={content.status === "ready" ? exportAs : null} />
               <button type="button" className="ui-icon-button" onClick={() => setRenaming(true)} aria-label="Renomear o quadro" title="Renomear" data-testid="quadro-rename">
                 <QIcon name="edit" />
               </button>
               <BotaoTelaCheia ativa={full.ativa} onClick={() => void full.alternar()} className="ui-icon-button" testId="quadro-fullscreen" />
-              <button type="button" className="ui-icon-button quadro-head__danger" onClick={() => setDeleting(true)} aria-label="Apagar o quadro" title="Apagar" data-testid="quadro-delete">
+              <button type="button" className="ui-icon-button quadro-head__danger" onClick={askDelete} aria-label="Apagar o quadro" title="Apagar" data-testid="quadro-delete">
                 <QIcon name="trash" />
               </button>
             </div>
@@ -183,13 +205,14 @@ function BoardView({ board, boards }: { board: Board; boards: readonly Board[] }
             </button>
           </div>
         )}
-        {content.status === "ready" && <QuadroFrame key={content.nonce} title={`Quadro: ${board.title}`} doc={content.doc} payload={content.payload} />}
+        {content.status === "ready" && <QuadroFrame ref={frameRef} key={content.nonce} title={`Quadro: ${board.title}`} doc={content.doc} payload={content.payload} />}
       </div>
       {renaming && <RenameDialog board={board} onSubmit={(body) => useBoardStore.getState().rename(board.id, body)} onClose={() => setRenaming(false)} />}
+      {sharing && <ShareDialog board={board} onClose={() => setSharing(false)} />}
       {deleting && (
         <ConfirmDialog
           title="Apagar o quadro"
-          message={<p>{deleteMessage(board.title)}</p>}
+          message={<p>{deleteMessage(board.title, deleteShared)}</p>}
           confirmLabel="Apagar o quadro"
           pendingLabel="Apagando…"
           onConfirm={() => useBoardStore.getState().remove(board.id)}

@@ -100,6 +100,8 @@ export type ServerEvent =
   | { type: "foryou:upserted"; item: ForYouItem }
   /** Item do "Para você" apagado (junto com o quarto, o agente ou a tarefa a que pertencia). */
   | { type: "foryou:deleted"; id: string }
+  /** Itens decididos há mais tempo que o prazo foram para o arquivo: saem da lista viva (nada é apagado; veja GET /for-you/archive). */
+  | { type: "foryou:archived"; ids: string[] }
   /** Tipo do "Para você" criado (`created`) ou editado; o web o guarda junto com os itens. */
   | { type: "foryou-types:upserted"; forYouType: ForYouTypeDef; created?: boolean }
   /** Tipo excluído (ou juntado a outro): os itens já foram para `movedTo` (foryou:upserted). */
@@ -206,6 +208,7 @@ const EVENT_TYPES: Record<ServerEventType, true> = {
   "board:deleted": true,
   "foryou:upserted": true,
   "foryou:deleted": true,
+  "foryou:archived": true,
   "foryou-types:upserted": true,
   "foryou-types:deleted": true,
   "agent:log": true,

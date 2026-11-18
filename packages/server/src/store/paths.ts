@@ -16,6 +16,8 @@ export type DataPaths = {
   sprintsReportFile: string;
   /** Itens do "Para você" por mês de criação: for-you/AAAA-MM.json. */
   forYouDir: string;
+  /** Arquivo dos itens decididos há mais tempo que o prazo: for-you/archive/AAAA-MM.json (pelo mês da decisão). */
+  forYouArchiveDir: string;
   /** Relatório da migração para projetos (o que foi agrupado e as validações). */
   migrationReportFile: string;
   backupRoot: string;
@@ -68,6 +70,7 @@ export function dataPaths(root: string): DataPaths {
     projectsArchiveDir: path.join(root, "projects", "avulsas.archive"),
     sprintsReportFile: path.join(root, "migration-report-sprints.json"),
     forYouDir: path.join(root, "for-you"),
+    forYouArchiveDir: path.join(root, "for-you", "archive"),
     migrationReportFile: path.join(root, "migration-report.json"),
     backupRoot: path.join(root, "backup"),
     legacy: {

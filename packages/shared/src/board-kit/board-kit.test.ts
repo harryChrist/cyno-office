@@ -65,6 +65,27 @@ describe("kit", () => {
     expect(BOARD_GUIDE).not.toMatch(/—|→/);
   });
 
+  it("o JS do kit não tem crase nem abertura de interpolação (quebraria o template literal)", () => {
+    expect(BOARD_KIT_JS).not.toContain("`");
+    expect(BOARD_KIT_JS).not.toContain("${");
+  });
+
+  it("a exportação existe: toMarkdown, toCsv, expandAll, exportMarkdown, marcador de pronto e o handler da mãe", () => {
+    for (const part of ["Q.toMarkdown", "Q.toCsv", "Q.expandAll", "Q.exportMarkdown", "__quadroSettled", "quadro:export", "quadro:export-result", "Q._tables", "_qchart"]) expect(BOARD_KIT_JS).toContain(part);
+  });
+
+  it("o CSS tem o bloco de impressão (A4 paisagem, cabeçalho de tabela repetido, sem quebra em cartões)", () => {
+    expect(BOARD_KIT_CSS).toContain("@media print");
+    expect(BOARD_KIT_CSS).toContain("@page{size:A4 landscape;margin:12mm}");
+    expect(BOARD_KIT_CSS).toContain("table-header-group");
+    expect(BOARD_KIT_CSS).toContain("break-inside:avoid");
+  });
+
+  it("o guia explica baixar/compartilhar e cita exportMarkdown", () => {
+    expect(BOARD_GUIDE).toContain("Quadro.exportMarkdown");
+    expect(BOARD_GUIDE).toMatch(/public link/);
+  });
+
   it("dados de exemplo: 300 obras por id e estudos com datas", () => {
     const catalog = exampleCatalogData(300);
     expect(Object.keys(catalog.works)).toHaveLength(300);

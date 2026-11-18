@@ -1,3 +1,4 @@
+import type { BrainOrganizePlan } from "./brain-organize";
 import type { RoutineProposalPayload } from "./routines";
 
 /**
@@ -43,14 +44,16 @@ export type ForYouHistoryEntry = { at: string; by: ForYouActor; action: "alterad
  * perguntas que o usuário responde no tempo dele (rascunho salvo no server, sem acordar ninguém) e
  * manda de uma vez; rotina = proposta ou pergunta sobre uma rotina; sprint = o resumo de entrega de
  * uma sprint que fechou (aprovar a entrega, ou devolver com o motivo); regra = uma regra proposta pela
- * retrospectiva da Gestão (aprovar grava uma nota no Cérebro; recusar a esconde por 8 semanas).
+ * retrospectiva da Gestão (aprovar grava uma nota no Cérebro; recusar a esconde por 8 semanas);
+ * organizacao = a proposta do Maestro para organizar o Cérebro de uma sala (aprovar aplica as ações
+ * que o dono deixou marcadas; nada é apagado, só vai para o histórico).
  */
 /** Motivo da recusa em uma palavra (escolha rápida no diálogo; opcional): a retrospectiva da Gestão agrupa por ele. */
 export const REJECTION_CATEGORIES = ["texto", "tom", "fato_errado", "formato", "fora_do_pedido", "outro"] as const;
 export type RejectionCategory = (typeof REJECTION_CATEGORIES)[number];
 export const REJECTION_CATEGORY_LABELS: Record<RejectionCategory, string> = { texto: "Texto", tom: "Tom", fato_errado: "Fato errado", formato: "Formato", fora_do_pedido: "Fora do pedido", outro: "Outro" };
 
-export const FOR_YOU_KINDS = ["aprovacao", "plano", "questionario", "rotina", "sprint", "regra"] as const;
+export const FOR_YOU_KINDS = ["aprovacao", "plano", "questionario", "rotina", "sprint", "regra", "organizacao"] as const;
 export type ForYouKind = (typeof FOR_YOU_KINDS)[number];
 
 /**
@@ -104,8 +107,11 @@ export type ForYouItem = {
   meta: Record<string, string>;
   /** Texto que vai sair (com a edição do usuário, se houver). */
   text: string;
-  /** Rascunho do agente, para "Desfazer edição" e para saber se foi editado. */
-  originalText: string;
+  /**
+   * Rascunho do agente, para "Desfazer edição" e para saber se foi editado. Ausente = igual a `text`
+   * (não se guarda duas vezes o mesmo texto): leia sempre com `forYouOriginalText`.
+   */
+  originalText?: string;
   editedByUser: boolean;
   /** Resposta (pergunta) ou nota para o time (demais tipos). */
   response?: string;
@@ -130,6 +136,8 @@ export type ForYouItem = {
   routine?: RoutineProposalPayload;
   /** kind "regra": a regra e a evidência dela. */
   rule?: ForYouRule;
+  /** kind "organizacao": a proposta de organização do Cérebro (veja brain-organize.ts). */
+  organize?: BrainOrganizePlan;
   /** Mídia da biblioteca anexada ao pedido (ids "M-0001"). */
   mediaIds?: string[];
   /** Contexto do pedido: o que o rascunho analisou (post original, perfil, referências). */
@@ -310,6 +318,47 @@ export function actorLabel(by: ForYouActor, agentName?: string): string {
   if (by === "servidor") return "pelo servidor";
   return agentName ? `por ${agentName}` : "pelo agente";
 }
+
+/** O rascunho do agente: `originalText`, ou `text` quando o item não o guarda (os dois são iguais). */
+export function forYouOriginalText(item: Pick<ForYouItem, "text" | "originalText">): string {
+  return item.originalText ?? item.text;
+}
+
+/** O item sem `originalText` quando ele repete `text` (a forma guardada e enviada). Devolve o mesmo objeto se não há o que tirar. */
+export function compactForYouItem<T extends Pick<ForYouItem, "text" | "originalText">>(item: T): T {
+  if (item.originalText === undefined || item.originalText !== item.text) return item;
+  const { originalText: _same, ...rest } = item;
+  return rest as T;
+}
+
+// ---------- Arquivo: os itens decididos há mais tempo saem da lista viva ----------
+
+/** Dias que um item decidido fica na lista viva (a que vai para a tela); 0 = nunca arquivar. */
+export const FOR_YOU_LIVE_DAY_OPTIONS = [1, 3, 7, 14, 30, 0] as const;
+export const DEFAULT_FOR_YOU_LIVE_DAYS = 7;
+
+const FOR_YOU_DAY_MS = 86_400_000;
+
+/**
+ * O item já pode ir para o arquivo? Só os decididos (qualquer estado que não seja "pendente") há mais
+ * de `liveDays` dias, pela data da decisão (sem ela, a da criação). `liveDays` <= 0 = nunca.
+ */
+export function isForYouArchivable(item: Pick<ForYouItem, "status" | "decidedAt" | "createdAt">, nowMs: number, liveDays: number): boolean {
+  if (liveDays <= 0 || item.status === "pendente") return false;
+  const at = Date.parse(item.decidedAt ?? item.createdAt);
+  return Number.isFinite(at) && nowMs - at > liveDays * FOR_YOU_DAY_MS;
+}
+
+/** Mês ("AAAA-MM") em que o item entra no arquivo: o da decisão (sem ela, o da criação). */
+export function forYouArchiveMonth(item: Pick<ForYouItem, "decidedAt" | "createdAt">): string {
+  return (item.decidedAt ?? item.createdAt).slice(0, 7);
+}
+
+/** GET /for-you/archive: o prazo em vigor e os meses do arquivo (do mais novo para o mais antigo), com quantos itens cada um tem. */
+export type ForYouArchiveSummary = { liveDays: number; months: { month: string; count: number }[] };
+
+/** GET /for-you/archive/:month devolve `ForYouItem[]` (em ordem de decisão); GET /for-you/archive/find?taskId=&id= devolve os itens do arquivo daquela tarefa ou daquele id. */
+export const FOR_YOU_ARCHIVE_MONTH_PATTERN = /^\d{4}-\d{2}$/;
 
 /** Itens esperando o usuário. */
 export function pendingForYou(items: readonly ForYouItem[]): ForYouItem[] {

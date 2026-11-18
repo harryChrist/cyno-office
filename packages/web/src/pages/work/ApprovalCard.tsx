@@ -1,4 +1,4 @@
-import { forYouKind, type ForYouDecisionBody, type ForYouItem, type RejectionCategory } from "@cyno/shared";
+import { forYouKind, forYouOriginalText, type ForYouDecisionBody, type ForYouItem, type RejectionCategory } from "@cyno/shared";
 import { useId, useState } from "react";
 import { api } from "../../api/client";
 import { useForYouFocus } from "../../store/forYouFocus";
@@ -16,7 +16,7 @@ type ApprovalCardProps = {
 };
 
 /** Texto de um item para a tela: o que o agente quer aprovar. */
-const KIND_LABEL = { aprovacao: "Aprovação", plano: "Plano do projeto", questionario: "Pergunta", rotina: "Rotina", sprint: "Entrega da sprint", regra: "Regra da retrospectiva" } as const;
+const KIND_LABEL = { aprovacao: "Aprovação", plano: "Plano do projeto", questionario: "Pergunta", rotina: "Rotina", sprint: "Entrega da sprint", regra: "Regra da retrospectiva", organizacao: "Organização do Cérebro" } as const;
 
 /**
  * Aprovação ali mesmo, na trilha do projeto (o cartão do Para você em modo compacto): o texto que vai sair
@@ -37,7 +37,7 @@ export function ApprovalCard({ item, types, agentName, now }: ApprovalCardProps)
   const [localError, setLocalError] = useState<string | null>(null);
   const [confirmOver, setConfirmOver] = useState(false);
   const current = draft ?? item.text;
-  const changed = draft !== null && draft !== item.originalText;
+  const changed = draft !== null && draft !== forYouOriginalText(item);
   const counter = counterState(item, current, types);
   const warning = overLimitWarning(item, current, types);
   const primary = primaryAction(item, types);

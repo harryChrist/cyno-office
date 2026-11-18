@@ -1,7 +1,10 @@
 import {
+  BRAIN_RULE_LIMITS,
   DAY_MS,
   forYouKind,
   GLOBAL_BRAIN_ID,
+  RETRO_IMPACT_DAYS,
+  RETRO_LOOKBACK_DAYS,
   RETRO_MAX_ASK_GROUPS,
   RETRO_SUPPRESS_WEEKS,
   slugify,
@@ -33,8 +36,8 @@ export type RetroDeps = {
   workspaceName: () => string;
   store: RetroStore;
   now: () => Date;
-  /** O que a retrospectiva lê dos serviços (retrato na hora). */
-  snapshot: () => RetroSnapshot;
+  /** O que a retrospectiva lê dos serviços (retrato na hora). `sinceMs`: até onde as aprovações precisam olhar para trás (o que saiu da lista viva vem do arquivo). */
+  snapshot: (sinceMs: number) => RetroSnapshot | Promise<RetroSnapshot>;
   forYou: {
     list(): ForYouItem[];
     openSpecial(input: { kind: "regra"; agentId: string; roomId: string; title: string; text: string; rule: ForYouRule }): ForYouItem;
@@ -42,7 +45,9 @@ export type RetroDeps = {
   };
   /** Cérebro: grava a nota da regra aprovada (nunca antes do clique). */
   brain: { hasBrain(brainId: string): boolean; writeRootNote(brainId: string, file: string, content: string, options: { replace: boolean; indexLine?: string }): Promise<string> };
-  /** Quarto de um agente (o Cérebro onde a regra de um agente só vale). */
+  /** Regras de cada agente: a regra com escopo de um agente vai para as dele (só ele a recebe), não para uma nota da sala. */
+  agentRules: { append(agentId: string, text: string): Promise<{ added: boolean; content: string }> };
+  /** Quarto de um agente (o quarto onde a regra de um agente vale; confere que o agente ainda existe). */
   roomOfAgent: (agentId: string) => string | undefined;
   roomExists: (roomId: string) => boolean;
   /** O Maestro de CLI: abre o pedido de redigir as regras. Sem ele, o botão fica desligado. */
@@ -59,7 +64,7 @@ const iso = (ms: number): string => new Date(ms).toISOString();
 /**
  * A retrospectiva de um workspace: acha os padrões por código (`findRetro`), abre os cartões de regra dos traços conhecidos (texto
  * por molde, sem IA), deixa o dono pedir ao Maestro que escreva as demais (`ask` + `propose_rule`) e cuida do que o clique faz:
- * aprovar grava a nota no Cérebro (do quarto do agente, ou o global quando o padrão vem de 2 ou mais agentes), recusar esconde o
+ * aprovar grava a regra: nas regras do agente (escopo de um agente), numa nota do Cérebro do quarto, ou no global quando o padrão vem de 2 ou mais agentes, recusar esconde o
  * padrão por 8 semanas. NADA entra no Cérebro sem o clique do dono.
  */
 export class RetroService {
@@ -120,9 +125,12 @@ export class RetroService {
   }
 
   /** Duas semanas depois de aprovada, o antes e o depois da regra (a mesma fórmula nas duas pontas). */
-  private impactsOf(state: Awaited<ReturnType<RetroService["state"]>>): RetroImpact[] {
+  private async impactsOf(state: Awaited<ReturnType<RetroService["state"]>>): Promise<RetroImpact[]> {
     const now = this.deps.now().getTime();
-    const snapshot = this.deps.snapshot();
+    const approved = state.rules.filter((record) => record.state === "aprovada" && record.decidedAt).map((record) => Date.parse(record.decidedAt!));
+    if (approved.length === 0) return [];
+    // O "antes" de cada regra olha 14 dias antes da aprovação: a regra mais antiga decide até onde ler.
+    const snapshot = await this.deps.snapshot(Math.min(...approved) - RETRO_IMPACT_DAYS * DAY_MS);
     const out: RetroImpact[] = [];
     for (const record of state.rules) {
       if (record.state !== "aprovada" || !record.decidedAt) continue;
@@ -149,7 +157,7 @@ export class RetroService {
   async view(): Promise<RetroView> {
     const now = this.deps.now().getTime();
     const state = await this.state();
-    const found = findRetro(this.deps.snapshot(), now);
+    const found = findRetro(await this.deps.snapshot(now - (RETRO_LOOKBACK_DAYS + 1) * DAY_MS), now);
     const candidates = this.candidatesOf(found, state);
     const needsMaestro = candidates.filter((group) => group.template === undefined);
     const available = this.deps.maestro.available();
@@ -161,7 +169,7 @@ export class RetroService {
       ready: candidates.filter((group) => group.template !== undefined),
       needsMaestro,
       rules: state.rules.map((record) => this.ruleView(record)).sort((a, b) => b.proposedAt.localeCompare(a.proposedAt)),
-      impacts: this.impactsOf(state),
+      impacts: await this.impactsOf(state),
       notices: found.notices,
       waiting: state.rules.filter((rule) => rule.state === "esperando").length,
       estimate: this.estimate(needsMaestro.length),
@@ -213,7 +221,7 @@ export class RetroService {
    */
   async generate(trigger: StoredRetro["trigger"], period = this.period()): Promise<{ report: StoredRetro; opened: number }> {
     const state = await this.state();
-    const found = findRetro(this.deps.snapshot(), this.deps.now().getTime());
+    const found = findRetro(await this.deps.snapshot(this.deps.now().getTime() - (RETRO_LOOKBACK_DAYS + 1) * DAY_MS), this.deps.now().getTime());
     const candidates = this.candidatesOf(found, state);
     let opened = 0;
     for (const group of candidates) {
@@ -222,13 +230,13 @@ export class RetroService {
       opened += 1;
     }
     if (opened > 0) await this.deps.store.writeState(state);
-    const report = this.reportOf(period, trigger, found, state);
+    const report = this.reportOf(period, trigger, found, state, await this.impactsOf(state));
     await this.deps.store.write(report);
     this.deps.log.info({ period, opened, candidates: candidates.length }, "retrospectiva gerada");
     return { report, opened };
   }
 
-  private reportOf(period: string, trigger: StoredRetro["trigger"], found: ReturnType<typeof findRetro>, state: Awaited<ReturnType<RetroService["state"]>>): StoredRetro {
+  private reportOf(period: string, trigger: StoredRetro["trigger"], found: ReturnType<typeof findRetro>, state: Awaited<ReturnType<RetroService["state"]>>, impacts: RetroImpact[]): StoredRetro {
     return {
       v: 1,
       kind: "retro",
@@ -241,7 +249,7 @@ export class RetroService {
       trigger,
       candidates: found.groups.filter((group) => !((state.suppressed[group.id] ?? "") > iso(this.deps.now().getTime()))),
       rules: state.rules.map((record) => this.ruleView(record)),
-      impacts: this.impactsOf(state),
+      impacts,
       notices: found.notices,
       considered: found.considered,
     };
@@ -252,7 +260,7 @@ export class RetroService {
     const stored = await this.deps.store.read(period);
     if (!stored) return undefined;
     const state = await this.state();
-    return { ...stored, rules: state.rules.map((record) => this.ruleView(record)), impacts: this.impactsOf(state) };
+    return { ...stored, rules: state.rules.map((record) => this.ruleView(record)), impacts: await this.impactsOf(state) };
   }
 
   /**
@@ -276,7 +284,7 @@ export class RetroService {
     if (!this.deps.maestro.available()) throw new HttpError(409, "O Maestro deste workspace não roda numa CLI: ligue-o em Configurações para ele escrever as regras.");
     if (this.asking) throw new HttpError(409, "O Maestro já está escrevendo as regras: espere ele terminar.");
     const state = await this.state();
-    const found = findRetro(this.deps.snapshot(), this.deps.now().getTime());
+    const found = findRetro(await this.deps.snapshot(this.deps.now().getTime() - (RETRO_LOOKBACK_DAYS + 1) * DAY_MS), this.deps.now().getTime());
     const pool = this.candidatesOf(found, state).filter((group) => group.template === undefined);
     const chosen = (wanted && wanted.length > 0 ? pool.filter((group) => wanted.includes(group.id)) : pool).slice(0, RETRO_MAX_ASK_GROUPS);
     if (chosen.length === 0) throw new HttpError(409, "Não há padrões esperando texto: nada para pedir ao Maestro.");
@@ -339,7 +347,7 @@ export class RetroService {
 
   // ---------- A decisão do dono ----------
 
-  /** Aprovar grava a nota no Cérebro; recusar esconde o padrão por 8 semanas. Só o clique do dono chega aqui (via `ForYouService.decide`). */
+  /** Aprovar grava a regra (nas regras do agente ou numa nota do Cérebro); recusar esconde o padrão por 8 semanas. Só o clique do dono chega aqui (via `ForYouService.decide`). */
   async decide(item: ForYouItem, decision: { status: "aprovado" | "rejeitado"; rule?: { text?: string; scope?: ForYouRuleScope } }): Promise<void> {
     const rule = item.rule;
     if (!rule) throw new HttpError(409, `O item ${item.id} não tem regra`);
@@ -357,14 +365,26 @@ export class RetroService {
     const text = (decision.rule?.text ?? rule.text).replace(/\s+/g, " ").trim();
     if (text.length === 0) throw new HttpError(400, "A regra precisa de um texto");
     const scope = this.checkScope(decision.rule?.scope ?? rule.scope);
-    const brainId = scope.global ? GLOBAL_BRAIN_ID : (scope.roomId ?? this.deps.roomOfAgent(scope.agentId!));
-    if (!brainId || !this.deps.brain.hasBrain(brainId)) throw new HttpError(400, "Não achei o Cérebro desse escopo (o quarto ainda existe?)");
-    const notePath = await this.writeNote(brainId, { text, scope, record, evidence: rule.evidence.line });
+    let notePath: string | undefined;
+    if (scope.agentId) {
+      // Regra de UM agente: vai para as regras dele (só ele a recebe), não para uma nota que a sala toda carregaria.
+      await this.deps.agentRules.append(scope.agentId, this.agentRuleLine(text));
+    } else {
+      const brainId = scope.global ? GLOBAL_BRAIN_ID : scope.roomId;
+      if (!brainId || !this.deps.brain.hasBrain(brainId)) throw new HttpError(400, "Não achei o Cérebro desse escopo (o quarto ainda existe?)");
+      notePath = await this.writeNote(brainId, { text, scope, record, evidence: rule.evidence.line });
+    }
     const finalRule: ForYouRule = { ...rule, text, scope };
     if (text !== rule.text || JSON.stringify(scope) !== JSON.stringify(rule.scope)) await this.deps.forYou.updateRule(item.id, finalRule);
-    Object.assign(record, { state: "aprovada" as const, text, scope, decidedAt: iso(now), notePath });
+    Object.assign(record, { state: "aprovada" as const, text, scope, decidedAt: iso(now), ...(notePath ? { notePath } : {}) });
     await this.deps.store.writeState(state);
-    this.deps.log.info({ itemId: item.id, notePath }, "regra da retrospectiva aprovada: nota gravada no Cérebro");
+    this.deps.log.info({ itemId: item.id, ...(notePath ? { notePath } : { agentId: scope.agentId }) }, scope.agentId ? "regra da retrospectiva aprovada: entrou nas regras do agente" : "regra da retrospectiva aprovada: nota gravada no Cérebro");
+  }
+
+  /** A regra como linha das regras do agente (cabe no teto de uma regra de agente). */
+  private agentRuleLine(text: string): string {
+    const line = text.replace(/\s+/g, " ").trim();
+    return line.length <= BRAIN_RULE_LIMITS.agentRule ? line : `${line.slice(0, BRAIN_RULE_LIMITS.agentRule - 1).trimEnd()}…`;
   }
 
   private checkScope(scope: ForYouRuleScope): ForYouRuleScope {

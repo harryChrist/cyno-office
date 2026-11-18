@@ -5,19 +5,43 @@ import {
   forYouCancelBodySchema,
   forYouDecisionBodySchema,
   forYouParamsSchema,
+  FOR_YOU_ARCHIVE_MONTH_PATTERN,
   forYouTypeParamsSchema,
   mergeForYouTypeBodySchema,
   updateForYouTypeBodySchema,
+  type ForYouArchiveSummary,
   type ForYouBatchResponse,
+  type ForYouItem,
   type ForYouTypeDef,
 } from "@cyno/shared";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
+import { HttpError } from "../platform/http/errors";
 import type { ForYouTypesService } from "../workspace/for-you/types-service";
 import type { ServicesOf } from "./scope";
+
+/** ?taskId=&id= do GET /for-you/archive/find (ao menos um dos dois). */
+const archiveFindQuerySchema = z.object({ taskId: z.string().max(200).optional(), id: z.string().max(200).optional() });
 
 /** Rotas do "Para você", dentro de /api/w/:ws. */
 export function registerForYouRoutes(scope: FastifyInstance, servicesOf: ServicesOf): void {
   scope.get("/for-you", async (request) => servicesOf(request).forYou.list());
+
+  // Arquivo: as aprovações decididas há mais tempo que o prazo da lista viva (só leitura; nada se apaga).
+  scope.get("/for-you/archive", async (request): Promise<ForYouArchiveSummary> => servicesOf(request).forYou.archiveSummary());
+
+  // Os itens arquivados de uma tarefa e/ou de um id (a rota fixa vem antes da de mês: `find` não é um mês).
+  scope.get("/for-you/archive/find", async (request): Promise<ForYouItem[]> => {
+    const query = archiveFindQuerySchema.parse(request.query);
+    if (!query.taskId && !query.id) throw new HttpError(400, "Informe taskId ou id para procurar no arquivo");
+    return servicesOf(request).forYou.archiveFind({ ...(query.taskId ? { taskId: query.taskId } : {}), ...(query.id ? { id: query.id } : {}) });
+  });
+
+  scope.get("/for-you/archive/:month", async (request): Promise<ForYouItem[]> => {
+    const { month } = request.params as { month: string };
+    if (!FOR_YOU_ARCHIVE_MONTH_PATTERN.test(month)) throw new HttpError(400, `Mês inválido: use AAAA-MM (recebi "${month}")`);
+    return servicesOf(request).forYou.archiveMonth(month);
+  });
 
   // Aprovar em lote (Gestão): até 20 aprovações de texto do mesmo tipo, sem edição pendente (convite e post só com histórico).
   scope.post("/for-you/batch", async (request): Promise<ForYouBatchResponse> => {

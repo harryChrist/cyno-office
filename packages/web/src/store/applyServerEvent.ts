@@ -72,6 +72,7 @@ export function applyServerEvent(office: OfficeState, event: ServerEvent): Offic
     case "calendar:deleted":
     case "foryou:upserted":
     case "foryou:deleted":
+    case "foryou:archived":
     case "foryou-types:upserted":
     case "foryou-types:deleted":
       // Calendário e "Para você" ficam fora do escritório (ver calendarStore.ts, forYouItems.ts e forYouTypes.ts).

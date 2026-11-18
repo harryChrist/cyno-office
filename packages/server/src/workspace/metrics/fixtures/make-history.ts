@@ -350,7 +350,7 @@ export function makeHistory(options: HistoryOptions): History {
             ...(refused && decidedAt <= now ? { rejection: { reason: profile.rejectReason, ...(CATEGORY_OF_REASON[profile.rejectReason] ? { category: CATEGORY_OF_REASON[profile.rejectReason]! } : {}) } } : {}),
           };
           if (item.status === "pendente") {
-            item.text = item.originalText;
+            item.text = item.originalText ?? item.text;
             item.editedByUser = false;
           }
           history.forYou.push(item);

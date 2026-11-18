@@ -18,7 +18,7 @@ export const INITIAL_SYNC: OfficeSync = { office: null, progress: EMPTY_PROGRESS
  * objeto se nada mudou.
  */
 export function officeReducer(state: OfficeSync, event: ServerEvent): OfficeSync {
-  if (event.type === "foryou:upserted" || event.type === "foryou:deleted") {
+  if (event.type === "foryou:upserted" || event.type === "foryou:deleted" || event.type === "foryou:archived") {
     const forYou = applyForYouEvent(state.forYou, event);
     return forYou === state.forYou ? state : { ...state, forYou };
   }

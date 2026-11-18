@@ -9,6 +9,11 @@ export function applyForYouEvent(items: ForYouItems, event: ServerEvent): ForYou
   if (event.type === "foryou:deleted") {
     return items.some((item) => item.id === event.id) ? items.filter((item) => item.id !== event.id) : items;
   }
+  if (event.type === "foryou:archived") {
+    // Foram para o arquivo: saem da lista viva, em silêncio (nada foi apagado).
+    const gone = new Set(event.ids);
+    return items.some((item) => gone.has(item.id)) ? items.filter((item) => !gone.has(item.id)) : items;
+  }
   if (event.type !== "foryou:upserted") return items;
   const index = items.findIndex((item) => item.id === event.item.id);
   if (index === -1) return [...items, event.item];

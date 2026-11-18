@@ -248,6 +248,8 @@ describe("migrateToSprints (disco)", () => {
   it("é idempotente: rodar de novo (e abrir o store de novo) não muda nada", async () => {
     const { dir, paths } = await v3Workspace();
     await migrate(paths);
+    // A primeira abertura do store compacta o `originalText` repetido dos itens antigos; dali em diante nada muda.
+    await OfficeStore.open(dir);
     const first = await snapshotDir(dir);
     expect((await migrate(paths)).status).toBe("already");
     await OfficeStore.open(dir);

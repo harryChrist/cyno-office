@@ -16,7 +16,7 @@ function harness(initial: Project | Project[], extra: Partial<ProjectServiceDeps
     state: { read: () => ({ rooms: [], teams: [], agents: [], tasks: [] }) as unknown as OfficeState, commit, publish: vi.fn() } as never,
     agentLog: { append: vi.fn() } as never,
     orchestrator: { enqueue: vi.fn(), cancelTask: vi.fn(), retryWaiting: vi.fn() },
-    forYou: { openSpecial: vi.fn(), close: vi.fn() },
+    forYou: { openSpecial: vi.fn(), close: vi.fn(), isArchived: vi.fn(() => false) },
     host: () => undefined,
     settings: () => ({ maxRunning: 3, perAgent: 1 }),
     log: { info: vi.fn(), error: vi.fn() },

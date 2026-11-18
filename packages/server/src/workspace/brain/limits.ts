@@ -1,21 +1,23 @@
 /**
- * Tetos do Cérebro (em caracteres), todos aqui. O contexto de uma tarefa tem tamanho limitado por
- * construção: fixos (com teto cada) + notas curtas escolhidas por relevância até o orçamento total +
- * a lista de títulos do que ficou de fora. O histórico (`historico/`) nunca entra sozinho.
+ * Tetos do Cérebro (em caracteres), todos aqui. O contexto de uma tarefa carrega só o que o time
+ * precisa SEGUIR (regras e briefing, cada um com teto); as outras notas entram como lista de
+ * títulos (o agente lê com `read_note`) e o histórico (`historico/`) só aparece por busca.
  */
 export const BRAIN_LIMITS = {
-  /** Teto de cada arquivo fixo do próprio quarto e do lobby. */
-  fixed: { regras: 2000, indice: 3000, briefing: 2000 },
-  /** Teto de cada fixo (`_briefing`, `_indice`) de um quarto conectado ou, para o Maestro, de cada quarto. */
+  /** Teto do `_regras` e do `_briefing` do próprio quarto e do lobby. */
+  fixed: { regras: 2000, briefing: 2000 },
+  /** Teto das regras do próprio agente (`agents/<id>/regras.md`). */
+  agentRules: 2000,
+  /** Teto de cada nota de regra (cortada com um aviso para ler inteira). */
+  ruleNote: 1500,
+  /** Orçamento total das notas de regra (próprio quarto e depois lobby). */
+  rulesTotal: 8000,
+  /** Teto do `_briefing` de um quarto conectado ou, para o Maestro, de cada quarto. */
   peerFixed: 1200,
-  /** Teto da visão geral dos quartos (soma dos fixos dos quartos conectados/gerenciados). */
+  /** Teto da visão geral dos quartos (soma dos briefings dos quartos conectados/gerenciados). */
   peersTotal: 12_000,
-  /** Teto de cada nota curta no contexto (cortada com um aviso para ler inteira). */
-  note: 1800,
-  /** Orçamento total das notas curtas no contexto (os fixos não contam aqui). */
-  notesTotal: 12_000,
-  /** Títulos listados em "também existem" (o resto vira "+N"). */
-  omittedTitles: 40,
+  /** Linhas da lista de títulos das outras notas (o resto vira "+N"). */
+  titles: 30,
   /** `read_note`: teto do texto devolvido. */
   readNote: 16_000,
   /** `save_note`: tamanho máximo do conteúdo de uma nota curta. */

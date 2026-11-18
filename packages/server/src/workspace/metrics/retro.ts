@@ -9,6 +9,7 @@ import {
   RETRO_MIN_DAYS,
   RETRO_MIN_ITEMS,
   RETRO_MIN_TOTAL,
+  forYouOriginalText,
   type ForYouItem,
   type Project,
   type RetroGroup,
@@ -181,20 +182,20 @@ type TraitSpec = {
   hit: (item: ForYouItem) => boolean;
 };
 
-const edited = (item: ForYouItem): boolean => item.status === "aprovado" && item.editedByUser && item.text !== item.originalText;
-const ratioOf = (item: ForYouItem): number => (item.originalText.length > 0 ? item.text.length / item.originalText.length : 1);
+const edited = (item: ForYouItem): boolean => item.status === "aprovado" && item.editedByUser && item.text !== forYouOriginalText(item);
+const ratioOf = (item: ForYouItem): number => (forYouOriginalText(item).length > 0 ? item.text.length / forYouOriginalText(item).length : 1);
 
 const TRAIT_SPECS: readonly TraitSpec[] = [
-  { trait: "emoji", considered: (item) => item.status === "aprovado" && count(item.originalText, EMOJI) > 0, hit: (item) => edited(item) && count(item.text, EMOJI) < count(item.originalText, EMOJI) },
-  { trait: "hashtag", considered: (item) => item.status === "aprovado" && count(item.originalText, HASHTAG) > 0, hit: (item) => edited(item) && count(item.text, HASHTAG) < count(item.originalText, HASHTAG) },
-  { trait: "exclamation", considered: (item) => item.status === "aprovado" && item.originalText.includes("!"), hit: (item) => edited(item) && count(item.text, /!/g) < count(item.originalText, /!/g) },
+  { trait: "emoji", considered: (item) => item.status === "aprovado" && count(forYouOriginalText(item), EMOJI) > 0, hit: (item) => edited(item) && count(item.text, EMOJI) < count(forYouOriginalText(item), EMOJI) },
+  { trait: "hashtag", considered: (item) => item.status === "aprovado" && count(forYouOriginalText(item), HASHTAG) > 0, hit: (item) => edited(item) && count(item.text, HASHTAG) < count(forYouOriginalText(item), HASHTAG) },
+  { trait: "exclamation", considered: (item) => item.status === "aprovado" && forYouOriginalText(item).includes("!"), hit: (item) => edited(item) && count(item.text, /!/g) < count(forYouOriginalText(item), /!/g) },
   { trait: "shorter", considered: edited, hit: (item) => edited(item) && ratioOf(item) <= 0.75 },
   { trait: "longer", considered: edited, hit: (item) => edited(item) && ratioOf(item) >= 1.35 },
   {
     trait: "repeat",
-    considered: (item) => item.status === "aprovado" && repeated(item.originalText) !== undefined,
+    considered: (item) => item.status === "aprovado" && repeated(forYouOriginalText(item)) !== undefined,
     hit: (item) => {
-      const before = repeated(item.originalText);
+      const before = repeated(forYouOriginalText(item));
       return edited(item) && before !== undefined && (repeated(item.text)?.times ?? 0) < before.times;
     },
   },
@@ -260,7 +261,7 @@ export function findRetro(snapshot: RetroSnapshot, now: number): RetroFound {
   for (const item of items) {
     remember(item.rejection?.reason);
     if (edited(item)) {
-      remember(item.originalText);
+      remember(forYouOriginalText(item));
       remember(item.text);
     }
   }
@@ -336,7 +337,7 @@ export function findRetro(snapshot: RetroSnapshot, now: number): RetroFound {
         itemIds: hits.map((item) => item.id),
         dayKeys: days,
         total: considered.length,
-        excerpts: hits.slice(0, 5).map((item) => ({ itemId: item.id, before: cut(item.originalText), after: cut(item.text) })),
+        excerpts: hits.slice(0, 5).map((item) => ({ itemId: item.id, before: cut(forYouOriginalText(item)), after: cut(item.text) })),
         samples: [],
         ...(ratio !== undefined ? { ratio } : {}),
       });
@@ -347,7 +348,7 @@ export function findRetro(snapshot: RetroSnapshot, now: number): RetroFound {
     if (editedItems.length >= RETRO_MIN_ITEMS) {
       for (const direction of ["removed", "added"] as const) {
         const perItem = editedItems.map((item) => {
-          const before = new Set(reasonWords(item.originalText));
+          const before = new Set(reasonWords(forYouOriginalText(item)));
           const after = new Set(reasonWords(item.text));
           const changed = direction === "removed" ? [...before].filter((word) => !after.has(word)) : [...after].filter((word) => !before.has(word));
           return { item, changed };
@@ -368,7 +369,7 @@ export function findRetro(snapshot: RetroSnapshot, now: number): RetroFound {
           itemIds: hits.map((entry) => entry.item.id),
           dayKeys: days,
           total: editedItems.length,
-          excerpts: hits.slice(0, 5).map((entry) => ({ itemId: entry.item.id, before: cut(entry.item.originalText), after: cut(entry.item.text) })),
+          excerpts: hits.slice(0, 5).map((entry) => ({ itemId: entry.item.id, before: cut(forYouOriginalText(entry.item)), after: cut(entry.item.text) })),
           samples: [`${direction === "removed" ? "removidas" : "acrescentadas"}: ${shown(common).join(", ")}`],
         });
       }
@@ -510,7 +511,7 @@ export function patternCount(snapshot: RetroSnapshot, target: RuleTarget, from: 
   const direction = target.key.startsWith("removed") ? "removed" : "added";
   return items.filter((item) => {
     if (!edited(item)) return false;
-    const before = new Set(reasonWords(item.originalText));
+    const before = new Set(reasonWords(forYouOriginalText(item)));
     const after = new Set(reasonWords(item.text));
     const wanted = target.words.map((word) => stem(fold(word)));
     return wanted.some((word) => (direction === "removed" ? before.has(word) && !after.has(word) : after.has(word) && !before.has(word)));

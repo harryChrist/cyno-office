@@ -41,7 +41,8 @@ describe("Para você: itens nascem dos pedidos de aprovação", () => {
     expect(await listItems(setup.app)).toEqual([]);
     const { task, item } = await waitingTask(setup, "Escrever convite para Ana Souza [aprovar]");
     expect(item).toMatchObject({ id: "A-0001", taskId: task.id, agentId: task.agentId, roomId: task.roomId, type: "convite", status: "pendente", to: "Ana Souza", editedByUser: false });
-    expect(item.text).toBe(item.originalText);
+    // Compacto: o rascunho igual ao texto não é guardado (ausente = igual).
+    expect(item.originalText).toBeUndefined();
     expect(item.text.length).toBeLessThanOrEqual(200);
     expect(item.text).toContain(SIMULATED_DRAFT_MARK);
     expect(item.why).toContain("precisa do seu ok");
@@ -132,8 +133,8 @@ describe("Para você: atalho /tasks/:id/approval", () => {
     expect(approved.status).toBe("in_progress");
     await setup.log.waitForTask(task.id, "done");
     const [saved] = await listItems(setup.app);
-    expect(saved).toMatchObject({ id: item.id, status: "aprovado", text: item.originalText, editedByUser: false });
-    expect((await taskOf(setup.app, task.id)).result).toContain(item.originalText);
+    expect(saved).toMatchObject({ id: item.id, status: "aprovado", text: item.text, editedByUser: false });
+    expect((await taskOf(setup.app, task.id)).result).toContain(item.text);
   });
 
   it("recusar pela tarefa rejeita o item", async () => {

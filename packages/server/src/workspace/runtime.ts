@@ -23,6 +23,7 @@ import {
   isCliEngine,
   type CalendarEvent,
   type EngineInfo,
+  type ForYouItem,
   type ForYouTypeDef,
   type ModelChoice,
   type MaestroSettings,
@@ -61,6 +62,7 @@ import { Brain } from "./brain/brain";
 import { BrowserService, type BrowserLauncher } from "./browser/service";
 import { UrlPolicy } from "./browser/url-policy";
 import { BrainAccess } from "./brain/access";
+import { AgentRules } from "./brain/agent-rules";
 import { AgentDiary } from "./brain/diary";
 import { CalendarService } from "./calendar/calendar-service";
 import { ConnectorsService } from "../library/connectors/service";
@@ -94,6 +96,7 @@ import { buildOverview } from "./routines/overview";
 import { buildToday } from "./today/today";
 import { DayStatsService } from "./day-stats/service";
 import { computeMetrics, deliveriesOf, type MetricsSnapshot } from "./metrics/compute";
+import { BrainOrganizeService } from "./brain/organize";
 import { RetroService } from "./retro/service";
 import { RetroStore } from "./retro/store";
 import { ReportScheduler } from "./reports/scheduler";
@@ -162,6 +165,8 @@ export type RuntimeOptions = {
   /** Motores detectados (o catálogo do GET /api/engines): o create_agent do Maestro só aceita motor real disponível. */
   engines?: () => Promise<EngineInfo[]>;
   doneLingerMs: number;
+  /** Dias que uma aprovação decidida fica na lista viva antes de ir para o arquivo (0 = nunca). Vem das configurações da plataforma; ausente = 7. */
+  approvalsLiveDays?: () => number;
   /** Quanto uma tarefa que espera o usuário segura a vaga do agente antes de soltá-la (ausente = 2 min). */
   approvalParkMs?: number;
   /** Quanto o Maestro leva na triagem e na revisão. */
@@ -202,6 +207,9 @@ export type BrowserConfig = {
 /** Ociosidade padrão do navegador compartilhado. */
 export const BROWSER_IDLE_MS = 10 * 60_000;
 
+/** De quanto em quanto tempo a lista viva das aprovações é varrida (o que passou do prazo vai para o arquivo). */
+const APPROVALS_SWEEP_MS = 60 * 60_000;
+
 /** Quanto esperar, depois de uma tarefa concluída, para o último turno gravar o gasto antes de somar o custo na Atividade. */
 const TURN_COST_WAIT_MS = 10_000;
 
@@ -218,6 +226,8 @@ export class WorkspaceRuntime {
   readonly brain: Brain;
   /** Ferramentas do Cérebro dos agentes (buscar/ler/salvar com as regras de visibilidade). */
   readonly brainAccess: BrainAccess;
+  /** Regras de cada agente (`agents/<id>/regras.md`): só ele as recebe, em toda tarefa. */
+  readonly agentRules: AgentRules;
   readonly orchestrator: Orchestrator;
   readonly maestro: MaestroCoordinator;
   /** Itens do "Para você" (for-you.json): os pedidos de aprovação dos agentes. */
@@ -236,6 +246,8 @@ export class WorkspaceRuntime {
   readonly reports: ReportService;
   /** A retrospectiva: padrões das recusas, edições e falhas, e as regras que o dono aprova um a um (`reports/retro/`). */
   readonly retro: RetroService;
+  /** "Organizar o Cérebro": o Maestro propõe, o dono aprova e o servidor aplica (`brain/organize.ts`). */
+  readonly brainOrganize: BrainOrganizeService;
   private readonly reportClock: ReportScheduler;
   /** Executa um horário de rotina (o relógio e o botão "Rodar agora" usam o mesmo). */
   readonly routineRunner: RoutineRunner;
@@ -289,6 +301,9 @@ export class WorkspaceRuntime {
   private readonly engines: (() => Promise<EngineInfo[]>) | undefined;
   /** Uso da assinatura e disponibilidade dos motores (o get_usage do Maestro). */
   private stopping = false;
+  /** Varredura do arquivo das aprovações: a cada hora (veja `startApprovalsSweep`). */
+  private approvalsTimer: NodeJS.Timeout | undefined;
+  private readonly log: FastifyBaseLogger;
   private readonly usageInfo: Pick<RuntimeOptions, "usage" | "availability" | "now">;
   /** O limite de trabalho em paralelo de agora (as Configurações podem mudar, por isso é uma leitura). */
   private readonly dispatchNow: () => DispatchSettings;
@@ -328,9 +343,11 @@ export class WorkspaceRuntime {
     this.muralDeps = options.mural ? { service: options.mural, workspaceId: id, workspaceName: (workspaceId) => options.workspaceName?.(workspaceId) } : undefined;
     this.models = () => options.workspaceModels?.(id);
     this.platformLink = options.platformLink;
-    this.brain = new Brain({ paths: store.paths, rooms: () => store.snapshot().rooms, now: options.now });
-    this.brainAccess = new BrainAccess({ brain: this.brain, rooms: () => store.snapshot().rooms, now: options.now });
+    this.agentRules = new AgentRules((agentId) => store.paths.agentDir(agentId), options.now);
+    this.brain = new Brain({ paths: store.paths, rooms: () => store.snapshot().rooms, readAgentRules: async (agentId) => (await this.agentRules.read(agentId)).content, now: options.now });
+    this.brainAccess = new BrainAccess({ brain: this.brain, rooms: () => store.snapshot().rooms, now: options.now, agentRules: this.agentRules, agents: () => store.snapshot().agents });
     const log = options.log.child({ workspace: id });
+    this.log = log;
     this.agentLog = new AgentLogService({
       paths: store.paths,
       queue: store.queue,
@@ -490,6 +507,9 @@ export class WorkspaceRuntime {
       state: this.state,
       log,
       now: options.now,
+      // O prazo da lista viva é configuração da plataforma (Configurações > Histórico); o getter é lido a cada varredura.
+      ...(options.approvalsLiveDays ? { liveDays: options.approvalsLiveDays } : {}),
+      holdLive: () => this.meta.holdsApproved(),
       types: this.forYouTypes,
       media: { linkForYou: (ids, forYouId) => this.media.linkForYou(ids, forYouId), approve: (ids) => this.media.approve(ids) },
       // Aprovação pedida pelo Maestro de CLI volta para ele; as outras, para o orquestrador.
@@ -533,6 +553,8 @@ export class WorkspaceRuntime {
       maestroAnswers: (item, answers) => this.cliMaestro.answers(item, answers),
       // Cartão "regra" da retrospectiva: o clique do dono grava a nota no Cérebro (aprovar) ou esconde o padrão por 8 semanas (recusar).
       decideRule: (item, decision) => this.retro.decide(item, decision),
+      // Cartão "organizacao": o clique do dono aplica as ações marcadas (nada é apagado: vai para o histórico do Cérebro).
+      decideOrganize: (item, decision) => this.brainOrganize.decide(item, decision),
       decideRoutine: async (item, decision) => {
         this.routines.decide(item, decision);
         // "Ajustar" no cartão de rotina: o texto do usuário volta para o Maestro (que propõe de novo).
@@ -792,13 +814,14 @@ export class WorkspaceRuntime {
       workspaceName: () => options.workspaceName?.(id) ?? id,
       store: new RetroStore(path.join(store.paths.reportsDir, "retro")),
       now: options.now,
-      snapshot: () => {
+      snapshot: async (sinceMs) => {
         const state = this.state.read();
         const types = this.forYouTypes.list();
-        return { agents: state.agents, tasks: state.tasks, projects: this.plans.list(), forYou: this.forYou.list(), typeName: (type) => types.find((candidate) => candidate.id === type)?.name ?? type };
+        return { agents: state.agents, tasks: state.tasks, projects: this.plans.list(), forYou: await this.forYou.listSince(sinceMs), typeName: (type) => types.find((candidate) => candidate.id === type)?.name ?? type };
       },
       forYou: this.forYou,
       brain: this.brain,
+      agentRules: this.agentRules,
       roomOfAgent: (agentId) => {
         const state = this.state.read();
         const agent = state.agents.find((candidate) => candidate.id === agentId);
@@ -812,6 +835,23 @@ export class WorkspaceRuntime {
           return maestro?.model ?? this.models()?.maestro.model;
         },
         ask: ({ title, message }) => this.cliMaestro.openServerRequest({ title, origin: "Retrospectiva da Gestão (o dono pediu as regras)", message }),
+      },
+      subscribe: (listener) => this.hub.subscribe(listener),
+      log,
+    });
+    this.brainOrganize = new BrainOrganizeService({
+      brain: this.brain,
+      agentRules: this.agentRules,
+      agents: () => {
+        const state = this.state.read();
+        return state.agents.map((agent) => ({ id: agent.id, name: agent.name, role: agent.role, roomId: state.teams.find((team) => team.id === agent.teamId)?.roomId }));
+      },
+      forYou: this.forYou,
+      maestro: {
+        available: () => this.cliMaestro.enabled(),
+        agentId: () => findMaestroAgent(this.state.read())?.id,
+        roomId: () => findMaestroRoom(this.state.read())?.id,
+        ask: ({ title, message }) => this.cliMaestro.openServerRequest({ title, origin: "Cérebro (o dono pediu para organizar)", message }),
       },
       subscribe: (listener) => this.hub.subscribe(listener),
       log,
@@ -988,6 +1028,8 @@ export class WorkspaceRuntime {
     await this.agentLog.closeInterrupted(this.state.read().tasks.filter((task) => task.status === "in_progress" || task.status === "waiting_approval").map((task) => task.id));
     await this.orchestrator.resume();
     this.forYou.backfill();
+    // Aprovações decididas há mais que o prazo saem da lista viva já no boot e depois a cada hora.
+    await this.startApprovalsSweep();
     this.maestro.resume();
     this.plans.resume();
     // Diária: abre o relógio de estados (os trechos que estavam abertos antes do reinício não viram tempo).
@@ -1004,6 +1046,24 @@ export class WorkspaceRuntime {
     this.cliMaestro.attach();
     // Horas do Freebuff ainda abertas (o servidor reiniciou): volta na mesma conversa e na mesma hora (--continue).
     this.terminals.resumeHours();
+  }
+
+  /** Varredura do arquivo de aprovações agora (boot, a cada hora e quando o prazo muda). Nunca rejeita: a falha vai para o log. */
+  sweepApprovals(): Promise<number> {
+    if (this.stopping) return Promise.resolve(0);
+    return this.forYou.sweep().catch((error: unknown) => {
+      this.log.error({ err: error }, "falha ao arquivar as aprovações antigas");
+      return 0;
+    });
+  }
+
+  /** A primeira varredura roda (e espera) no boot; depois, um timer sem segurar o processo. */
+  private async startApprovalsSweep(): Promise<void> {
+    if (!this.approvalsTimer) {
+      this.approvalsTimer = setInterval(() => void this.sweepApprovals(), APPROVALS_SWEEP_MS);
+      this.approvalsTimer.unref();
+    }
+    await this.sweepApprovals();
   }
 
   /** Último progresso de cada tarefa ativa (agentes e Maestro), para o office:snapshot. */
@@ -1046,14 +1106,16 @@ export class WorkspaceRuntime {
     const span = options.from !== undefined ? to - options.from : METRICS_MEDIAN_DAYS * DAY_MS;
     const earliest = to - 2 * Math.max(span, METRICS_MEDIAN_DAYS * DAY_MS) - 30 * DAY_MS;
     await this.usageHistory.idle();
-    return computeMetrics(this.metricsSnapshot(await this.usageHistory.read(earliest, to + 1)), { now, workspace: this.id, ...(options.from !== undefined ? { from: options.from } : {}), ...(options.to !== undefined ? { to: options.to } : {}) });
+    // As aprovações decididas antes do prazo da lista viva estão no arquivo: a janela (e a anterior a ela) lê de lá também.
+    const forYou = await this.forYou.listSince(earliest);
+    return computeMetrics(this.metricsSnapshot(await this.usageHistory.read(earliest, to + 1), { forYou }), { now, workspace: this.id, ...(options.from !== undefined ? { from: options.from } : {}), ...(options.to !== undefined ? { to: options.to } : {}) });
   }
 
   /**
    * Tudo que o `computeMetrics` lê, tirado dos serviços na hora. A aba Gestão, as ferramentas e o bloco da página do Cyno usam este
    * mesmo retrato (o bloco, com `light`: sem a projeção das metas, que ele não usa).
    */
-  metricsSnapshot(usage: readonly UsageRecord[] = [], options: { light?: boolean } = {}): MetricsSnapshot {
+  metricsSnapshot(usage: readonly UsageRecord[] = [], options: { light?: boolean; forYou?: ForYouItem[] } = {}): MetricsSnapshot {
     const state = this.state.read();
     const engineBlocks = state.agents.flatMap((agent) => {
       const block = this.engineBlockOf(agent);
@@ -1063,7 +1125,7 @@ export class WorkspaceRuntime {
       agents: state.agents,
       tasks: state.tasks,
       projects: this.plans.list(),
-      forYou: this.forYou.list(),
+      forYou: options.forYou ?? this.forYou.list(),
       usage,
       routines: this.routines.list(),
       entries: this.routines.entries,
@@ -1173,7 +1235,7 @@ export class WorkspaceRuntime {
       tasks: () => this.state.read().tasks,
       projects: () => this.plans.list(),
       agents: () => this.state.read().agents,
-      forYou: () => this.forYou.list(),
+      forYou: (sinceMs) => this.forYou.listSince(sinceMs),
       usage: (from, to) => this.usageHistory.read(from, to),
       usdBrl: () => usdBrl ?? DEFAULT_USD_BRL,
       now: () => this.now().getTime(),
@@ -1213,6 +1275,7 @@ export class WorkspaceRuntime {
       metrics: { metrics: (window) => this.metrics(window), now: () => this.now() },
       reports: { ensure: (kind, period) => this.reports.ensure(kind, period, "mcp"), retro: this.retro },
       retro: { propose: (input) => this.retro.proposeRule(input) },
+      brainOrganize: { propose: (input) => this.brainOrganize.propose(input) },
       ...(this.agendaDeps ? { agenda: this.agendaDeps } : {}),
       ...(this.muralDeps ? { mural: this.muralDeps } : {}),
       routines: { routines: this.routines, tracking: this.tracking, workspaceId: this.id, now: this.usageInfo.now, forYou: () => this.forYou.list() },
@@ -1336,6 +1399,8 @@ export class WorkspaceRuntime {
 
   /** Para o orquestrador e os terminais de CLI e espera as gravações pendentes. */
   async close(): Promise<void> {
+    if (this.approvalsTimer) clearInterval(this.approvalsTimer);
+    this.approvalsTimer = undefined;
     this.routineScheduler.stop();
     this.slotClock.stop();
     this.reportClock.stop();

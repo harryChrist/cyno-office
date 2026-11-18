@@ -6,7 +6,7 @@ import { WorkspacePicker } from "../WorkspacePicker";
 import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
 import { NavVersion } from "./NavVersion";
-import { CynoItem, MovedHint, NavSections, NotificationsItem, ShortcutsRow, TodayItem } from "./NavItems";
+import { CynoItem, NavSections, NotificationsItem, ShortcutsRow, TodayItem } from "./NavItems";
 
 /**
  * Gaveta do celular: abre da esquerda por cima de tudo (dialog modal: foco preso dentro, Esc e
@@ -55,7 +55,6 @@ export function MobileDrawer({ onClose }: { onClose: () => void }) {
         {!empty && <FoldersItem onBeforeOpen={onClose} />}
       </div>
       <div className="sidenav__scroll">
-        <MovedHint />
         {!empty && (
           <ul className="navsection__list navsection--top">
             <li>

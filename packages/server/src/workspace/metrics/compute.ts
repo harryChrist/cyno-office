@@ -25,6 +25,7 @@ import {
   type MetricsReport,
   type Project,
   type ProjectTask,
+  forYouOriginalText,
   type Routine,
   type RoutineEntry,
   type SubscriptionUsage,
@@ -455,7 +456,7 @@ export function computeMetrics(full: MetricsSnapshot, options: MetricsOptions): 
   const approved = decided.filter((item) => item.status === "aprovado");
   const prevApproved = prevDecided.filter((item) => item.status === "aprovado");
   const edited = (item: ForYouItem) => item.editedByUser;
-  const intensityOf = (items: readonly ForYouItem[]) => items.filter(edited).map((item) => editIntensity(item.originalText, item.text));
+  const intensityOf = (items: readonly ForYouItem[]) => items.filter(edited).map((item) => editIntensity(forYouOriginalText(item), item.text));
   const intensityGroups = (key: (item: ForYouItem) => string | undefined, label: Names): MetricGroup[] =>
     rateGroups(approved, prevApproved, key, edited, label).map((group) => ({ ...group, intensity: median(intensityOf(approved.filter((item) => key(item) === group.key))) }));
   const editRate: MetricsReport["editRate"] = {

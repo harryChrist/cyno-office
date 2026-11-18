@@ -12,6 +12,7 @@ import {
   PROJECT_PRIORITY_LABELS,
   WORK_TIME_ZONE,
   type Agent,
+  forYouOriginalText,
   type ForYouItem,
   type MediaItem,
   type Plan,
@@ -193,7 +194,7 @@ export function observeWorkspaceActivity(deps: ActivityRecorderDeps): ActivityOb
     const kind = item.kind ?? "aprovacao";
     const at = now();
     if (previous === undefined && item.status === "pendente") {
-      const what = kind === "questionario" ? "respostas" : kind === "plano" ? "a aprovação de um plano" : kind === "rotina" ? "a aprovação de uma rotina" : kind === "sprint" ? "o OK na entrega de uma sprint" : kind === "regra" ? "o OK numa regra da retrospectiva" : "a sua aprovação";
+      const what = kind === "questionario" ? "respostas" : kind === "plano" ? "a aprovação de um plano" : kind === "rotina" ? "a aprovação de uma rotina" : kind === "sprint" ? "o OK na entrega de uma sprint" : kind === "regra" ? "o OK numa regra da retrospectiva" : kind === "organizacao" ? "o OK numa organização do Cérebro" : "a sua aprovação";
       emit({ at, category: "aprovacao", action: "pedida", actor: item.agentId, summary: `${nameOf(item.agentId)} pediu ${what}: ${label}`, refs, data: { type: item.type, kind, where: item.where } });
       return;
     }
@@ -208,7 +209,7 @@ export function observeWorkspaceActivity(deps: ActivityRecorderDeps): ActivityOb
       emit({ at, category: "aprovacao", action: "cancelada", actor: by, summary: `${byName} cancelou o pedido: ${label}`, refs, data: { ...base, ...(item.cancelReason ? { reason: item.cancelReason } : {}) } });
       return;
     }
-    const edited = item.editedByUser && item.text !== item.originalText;
+    const edited = item.editedByUser && item.text !== forYouOriginalText(item);
     const verb = item.status === "aprovado" ? "aprovou" : item.status === "rejeitado" ? "rejeitou" : "respondeu";
     const action = item.status === "aprovado" ? "aprovada" : item.status === "rejeitado" ? "rejeitada" : "respondida";
     const why = item.status === "rejeitado" && item.rejection?.reason ? ` — motivo: ${quote(shorten(item.rejection.reason, 140))}` : "";
@@ -435,6 +436,10 @@ export function observeWorkspaceActivity(deps: ActivityRecorderDeps): ActivityOb
           return onItem(event.item);
         case "foryou:deleted":
           items.delete(event.id);
+          return;
+        case "foryou:archived":
+          // Arquivado (decidido há tempo) não é apagado nem decidido de novo: não vira registro, só sai da memória.
+          for (const id of event.ids) items.delete(id);
           return;
         case "routine:upserted":
           return onRoutine(event.routine);

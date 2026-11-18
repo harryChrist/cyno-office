@@ -126,3 +126,26 @@ export function parseFrontmatter(content: string): { frontmatter: BrainFrontmatt
   }
   return { frontmatter, body: content.slice(match[0].length) };
 }
+
+/**
+ * Acerta campos do frontmatter de uma nota sem mexer no resto: campos que já existem ficam onde estão
+ * (só trocam de valor), os novos entram no fim; `undefined` tira o campo. Sem bloco, nasce um. O corpo
+ * volta intacto. (Objetos aninhados do YAML, que o leitor ignora, não sobrevivem: as notas do Cérebro não os usam.)
+ */
+export function patchFrontmatter(content: string, patch: Record<string, string | string[] | undefined>): string {
+  const { frontmatter, body } = parseFrontmatter(content);
+  const merged: Record<string, string | string[] | undefined> = { ...frontmatter };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete merged[key];
+    else merged[key] = value;
+  }
+  // Sem bloco antes, o corpo era o texto todo: uma linha em branco separa o bloco novo do texto.
+  return `${renderFields(merged)}${body === content ? "\n" : ""}${body}`;
+}
+
+/** Troca o corpo da nota e mantém o frontmatter (com os acertos de `patch`). */
+export function replaceBody(content: string, body: string, patch: Record<string, string | string[] | undefined> = {}): string {
+  const head = patchFrontmatter(content, patch);
+  const { body: oldBody } = parseFrontmatter(head);
+  return `${head.slice(0, head.length - oldBody.length)}\n${body.trim()}\n`;
+}

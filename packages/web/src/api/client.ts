@@ -112,7 +112,7 @@ import type {
   RoutinesOverview,
   UpdateRoutineBody,
 } from "@cyno/shared";
-import type { ForYouBatchResponse, ModelSaving, SprintCreateBody, SprintPatchBody, TaskCreateBody, TaskMoveBody, TaskPatchBody, TaskReassignBody } from "@cyno/shared";
+import type { ForYouArchiveSummary, ForYouBatchResponse, ModelSaving, SprintCreateBody, SprintPatchBody, TaskCreateBody, TaskMoveBody, TaskPatchBody, TaskReassignBody } from "@cyno/shared";
 import { TODAY_PATH, type PlatformToday, type TodayView } from "@cyno/shared";
 import { ATTENTION_PATH, ATTENTION_PREFS_PATH, type AttentionPrefs, type AttentionPrefsBody, type AttentionResponse } from "@cyno/shared";
 import { AGENDA_AVAILABILITY_PATH, AGENDA_CHECK_PATH, AGENDA_PATH, type AgendaEvent, type AgendaResponse, type Availability, type CheckAgendaBody, type CreateAgendaEventBody, type SlotCheck, type UpdateAgendaEventBody } from "@cyno/shared";
@@ -123,7 +123,8 @@ import { FREEBUFF_MODELS_REFRESH_PATH, FREEBUFF_SETTINGS_PATH, FREEBUFF_TEST_PAT
 import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, VERSION_CHECK_PATH, VERSION_PATH, VERSION_UPDATE_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
-import { boardDataPath, boardPagePath, boardPath, boardsPath, type Board, type UpdateBoardBody } from "@cyno/shared";
+import { boardDataPath, boardExportPath, boardPagePath, boardPath, boardSharePath, boardShareRotatePath, boardsPath, type Board, type BoardShare, type SetBoardShareBody, type UpdateBoardBody } from "@cyno/shared";
+import { agentRulesPath, brainOrganizePath, brainRulesPath, type AgentRulesResponse, type BrainOrganizeResponse } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
 import { useNavStore } from "../store/navStore";
 
@@ -178,6 +179,23 @@ export async function requestText(path: string): Promise<string> {
     throw new ApiRequestError(response.status, message);
   }
   return response.text();
+}
+
+/** GET que devolve um arquivo (o PDF de um quadro); em erro, lê a mensagem do corpo JSON. */
+export async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(path);
+  if (!response.ok) {
+    if (response.status === 401) useAuthStore.getState().expire();
+    const text = await response.text().catch(() => "");
+    let message = `Erro HTTP ${response.status}`;
+    try {
+      message = (JSON.parse(text) as ApiErrorBody).error ?? message;
+    } catch {
+      // Corpo que não é JSON: fica a mensagem padrão.
+    }
+    throw new ApiRequestError(response.status, message);
+  }
+  return response.blob();
 }
 
 const segment = encodeURIComponent;
@@ -445,6 +463,17 @@ export const api = {
   getManagementSummary: () => requestJson<ManagementSummary>(`${ws()}/management/summary`),
 
   listForYou: () => requestJson<ForYouItem[]>(`${ws()}/for-you`),
+  /** O arquivo das aprovações decididas há mais tempo que o prazo: o resumo (meses e quantos itens). */
+  getForYouArchive: () => requestJson<ForYouArchiveSummary>(`${ws()}/for-you/archive`),
+  /** Os itens arquivados de um mês ("AAAA-MM"). */
+  getForYouArchiveMonth: (month: string) => requestJson<ForYouItem[]>(`${ws()}/for-you/archive/${segment(month)}`),
+  /** Os itens do arquivo de uma tarefa e/ou de um id (para telas de UMA tarefa ou de UM registro). */
+  findForYouArchive: (query: { taskId?: string; id?: string }) => {
+    const params = new URLSearchParams();
+    if (query.taskId) params.set("taskId", query.taskId);
+    if (query.id) params.set("id", query.id);
+    return requestJson<ForYouItem[]>(`${ws()}/for-you/archive/find?${params.toString()}`);
+  },
   /** Aprovar em lote (Gestão): até 20 aprovações de texto do mesmo tipo, sem edição pendente. */
   approveForYouBatch: (ids: readonly string[]) => requestJson<ForYouBatchResponse>(`${ws()}/for-you/batch`, { method: "POST", body: { ids, decision: "aprovado" } }),
   /** Quanto o agente economizaria (ou gastaria a mais) com outro modelo; só estima, nada muda. */
@@ -475,6 +504,13 @@ export const api = {
   listBrains: () => requestJson<ListBrainsResponse>(`${ws()}/brains`),
   getBrainNote: (brainId: string, file: string) =>
     requestJson<BrainNoteResponse>(`${ws()}/brains/${segment(brainId)}/notes/${segment(file)}`),
+  /** Regras de um agente (só ele as recebe, em toda tarefa). */
+  getAgentRules: (agentId: string) => requestJson<AgentRulesResponse>(`${ws()}${agentRulesPath(agentId)}`),
+  setAgentRules: (agentId: string, content: string) => requestJson<AgentRulesResponse>(`${ws()}${agentRulesPath(agentId)}`, { method: "PUT", body: { content } }),
+  /** Troca o texto do `_regras.md` do Cérebro. */
+  setBrainRules: (brainId: string, content: string) => requestJson<BrainNoteResponse>(`${ws()}${brainRulesPath(brainId)}`, { method: "PUT", body: { content } }),
+  /** Pede ao Maestro uma proposta de organização do Cérebro (nada muda até o dono aprovar em Aprovações). */
+  organizeBrain: (brainId: string) => requestJson<BrainOrganizeResponse>(`${ws()}${brainOrganizePath(brainId)}`, { method: "POST" }),
 
   createRoom: (body: CreateRoomBody) => requestJson<Room>(`${ws()}/rooms`, { method: "POST", body }),
   updateRoom: (id: string, body: UpdateRoomBody) => requestJson<Room>(`${ws()}/rooms/${segment(id)}`, { method: "PATCH", body }),
@@ -567,6 +603,13 @@ export const api = {
   /** A página HTML do quadro (texto) e os dados (JSON, qualquer formato). */
   boardPage: (id: string) => requestText(`${ws()}${boardPagePath(id)}`),
   boardData: (id: string) => requestJson<unknown>(`${ws()}${boardDataPath(id)}`),
+  /** Link público do quadro: estado, ligar (ou trocar a validade), trocar o token e desligar. */
+  getBoardShare: (id: string) => requestJson<BoardShare>(`${ws()}${boardSharePath(id)}`),
+  setBoardShare: (id: string, body: SetBoardShareBody) => requestJson<BoardShare>(`${ws()}${boardSharePath(id)}`, { method: "PUT", body }),
+  rotateBoardShare: (id: string) => requestJson<BoardShare>(`${ws()}${boardShareRotatePath(id)}`, { method: "POST" }),
+  deleteBoardShare: (id: string) => requestJson<void>(`${ws()}${boardSharePath(id)}`, { method: "DELETE" }),
+  /** O quadro em PDF, gerado pelo servidor (pode levar alguns segundos). */
+  downloadBoardPdf: (id: string) => requestBlob(`${ws()}${boardExportPath(id, "pdf")}`),
   /** Espaço em disco do workspace e das pastas de trabalho (responde na hora; mede em segundo plano). */
   storageOf: (workspaceId: string) => requestJson<StorageResponse>(`/api/w/${segment(workspaceId)}/storage`),
   refreshStorageOf: (workspaceId: string) => requestJson<StorageResponse>(`/api/w/${segment(workspaceId)}/storage/refresh`, { method: "POST" }),

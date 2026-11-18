@@ -1,0 +1,235 @@
+/* Cartão "organizacao" do Para você: proposta do Maestro para organizar o Cérebro de uma sala. */
+.fy-org {
+  display: contents;
+}
+
+.fy-org__summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.fy-org__weight {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-org__groups {
+  display: grid;
+  gap: 14px;
+}
+
+.fy-org__group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fy-org__group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.fy-org__count {
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 17px;
+  color: var(--ui-text-2);
+  background: var(--ui-hover);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-org__rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fy-org__row {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-org__row[data-state="skipped"] .fy-org__title {
+  color: var(--ui-text-3);
+  text-decoration: line-through;
+}
+
+.fy-org__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.fy-org__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.fy-org__check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--ui-accent);
+}
+
+.fy-org__check:has(input:not(:checked)) .fy-org__title {
+  color: var(--ui-text-3);
+  text-decoration: line-through;
+}
+
+.fy-org__title {
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+.fy-org__tag {
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--ui-text-3);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.fy-org__tag--bad {
+  color: var(--ui-danger);
+  border-color: color-mix(in srgb, var(--ui-danger) 45%, transparent);
+}
+
+.fy-org__merge,
+.fy-org__reason {
+  margin: 0 0 0 24px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
+.fy-org__reason {
+  color: var(--ui-text-3);
+}
+
+.fy-org__more {
+  justify-self: start;
+  margin-left: 24px;
+}
+
+.fy-org__group > .fy-org__more {
+  margin-left: 0;
+}
+
+.fy-org__preview {
+  max-height: 240px;
+  margin: 2px 0 0 24px;
+  padding: 8px 10px;
+  overflow: auto;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--ui-surface-1, var(--ui-surface-3));
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-org__empty,
+.fy-org__safe {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ui-text-3);
+}
+
+.fy-org__done {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.fy-org__done-line {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.fy-org__failed {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  list-style: none;
+  color: var(--ui-danger);
+  overflow-wrap: anywhere;
+}
+
+.fy-org__refuse {
+  display: grid;
+  gap: 6px;
+}
+
+.fy-org__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+@media (max-width: 600px) {
+  .fy-org__merge,
+  .fy-org__reason,
+  .fy-org__preview {
+    margin-left: 0;
+  }
+
+  .fy-org__more {
+    margin-left: 0;
+  }
+
+  .fy-org .fy-actions .ui-button {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+}

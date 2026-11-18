@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { useTempDirs } from "../../dev/test-utils";
 import { reportText } from "../../mcp/report-tools";
 import { dataPaths } from "../../store/paths";
+import { AgentRules } from "../brain/agent-rules";
 import { Brain } from "../brain/brain";
 import { buildContext } from "../brain/context";
 import { parseFrontmatter } from "../brain/frontmatter";
@@ -62,6 +63,7 @@ async function setup(history: ForYouItem[], options: { maestro?: boolean } = {})
       return found;
     }),
   };
+  const agentRules = new AgentRules((agentId) => path.join(dir, "agents", agentId), () => new Date(clock.ms));
   const service = new RetroService({
     workspaceId: "principal",
     workspaceName: () => "Principal",
@@ -70,6 +72,7 @@ async function setup(history: ForYouItem[], options: { maestro?: boolean } = {})
     snapshot: (): RetroSnapshot => ({ agents, tasks: [], projects: [], forYou: items, typeName: (type) => (type === "comentario" ? "Comentário" : type) }),
     forYou,
     brain,
+    agentRules,
     roomOfAgent: (agentId) => agents.find((agent) => agent.id === agentId)?.room,
     roomExists: (roomId) => ROOMS.some((room) => room.id === roomId),
     maestro: {
@@ -93,7 +96,7 @@ async function setup(history: ForYouItem[], options: { maestro?: boolean } = {})
     card.status = status;
     card.decidedAt = iso(clock.ms);
   };
-  return { service, items, clock, brain, asked, notes, decide, forYou, finishAsk: () => listeners.forEach((listener) => listener({ type: "task:upserted", task: { id: "T-ask", status: "done" } } as unknown as ServerEvent)) };
+  return { service, items, clock, brain, agentRules, asked, notes, decide, forYou, finishAsk: () => listeners.forEach((listener) => listener({ type: "task:upserted", task: { id: "T-ask", status: "done" } } as unknown as ServerEvent)) };
 }
 
 describe("retrospectiva: as regras por molde não gastam nada e nada entra no Cérebro sem o clique", () => {
@@ -118,27 +121,46 @@ describe("retrospectiva: as regras por molde não gastam nada e nada entra no C�
     expect(view.ready).toEqual([]);
   });
 
-  it("aprovar grava a nota no Cérebro do quarto do agente, com tags e origem, e ela entra no contexto (buildContext)", async () => {
+  it("aprovar a regra de um agente grava nas regras DELE (não numa nota da sala) e só ele a recebe no contexto", async () => {
     const s = await setup([1, 2, 3].map((back) => withEmoji({ back })));
     await s.service.generate("manual");
     const card = s.items.find((candidate) => forYouKind(candidate) === "regra")!;
     expect(await s.notes("sala-a")).toEqual([]);
     await s.decide(card.id, "aprovado");
+    expect(await s.notes("sala-a")).toEqual([]);
+    expect(await s.notes("global")).toEqual([]);
+    expect((await s.agentRules.read("clara")).content).toBe("- Não usar emojis em comentários.");
+    expect((await s.agentRules.read("eco")).content).toBe("");
+    const deps = { rooms: () => ROOMS, readNotes: (id: string) => s.brain.readNotes(id), readAgentRules: async (id: string) => (await s.agentRules.read(id)).content, now: () => new Date(s.clock.ms) };
+    const forClara = await buildContext(deps, "sala-a", "Escreva um comentário para o post", { id: "clara", name: "Clara" });
+    expect(forClara.text).toContain("## Suas regras (só para você, Clara)");
+    expect(forClara.text).toContain("Não usar emojis em comentários.");
+    expect(forClara.sources[0]!.kind).toBe("agent");
+    const forEco = await buildContext(deps, "sala-a", "Escreva um comentário para o post", { id: "eco", name: "Eco" });
+    expect(forEco.text).not.toContain("Não usar emojis");
+    const view = await s.service.view();
+    expect(view.rules[0]).toMatchObject({ state: "aprovada" });
+    expect(view.rules[0]!.notePath).toBeUndefined();
+    expect(view.waiting).toBe(0);
+  });
+
+  it("regra de escopo de sala vira nota com tag regra e entra no contexto de todos da sala como regra carregada", async () => {
+    const s = await setup([1, 2, 3].map((back) => withEmoji({ back })));
+    await s.service.generate("manual");
+    const card = s.items.find((candidate) => forYouKind(candidate) === "regra")!;
+    await s.decide(card.id, "aprovado", { scope: { roomId: "sala-a" } });
     const [file] = await s.notes("sala-a");
     expect(file).toBeDefined();
-    expect(await s.notes("global")).toEqual([]);
+    expect((await s.agentRules.read("clara")).content).toBe("");
     const content = await readFile(path.join(s.brain.dir("sala-a"), file!), "utf8");
     const { frontmatter, body } = parseFrontmatter(content);
     expect(frontmatter.tags).toEqual(["regra", "retro"]);
     expect(frontmatter.origem).toBe("retro-2026-W46");
     expect(body).toContain("Não usar emojis em comentários.");
-    expect(body).toContain("Vale para: Clara");
-    // A nota entra no contexto do quarto pelo buildContext de sempre.
     const context = await buildContext({ rooms: () => ROOMS, readNotes: (id) => s.brain.readNotes(id), now: () => new Date(s.clock.ms) }, "sala-a", "Escreva um comentário para o post");
     expect(context.text).toContain("Não usar emojis em comentários.");
-    const view = await s.service.view();
-    expect(view.rules[0]).toMatchObject({ state: "aprovada", notePath: `sala-a/${file}` });
-    expect(view.waiting).toBe(0);
+    expect(context.text).not.toContain("## Notas do Cérebro");
+    expect((await s.service.view()).rules[0]).toMatchObject({ state: "aprovada", notePath: `sala-a/${file}` });
   });
 
   it("padrão de 2 agentes: o cartão nasce global e a aprovação grava no Cérebro global (não no do quarto)", async () => {

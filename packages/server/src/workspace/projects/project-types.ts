@@ -36,7 +36,7 @@ export type ProjectServiceDeps = {
   state: StateManager;
   agentLog: AgentLogService;
   orchestrator: Pick<Orchestrator, "enqueue" | "cancelTask" | "retryWaiting">;
-  forYou: Pick<ForYouService, "openSpecial" | "close">;
+  forYou: Pick<ForYouService, "openSpecial" | "close" | "isArchived">;
   /** Quem cuida do pedido (undefined = pedido que não é do Maestro). */
   host: (requestId: string) => ProjectHost | undefined;
   /** Arquivo mensal somente leitura do "Avulsas" (folhas finalizadas há mais de 14 dias); sem ele nada é arquivado. */

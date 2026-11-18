@@ -8,6 +8,7 @@ import { BrainOverview } from "./BrainOverview";
 import { brainHash, brainLevel, buildWikiIndex, doneSignature, parseBrainHash } from "./brainView";
 import "./brain.css";
 import { NoteList } from "./NoteList";
+import { AgentRulesReader } from "./AgentRules";
 import { NoteReader } from "./NoteReader";
 
 /** O hash do endereço como store externo (links de nota mudam o hash; voltar/avançar também). */
@@ -37,6 +38,8 @@ function BrainBrowser({ workspaceId }: { workspaceId: string }) {
   const key = `${done}|${retry}`;
   const [list, setList] = useState<ListState>({ key: "", brains: null, error: null });
   const [query, setQuery] = useState("");
+  // Uma regra de agente foi salva: o bloco "Regras por agente" recarrega o estado de cada um.
+  const [rulesVersion, setRulesVersion] = useState(0);
 
   useEffect(() => {
     let stale = false;
@@ -54,7 +57,8 @@ function BrainBrowser({ workspaceId }: { workspaceId: string }) {
   const loading = list.key !== key;
   const activeId = selection.brainId ?? GLOBAL_BRAIN_ID;
   const activeBrain = brains?.find((brain) => brain.id === activeId);
-  const reading = selection.file !== null;
+  const readingAgent = selection.agentId !== undefined;
+  const reading = selection.file !== null || readingAgent;
   const now = useNow();
 
   if (!brains) {
@@ -93,7 +97,7 @@ function BrainBrowser({ workspaceId }: { workspaceId: string }) {
       )}
       <BrainList workspaceId={workspaceId} brains={brains} activeId={activeId} selected={selection.brainId !== null} office={office} />
       {activeBrain ? (
-        <NoteList workspaceId={workspaceId} brain={activeBrain} activeFile={selection.file} query={query} onQueryChange={setQuery} now={now} office={office} />
+        <NoteList workspaceId={workspaceId} brain={activeBrain} activeFile={selection.file} activeAgentId={selection.agentId ?? null} rulesVersion={rulesVersion} query={query} onQueryChange={setQuery} now={now} office={office} />
       ) : (
         <section className="brain-col brain-col--notes">
           <a className="brain-back" href={brainHash(workspaceId, null)}>
@@ -102,7 +106,16 @@ function BrainBrowser({ workspaceId }: { workspaceId: string }) {
           <p className="brain-empty">Este Cérebro não existe mais neste workspace.</p>
         </section>
       )}
-      {reading ? (
+      {readingAgent ? (
+        <AgentRulesReader
+          key={`${activeId}/@agente/${selection.agentId}`}
+          workspaceId={workspaceId}
+          brainId={activeId}
+          agentId={selection.agentId!}
+          agentName={office?.agents.find((agent) => agent.id === selection.agentId)?.name ?? selection.agentId!}
+          onSaved={() => setRulesVersion((value) => value + 1)}
+        />
+      ) : reading ? (
         <NoteReader
           key={`${activeId}/${selection.file}`}
           workspaceId={workspaceId}
@@ -112,6 +125,7 @@ function BrainBrowser({ workspaceId }: { workspaceId: string }) {
           office={office}
           wikiIndex={wikiIndex}
           now={now}
+          onRulesSaved={() => setRetry((value) => value + 1)}
         />
       ) : activeBrain ? (
         <BrainOverview workspaceId={workspaceId} brain={activeBrain} office={office} now={now} />
@@ -142,7 +156,7 @@ export function BrainPage() {
           <h2 id="page-title-cerebro" className="page__title">
             Cérebro
           </h2>
-          <p className="page__subtitle">As notas guardadas no Cérebro do lobby, da Sala do Maestro e de cada sala.</p>
+          <p className="page__subtitle">As regras e as notas do lobby, da Sala do Maestro e de cada sala. Os agentes recebem as regras em toda tarefa e buscam o resto quando precisam.</p>
         </div>
       </header>
       {workspaceId ? <BrainBrowser key={workspaceId} workspaceId={workspaceId} /> : <p className="page__empty">Escolha um workspace.</p>}

@@ -31,8 +31,8 @@ const STATUS_IN: Record<string, ForYouStatus | "all"> = {
   all: "all",
 };
 const STATUS_OUT: Record<ForYouStatus, string> = { pendente: "pending", aprovado: "approved", rejeitado: "rejected", respondido: "answered", cancelado: "cancelled" };
-const KIND_IN: Record<string, ForYouKind> = { approval: "aprovacao", plan: "plano", questionnaire: "questionario", routine: "rotina", sprint: "sprint", rule: "regra" };
-const KIND_OUT: Record<ForYouKind, string> = { aprovacao: "approval", plano: "plan", questionario: "questionnaire", rotina: "routine", sprint: "sprint", regra: "rule" };
+const KIND_IN: Record<string, ForYouKind> = { approval: "aprovacao", plan: "plano", questionnaire: "questionario", routine: "rotina", sprint: "sprint", rule: "regra", brain_cleanup: "organizacao" };
+const KIND_OUT: Record<ForYouKind, string> = { aprovacao: "approval", plano: "plan", questionario: "questionnaire", rotina: "routine", sprint: "sprint", regra: "rule", organizacao: "brain_cleanup" };
 const ACTOR_OUT = { maestro: "the Maestro", agente: "the agent", usuario: "the user", servidor: "the server" } as const;
 
 const idField = z.string().trim().regex(/^A-\d{4,}$/, 'Use the short id, e.g. "A-0001"').describe('Item id, e.g. "A-0001" (see list_pending_items)');
@@ -101,6 +101,7 @@ export function forYouTools(scope: ForYouToolsScope, deps: ForYouToolsDeps): Mcp
     if (item.status !== "pendente") return `Item ${id} is already ${STATUS_OUT[item.status]}: only pending items can be changed or cancelled.`;
     if (forYouKind(item) === "sprint") return `Item ${id} is a sprint delivery summary: only the user approves or sends it back.`;
     if (forYouKind(item) === "regra") return `Item ${id} is a rule proposed by the retrospective: only the user approves or refuses it.`;
+    if (forYouKind(item) === "organizacao") return `Item ${id} is a Brain cleanup proposal: only the user approves or refuses it.`;
     if (forYouKind(item) === "plano") return `Item ${id} is a plan approval: send a new version with create_project, or stop it with resolve_task (cancel_project) / cancel_request.`;
     return item;
   };

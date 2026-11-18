@@ -1,4 +1,4 @@
-import { FOR_YOU_STATUS_LABELS, formatCharCount, type ForYouDecisionStatus, type ForYouItem, type ForYouRuleScope, type RejectionCategory, type RoutineApprovalOverrides, type Task } from "@cyno/shared";
+import { FOR_YOU_STATUS_LABELS, formatCharCount, forYouOriginalText, type ForYouDecisionStatus, type ForYouItem, type ForYouRuleScope, type RejectionCategory, type RoutineApprovalOverrides, type Task } from "@cyno/shared";
 import { useId, useMemo, useState, type KeyboardEvent, type Ref } from "react";
 import { formatDateTime, TASK_STATUS_LABELS } from "../../ui/format";
 import { Linkify } from "../../ui/Linkify";
@@ -30,7 +30,7 @@ import { RejectionCategories } from "./RejectionCategories";
 /** Ctrl no Windows/Linux, ⌘ no Mac (só o rótulo; o atalho aceita os dois). */
 export const MOD_KEY = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
 
-export type DecisionValues = { text?: string; response?: string; /** Recusa: por que o usuário recusou (volta ao agente para refazer). */ reason?: string; /** Recusa: a categoria rápida do motivo (opcional). */ category?: RejectionCategory; routine?: RoutineApprovalOverrides; /** Cartão da sprint, ao devolver: as tarefas entregues que voltam como retrabalho. */ returnRefs?: string[]; /** Cartão da regra, ao aprovar: o texto e o escopo que o dono ajustou. */ rule?: { text?: string; scope?: ForYouRuleScope } };
+export type DecisionValues = { text?: string; response?: string; /** Recusa: por que o usuário recusou (volta ao agente para refazer). */ reason?: string; /** Recusa: a categoria rápida do motivo (opcional). */ category?: RejectionCategory; routine?: RoutineApprovalOverrides; /** Cartão da sprint, ao devolver: as tarefas entregues que voltam como retrabalho. */ returnRefs?: string[]; /** Cartão da regra, ao aprovar: o texto e o escopo que o dono ajustou. */ rule?: { text?: string; scope?: ForYouRuleScope}; /** Cartão da organização, ao aprovar: os índices das ações desmarcadas. */ organize?: { skip?: number[] } };
 
 type ForYouCardProps = {
   item: ForYouItem;
@@ -50,6 +50,8 @@ type ForYouCardProps = {
   /** O item é de um lote: a faixa "3 de 10 decididos" com "Aprovar todos" / "Recusar todos". */
   batch?: { progress: BatchProgress; onApproveAll: () => Promise<unknown>; onRejectAll: (reason: string) => Promise<unknown> };
   cardRef?: Ref<HTMLElement>;
+  /** Item do arquivo ("Mais antigos"): só leitura, sem reabrir nem o menu de descartar. */
+  readOnly?: boolean;
 };
 
 function Counter({ item, text, types }: { item: ForYouItem; text: string; types: TypeList }) {
@@ -97,7 +99,7 @@ function linkedTaskNote(item: ForYouItem, task: Task | undefined): string | null
  * "por quê"; metadados; o texto que vai sair (editável, com limite) ou a pergunta; a nota ou a
  * resposta; e as ações. Ctrl/⌘+Enter faz a ação principal e Esc sai do campo de texto.
  */
-export function ForYouCard({ item, types, agentName, roomName, linkedTask, draft, onDraft, onDecide, onCopy, onUndoEdit, onDiscard, batch, cardRef }: ForYouCardProps) {
+export function ForYouCard({ item, types, agentName, roomName, linkedTask, draft, onDraft, onDecide, onCopy, onUndoEdit, onDiscard, batch, cardRef, readOnly }: ForYouCardProps) {
   const baseId = useId();
   const titleId = `${baseId}-t`;
   const { pending, error, run, clearError } = useAsyncAction();
@@ -116,7 +118,7 @@ export function ForYouCard({ item, types, agentName, roomName, linkedTask, draft
   const text = draft.text ?? item.text;
   const response = draft.response ?? (open ? "" : (item.response ?? ""));
   const reason = draft.reason ?? "";
-  const changed = editable && text !== item.originalText;
+  const changed = editable && text !== forYouOriginalText(item);
   // Várias opções num texto só: abas para ver uma por vez (só apresentação; o texto segue sendo um campo único).
   const options = useMemo(() => (editable ? splitOptions(text) : null), [editable, text]);
   const [pickedOption, setOption] = useState(0);
@@ -202,7 +204,7 @@ export function ForYouCard({ item, types, agentName, roomName, linkedTask, draft
         <span className={`fy-status fy-status--${item.status}`} data-testid="foryou-status">
           {FOR_YOU_STATUS_LABELS[item.status]}
         </span>
-        <ItemMenu item={item} onDiscard={onDiscard} />
+        {!readOnly && <ItemMenu item={item} onDiscard={onDiscard} />}
       </div>
 
       <h3 id={titleId} className="fy-card__title">
@@ -448,7 +450,7 @@ export function ForYouCard({ item, types, agentName, roomName, linkedTask, draft
             <kbd className="fy-kbd">{MOD_KEY}+Enter</kbd>
           </button>
         )}
-        {!open && item.status !== "cancelado" && (
+        {!readOnly && !open && item.status !== "cancelado" && (
           <button type="button" className="ui-button ui-button--secondary" onClick={() => void decide("pendente")} disabled={pending} data-testid="foryou-reopen">
             <Icon name="reopen" />
             Reabrir

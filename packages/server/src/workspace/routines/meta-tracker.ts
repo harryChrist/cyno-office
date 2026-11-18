@@ -4,6 +4,7 @@ import {
   dailyCapOf,
   deliveredCount,
   goalOf,
+  isActiveTaskStatus,
   metaFlight,
   planMeta,
   periodKeyFor,
@@ -71,6 +72,21 @@ export class MetaTracker {
       .filter((item) => item.status === "aprovado" && item.taskId !== undefined && done.has(item.taskId) && (item.kind === undefined || item.kind === "aprovacao") && approvedInPeriod(item, routine.period, key))
       .slice(-limit)
       .map((item) => `- ${item.id}: ${[item.where, item.to, item.title].filter(Boolean).join(" / ") || "item"} | ${item.text.replace(/\s+/g, " ").slice(0, 120)}`);
+  }
+
+  /**
+   * O teste "esta aprovação ainda conta na Meta?" (a lista viva a guarda mesmo decidida há tempo): aprovação de tarefa de rotina que
+   * ainda roda, ou decidida dentro do período atual (que pode ser o mês). A varredura do arquivo respeita isso.
+   */
+  holdsApproved(now: Date = this.deps.now()): (item: ForYouItem) => boolean {
+    const tasks = new Map(this.deps.state.read().tasks.map((task) => [task.id, task]));
+    return (item) => {
+      if (item.status !== "aprovado" || item.taskId === undefined || (item.kind !== undefined && item.kind !== "aprovacao")) return false;
+      const task = tasks.get(item.taskId);
+      const routine = task?.routineId ? this.deps.routines.find(task.routineId) : undefined;
+      if (!task || !routine) return false;
+      return isActiveTaskStatus(task.status) || approvedInPeriod(item, routine.period, periodKeyFor(now, routine.period));
+    };
   }
 
   /** Entregues no período atual da meta. */

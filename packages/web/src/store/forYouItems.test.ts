@@ -43,6 +43,22 @@ describe("itens de Aprovações no store", () => {
     expect(officeReducer({ ...INITIAL_SYNC, forYou: list }, removed).forYou).toHaveLength(1);
   });
 
+  it("foryou:archived tira os itens que foram para o arquivo, em silêncio (ids desconhecidos ou antes do GET: nada muda)", () => {
+    const list = [item("A-0001", { status: "aprovado" }), item("A-0002"), item("A-0003", { status: "rejeitado" })];
+    const archived: ServerEvent = { type: "foryou:archived", ids: ["A-0001", "A-0003"] };
+    expect(applyForYouEvent(list, archived)!.map((current) => current.id)).toEqual(["A-0002"]);
+    expect(applyForYouEvent(list, { type: "foryou:archived", ids: ["A-9999"] })).toBe(list);
+    expect(applyForYouEvent(list, { type: "foryou:archived", ids: [] })).toBe(list);
+    expect(applyForYouEvent(null, archived)).toBeNull();
+    const synced = officeReducer({ ...INITIAL_SYNC, forYou: list }, archived);
+    expect(synced.forYou).toHaveLength(1);
+    expect(synced.office).toBeNull();
+    // Sem o office carregado o evento não quebra nada e um item sem originalText segue válido.
+    const compact = item("A-0004");
+    delete compact.originalText;
+    expect(applyForYouEvent([compact], upsert({ ...compact, status: "aprovado" }))![0]!.status).toBe("aprovado");
+  });
+
   it("o reducer do escritório aplica foryou:* mesmo antes do snapshot e mantém o resto", () => {
     const loaded = { ...INITIAL_SYNC, forYou: [] };
     const next = officeReducer(loaded, upsert(item("A-0001")));

@@ -8,12 +8,18 @@
  *   iframe para a mãe:  { type: "quadro:ready" }                 a página carregou (mande os dados atuais se mudaram desde o srcdoc)
  *                       { type: "quadro:height", height: n }      altura do conteúdo em px (opcional: use para ajustar a altura do iframe)
  *                       { type: "quadro:error", message: "..." }  erro de script da página do agente (opcional: mostre um aviso)
+ *                       { type: "quadro:export-result", requestId, format, ok: true, text } | { ..., ok: false, error }  resposta ao pedido de exportação
  *   mãe para o iframe:  { type: "quadro:data", data: <json>, meta?: <BoardMeta> }  dados novos: o kit troca Quadro.data e chama os Quadro.onData
+ *                       { type: "quadro:export", requestId, format: "md" | "csv" }  pede o quadro em Markdown ou CSV (veja Quadro.toMarkdown/toCsv)
+ * Também expõe window.__quadroSettled (true quando o primeiro desenho terminou: serve para PDF e capturas).
  */
 export const BOARD_KIT_JS = String.raw`
 (function () {
   "use strict";
   var Q = (window.Quadro = {});
+  window.__quadroSettled = false;
+  /** Registro interno das tabelas do kit (a exportação lê todas as linhas, não só a página desenhada). */
+  Q._tables = [];
   var boot = { data: {}, meta: {} };
   try {
     var node = document.getElementById("quadro-data");
@@ -224,6 +230,7 @@ export const BOARD_KIT_JS = String.raw`
     if (col.type === "date" || col.type === "rel") { var d = toDate(v); return d ? d.getTime() : null; }
     return String(v);
   }
+  var EXPAND_CAP = 2000, MD_ROW_CAP = 5000;
   function Table(el) { this.el = el; this.state = { q: "", sortKey: null, dir: 1, page: 0, pageSize: 25 }; this.items = []; }
   Table.prototype.configure = function (opts) {
     this.opts = opts;
@@ -315,7 +322,7 @@ export const BOARD_KIT_JS = String.raw`
       });
       list = keyed.map(function (x) { return x.it; });
     }
-    var total = list.length, size = st.pageSize, pages = Math.max(1, Math.ceil(total / size));
+    var total = list.length, size = st.all ? Math.max(1, Math.min(total, EXPAND_CAP)) : st.pageSize, pages = Math.max(1, Math.ceil(total / size));
     if (st.page >= pages) st.page = pages - 1;
     var from = st.page * size, slice = list.slice(from, from + size);
     var body = slice.length
@@ -336,6 +343,7 @@ export const BOARD_KIT_JS = String.raw`
   };
   Table.prototype.pager = function (total, pages, from, n) {
     var st = this.state, box = this.el.querySelector(".q-pager");
+    if (st.all) { box.innerHTML = total > n ? '<span class="q-muted">Mostrando as primeiras ' + fmt.number(n) + " de " + fmt.number(total) + " linhas.</span>" : ""; return; }
     if (total <= 10) { box.innerHTML = ""; return; }
     var nums = [];
     for (var p = 0; p < pages; p++) if (p === 0 || p === pages - 1 || Math.abs(p - st.page) <= 1) nums.push(p);
@@ -361,7 +369,7 @@ export const BOARD_KIT_JS = String.raw`
     el = $(el);
     if (!el) return null;
     var t = el._qtable;
-    if (!t) { t = el._qtable = new Table(el); }
+    if (!t) { t = el._qtable = new Table(el); Q._tables.push(t); }
     t.configure(opts || {});
     return t;
   };
@@ -373,10 +381,11 @@ export const BOARD_KIT_JS = String.raw`
       if (el._qdraw && el._qw !== w) { el._qw = w; el._qdraw(); }
     });
   }) : null;
-  function host(el, draw) {
+  function host(el, draw, kind, o) {
     el = $(el);
     if (!el) return null;
     el.classList.add("q-chart");
+    el._qchart = { kind: kind, o: o };
     el._qdraw = draw;
     el._qw = Math.round(el.clientWidth);
     draw();
@@ -400,7 +409,7 @@ export const BOARD_KIT_JS = String.raw`
   }
   var fmtAxis = function (v) { return fmt.number(v, { compact: true, decimals: 1 }); };
   var C = (Q.chart = {});
-  /** Barras. o: { data: [{ label, value, color? }] ou labels + values, horizontal, height, format(valor) }. */
+  /** Barras. o: { title? (só aparece na exportação), data: [{ label, value, color? }] ou labels + values, horizontal, height, format(valor) }. */
   C.bar = function (el, o) {
     o = o || {};
     return host(el, function () {
@@ -433,7 +442,7 @@ export const BOARD_KIT_JS = String.raw`
         });
       }
       box.innerHTML = '<svg viewBox="0 0 ' + w + " " + h + '" width="' + w + '" height="' + h + '" role="img">' + svg + "</svg>";
-    });
+    }, "bar", o);
   };
   /** Linha(s). o: { series: [{ name, data: [numeros] | [{ x, y }], color? }], labels, height, format } (ou data: [numeros] para uma série). */
   C.line = function (el, o) {
@@ -475,7 +484,7 @@ export const BOARD_KIT_JS = String.raw`
       });
       box.innerHTML = '<svg viewBox="0 0 ' + w + " " + h + '" width="' + w + '" height="' + h + '" role="img">' + svg + "</svg>" +
         (series.length > 1 ? legend(series.map(function (s, i) { return { label: s.name, color: color(i, s.color) }; })) : "");
-    });
+    }, "line", o);
   };
   /** Rosca. o: { data: [{ label, value, color? }], center: { value, label } (padrão: total) }. A legenda mostra a parte de cada fatia. */
   C.donut = function (el, o) {
@@ -496,7 +505,247 @@ export const BOARD_KIT_JS = String.raw`
         '<div class="q-legend">' + data.map(function (d, i) {
           return '<span><i style="background:' + color(i, d.color) + '"></i>' + esc(d.label) + ' <b class="q-num">' + esc(fmt.number(d.value)) + '</b> <span class="q-muted">' + esc(fmt.percent(Number(d.value) / total)) + "</span></span>";
         }).join("") + "</div></div>";
+    }, "donut", o);
+  };
+
+  /* ---------- Exportação (Markdown, CSV, expandir tudo) ---------- */
+  var mdFn = null;
+  /** Registra fn() -> string Markdown: páginas de HTML muito livre controlam o próprio Markdown baixado. */
+  Q.exportMarkdown = function (fn) { mdFn = typeof fn === "function" ? fn : null; };
+  function squash(s) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim(); }
+  /** Texto puro de um trecho de HTML (DOMParser não executa scripts nem carrega imagens). */
+  function domText(html) {
+    html = String(html == null ? "" : html);
+    if (!/[<&]/.test(html)) return squash(html);
+    try { return squash(new DOMParser().parseFromString(html, "text/html").body.textContent); } catch (e) { return squash(html.replace(/<[^>]*>/g, "")); }
+  }
+  function isHttp(u) { return /^https?:\/\//i.test(String(u || "").trim()); }
+  function docOrder(a, b) { return a === b ? 0 : a.compareDocumentPosition(b) & 4 ? -1 : 1; }
+  /** Último título (h1 a h6) antes do elemento, na ordem do documento. */
+  function titleBefore(el) {
+    var found = "", hs = document.querySelectorAll("h1,h2,h3,h4,h5,h6");
+    for (var i = 0; i < hs.length; i++) {
+      if (hs[i] === el || hs[i].contains(el)) continue;
+      if (el.compareDocumentPosition(hs[i]) & 2) found = squash(hs[i].textContent); else break;
+    }
+    return found;
+  }
+  /** Texto e endereço de uma célula, como aparece na tela (sem HTML). */
+  function cellInfo(col, row) {
+    var v = cellValue(col, row), r = { text: "", url: "" };
+    if (typeof col.render === "function") { try { r.text = domText(col.render(v, row)); } catch (e) {} return r; }
+    if (v == null || v === "") return r;
+    switch (col.type) {
+      case "number": r.text = fmt.number(v, col.decimals); break;
+      case "percent": r.text = fmt.percent(v, col.decimals); break;
+      case "date": r.text = fmt.date(v, col.dateOptions); break;
+      case "rel": r.text = fmt.rel(v); break;
+      case "progress": {
+        var max = typeof col.max === "string" ? pathGet(row, col.max) : col.max, m = isNum(max) && Number(max) > 0 ? Number(max) : 100;
+        r.text = isNum(v) ? Math.round(Math.max(0, Math.min(100, (Number(v) / m) * 100))) + "%" : "";
+        break;
+      }
+      case "link": {
+        var s = String(v);
+        r.text = squash(col.text ? col.text(row) : s);
+        if (isHttp(s)) r.url = s.trim();
+        break;
+      }
+      case "html": r.text = domText(v); break;
+      default: r.text = squash(typeof v === "object" ? JSON.stringify(v) : v);
+    }
+    return r;
+  }
+  /** Todas as linhas de uma tabela do kit, na ordem original (busca e ordenação ignoradas). */
+  function kitMatrix(t, n) {
+    var cols = t.cols || [];
+    var title = (t.opts && t.opts.title) || (t.el.getAttribute && t.el.getAttribute("aria-label")) || titleBefore(t.el) || "Tabela " + n;
+    return {
+      title: squash(title),
+      header: cols.map(function (c) { return squash(c.label); }),
+      rows: (t.items || []).map(function (it) { return cols.map(function (c) { return cellInfo(c, it.row); }); })
+    };
+  }
+  function liveTables() {
+    return Q._tables.filter(function (t) { return t.built && document.documentElement.contains(t.el); }).sort(function (a, b) { return docOrder(a.el, b.el); });
+  }
+  /** Tabelas HTML comuns (fora das do kit): cabeçalho = primeira linha. */
+  function plainMatrix(table, n) {
+    var rows = [].slice.call(table.rows).map(function (tr) {
+      return [].slice.call(tr.cells).map(function (c) { return { text: squash(c.textContent), url: "" }; });
+    }).filter(function (r) { return r.length; });
+    var cap = table.querySelector("caption");
+    var head = rows.shift() || [];
+    return { title: squash(cap ? cap.textContent : "") || titleBefore(table) || "Tabela " + n, header: head.map(function (c) { return c.text; }), rows: rows };
+  }
+  function plainTables() {
+    return [].slice.call(document.querySelectorAll("table")).filter(function (t) { return !t.closest(".q-table-box"); });
+  }
+
+  /* --- Markdown --- */
+  var SKIP = { SCRIPT: 1, STYLE: 1, BUTTON: 1, INPUT: 1, SELECT: 1, TEXTAREA: 1, NOSCRIPT: 1, TEMPLATE: 1, SVG: 1, HEAD: 1, OPTION: 1, CANVAS: 1, IFRAME: 1 };
+  var BLOCK_SEL = "h1,h2,h3,h4,h5,h6,p,div,section,article,main,header,footer,nav,aside,figure,ul,ol,table,pre,blockquote,hr,details,form,fieldset,dl,.q-table-box,.q-chart,.q-stat";
+  function mdCell(s) { return String(s == null ? "" : s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\s*[\r\n]+\s*/g, " "); }
+  function mdTable(header, rows, total) {
+    if (!header.length) return "";
+    var lines = ["| " + header.map(mdCell).join(" | ") + " |", "| " + header.map(function () { return "---"; }).join(" | ") + " |"];
+    var shown = rows.slice(0, MD_ROW_CAP);
+    shown.forEach(function (r) {
+      lines.push("| " + header.map(function (h, i) {
+        var c = r[i] || { text: "", url: "" };
+        return c.url && c.text ? "[" + mdCell(c.text) + "](" + c.url + ")" : mdCell(c.text);
+      }).join(" | ") + " |");
     });
+    var n = total == null ? rows.length : total;
+    if (n > shown.length) lines.push("", "_Mostrando as primeiras " + fmt.number(shown.length) + " de " + fmt.number(n) + " linhas._");
+    return lines.join("\n");
+  }
+  function chartMd(el) {
+    var c = el._qchart, o = c.o || {}, out = [], header, rows = [];
+    if (o.title) out.push("**" + squash(o.title) + "**");
+    if (c.kind === "line") {
+      var series = (o.series || [{ name: o.name || "", data: o.data || o.values || [] }]).map(function (s) {
+        return { name: s.name, pts: (s.data || []).map(function (p, i) {
+          return typeof p === "object" && p ? { x: p.x, y: Number(p.y) } : { x: o.labels ? o.labels[i] : i + 1, y: Number(p) };
+        }) };
+      });
+      var n = Math.max.apply(null, series.map(function (s) { return s.pts.length; }).concat([0]));
+      header = ["Rótulo"].concat(series.map(function (s, i) { return squash(s.name) || (series.length > 1 ? "Série " + (i + 1) : "Valor"); }));
+      for (var i = 0; i < n; i++) {
+        var x = "";
+        series.forEach(function (s) { if (!x && s.pts[i]) x = String(s.pts[i].x == null ? "" : s.pts[i].x); });
+        rows.push([{ text: /^\d{4}-\d{2}-\d{2}$/.test(x) ? fmt.date(x) : x, url: "" }].concat(series.map(function (s) {
+          var p = s.pts[i];
+          return { text: p && isFinite(p.y) ? fmt.number(p.y) : "", url: "" };
+        })));
+      }
+    } else {
+      var data = pairs(o).filter(function (d) { return isNum(d.value); });
+      var total = data.reduce(function (s, d) { return s + Number(d.value); }, 0);
+      var donut = c.kind === "donut";
+      header = donut ? ["Rótulo", "Valor", "Parte"] : ["Rótulo", "Valor"];
+      rows = data.map(function (d) {
+        var row = [{ text: squash(d.label), url: "" }, { text: fmt.number(d.value), url: "" }];
+        if (donut) row.push({ text: total ? fmt.percent(Number(d.value) / total) : "", url: "" });
+        return row;
+      });
+    }
+    if (!rows.length) return out.join("\n\n");
+    out.push(mdTable(header, rows));
+    return out.join("\n\n");
+  }
+  function statMd(el) {
+    function t(sel) { var n = el.querySelector(sel); return n ? squash(n.textContent) : ""; }
+    var label = t(".q-stat-label"), value = t(".q-stat-value"), extra = [t(".q-stat-delta"), t(".q-stat-hint")].filter(Boolean);
+    return "**" + (label || "Valor") + ":** " + (value || "-") + (extra.length ? " (" + extra.join(", ") + ")" : "");
+  }
+  /** Texto corrido (negrito, itálico, código, links, imagens) de um nó; o resto vira texto puro. \u0001 marca quebra de linha. */
+  function mdInline(node) {
+    var s = "";
+    node.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) { s += n.nodeValue; return; }
+      if (n.nodeType !== 1 || SKIP[n.tagName.toUpperCase()] || n.hidden) return;
+      var tag = n.tagName.toLowerCase();
+      if (tag === "br") { s += "\u0001"; return; }
+      var inner = mdInline(n);
+      var core = inner.trim();
+      if (tag === "strong" || tag === "b") s += core ? "**" + core + "**" : "";
+      else if (tag === "em" || tag === "i") s += core ? "_" + core + "_" : "";
+      else if (tag === "code") s += "\x60" + n.textContent.replace(/\x60/g, "'") + "\x60";
+      else if (tag === "a") s += isHttp(n.getAttribute("href")) && core ? "[" + core + "](" + n.getAttribute("href").trim() + ")" : inner;
+      else if (tag === "img") { var src = n.getAttribute("src"); if (/^https:\/\//i.test(String(src || "").trim())) s += "![" + squash(n.getAttribute("alt")) + "](" + src.trim() + ")"; }
+      else s += " " + inner + " "; /* span, div etc. dentro de texto: um espaço evita colar "18/30" no nome ao lado */
+    });
+    return s;
+  }
+  function mdPara(raw) { return raw.replace(/\s+/g, " ").replace(/ ?\u0001 ?/g, "  \n").trim(); }
+  function mdList(el, ordered) {
+    var items = [], k = 0;
+    [].slice.call(el.children).forEach(function (li) {
+      if (li.tagName.toLowerCase() !== "li") return;
+      k++;
+      var marker = ordered ? k + ". " : "- ";
+      var task = !ordered && (li.classList.contains("q-done") || li.querySelector(".q-check")) ? (li.classList.contains("q-done") ? "[x] " : "[ ] ") : "";
+      var lines = mdBlocks(li).join("\n").split("\n");
+      var pad = marker.replace(/./g, " ");
+      items.push(marker + task + (lines[0] || "") + lines.slice(1).map(function (l) { return l ? "\n" + pad + l : ""; }).join(""));
+    });
+    return items.join("\n");
+  }
+  function mdBlocks(parent) {
+    var out = [], buf = "";
+    function flush() { var t = mdPara(buf); buf = ""; if (t) out.push(t); }
+    parent.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) { buf += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      var tag = n.tagName.toLowerCase();
+      if (SKIP[tag.toUpperCase()] || n.hidden) return;
+      if (n._qtable) { flush(); var t = n._qtable; if (t.built) { var m = kitMatrix(t, 1); var tb = mdTable(m.header, m.rows); if (tb) out.push(tb); } return; }
+      if (n._qchart) { flush(); var cm = chartMd(n); if (cm) out.push(cm); return; }
+      if (n.classList.contains("q-stat")) { flush(); out.push(statMd(n)); return; }
+      if (/^h[1-6]$/.test(tag)) { flush(); var ht = mdPara(mdInline(n)); if (ht) out.push("######".slice(0, +tag.charAt(1)) + " " + ht); return; }
+      if (tag === "br") { buf += "\u0001"; return; }
+      if (tag === "hr") { flush(); out.push("---"); return; }
+      if (tag === "ul" || tag === "ol") { flush(); var l = mdList(n, tag === "ol"); if (l) out.push(l); return; }
+      if (tag === "pre") { flush(); out.push("\x60\x60\x60\n" + n.textContent.replace(/\n$/, "") + "\n\x60\x60\x60"); return; }
+      if (tag === "blockquote") { flush(); var q = mdBlocks(n).join("\n\n"); if (q) out.push(q.split("\n").map(function (x) { return x ? "> " + x : ">"; }).join("\n")); return; }
+      if (tag === "table") {
+        flush();
+        var pm = plainMatrix(n, 1), pt = mdTable(pm.header, pm.rows);
+        if (pt) out.push(pt);
+        return;
+      }
+      if (n.matches(BLOCK_SEL) || n.querySelector(BLOCK_SEL)) { flush(); out.push.apply(out, mdBlocks(n)); return; }
+      buf += mdInline({ childNodes: [n] });
+    });
+    flush();
+    return out;
+  }
+  /** O quadro inteiro em Markdown (todas as linhas das tabelas do kit). Se a página registrou Quadro.exportMarkdown(fn), usa o texto dela. */
+  Q.toMarkdown = function () {
+    if (mdFn) {
+      try { var custom = mdFn(); if (typeof custom === "string" && custom.trim()) return custom; } catch (e) { reportError(e); }
+    }
+    var blocks = mdBlocks(document.body);
+    var title = squash(Q.meta && Q.meta.title), desc = squash(Q.meta && Q.meta.description);
+    if (title && !document.querySelector("h1")) {
+      blocks.unshift.apply(blocks, desc ? ["# " + title, desc] : ["# " + title]);
+    }
+    return blocks.join("\n\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  };
+
+  /* --- CSV --- */
+  function csvCell(s) {
+    s = String(s == null ? "" : s);
+    if (/^[=+\-@\t\r]/.test(s) && !/^-[\d.]*\d(,\d+)?$/.test(s)) s = "'" + s;
+    return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function csvLine(cells) { return cells.map(csvCell).join(";"); }
+  /** CSV das tabelas do kit (todas as linhas), com BOM e ";" (o Excel em português abre certo). Sem tabelas do kit, usa as tabelas HTML da página. */
+  Q.toCsv = function () {
+    var ms = liveTables().map(function (t, i) { return kitMatrix(t, i + 1); });
+    if (!ms.length) ms = plainTables().map(function (t, i) { return plainMatrix(t, i + 1); });
+    if (!ms.length) return "";
+    var blocks = ms.map(function (m) {
+      var lines = [];
+      if (ms.length > 1) lines.push(csvLine([m.title]));
+      lines.push(csvLine(m.header));
+      m.rows.forEach(function (r) { lines.push(csvLine(m.header.map(function (h, i) { return (r[i] || {}).text || ""; }))); });
+      return lines.join("\r\n");
+    });
+    return "\uFEFF" + blocks.join("\r\n\r\n") + "\r\n";
+  };
+
+  /** Desliga a paginação e a busca de todas as tabelas do kit (teto de 2.000 linhas cada) para imprimir ou gerar o PDF. */
+  Q.expandAll = function () {
+    var n = 0;
+    liveTables().forEach(function (t) {
+      t.state.all = true; t.state.q = ""; t.state.page = 0;
+      if (t.input) t.input.value = "";
+      t.draw();
+      n++;
+    });
+    return n;
   };
 
   /* ---------- Dados ao vivo e ciclo de vida ---------- */
@@ -525,6 +774,15 @@ export const BOARD_KIT_JS = String.raw`
       Q.data = m.data == null ? {} : m.data;
       if (m.meta) Q.meta = m.meta;
       handlers.slice().forEach(run);
+    } else if (m.type === "quadro:export") {
+      var kind = m.format, reply = { type: "quadro:export-result", requestId: m.requestId, format: kind };
+      try {
+        if (kind === "md") reply.text = Q.toMarkdown();
+        else if (kind === "csv") reply.text = Q.toCsv();
+        else throw new Error("Formato desconhecido: " + kind);
+        reply.ok = true;
+      } catch (err) { reply.ok = false; reply.error = String((err && err.message) || err); delete reply.text; }
+      try { window.parent.postMessage(reply, "*"); } catch (x) {}
     }
   });
   window.addEventListener("error", function (e) { reportError(e.error || e.message); });
@@ -538,5 +796,13 @@ export const BOARD_KIT_JS = String.raw`
     sendHeight();
     try { window.parent.postMessage({ type: "quadro:ready" }, "*"); } catch (x) {}
   });
+  /* Primeiro desenho terminou: depois do load e de dois quadros de animação (com um prazo de reserva, pois aba oculta não anima). */
+  function settle() {
+    var done = false;
+    function ok() { if (!done) { done = true; window.__quadroSettled = true; } }
+    requestAnimationFrame(function () { requestAnimationFrame(ok); });
+    setTimeout(ok, 1500);
+  }
+  if (document.readyState === "complete") settle(); else window.addEventListener("load", settle, { once: true });
 })();
 `;

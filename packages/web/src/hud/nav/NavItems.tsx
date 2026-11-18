@@ -219,21 +219,6 @@ export function CynoItem({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** Aviso dispensável de "onde foi parar" (aparece uma vez por navegador, no topo da barra). */
-export function MovedHint() {
-  const dismissed = useNavGroupsStore((state) => state.movedDismissed);
-  const dismiss = useNavGroupsStore((state) => state.dismissMoved);
-  if (dismissed) return null;
-  return (
-    <aside className="navmoved" aria-label="Aviso" data-testid="nav-moved-hint">
-      <p className="navmoved__text" title="Gastos e Atividade estão em Gestão; Mídia e Cérebro, na Biblioteca; Calendário virou Sua agenda.">O menu foi reorganizado: veja Gestão e Biblioteca.</p>
-      <button type="button" className="navmoved__close" aria-label="Dispensar o aviso" onClick={dismiss} data-testid="nav-moved-dismiss">
-        <NavIcon name="close" />
-      </button>
-    </aside>
-  );
-}
-
 /** As seções de páginas (a mesma lista na barra lateral e na gaveta do celular). */
 export function NavSections({ onNavigate, drawer = false }: { onNavigate?: () => void; drawer?: boolean }) {
   const empty = useWorkspaceView() === "empty";

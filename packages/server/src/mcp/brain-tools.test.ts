@@ -120,6 +120,42 @@ describe("ferramentas MCP do Cérebro: escrita", () => {
     expect((await callTool(tools("maestro"), "save_note", { title: "X", content: "x", kind: "doc", brain: "../fora" })).isError).toBe(true);
   });
 
+  it("kind rule: grava tipo regra com a tag regra, limita a um texto curto e vale só no próprio quarto (o Maestro, em qualquer um)", async () => {
+    const { tools, brainDir } = await setup();
+    const saved = await callTool(tools("lia"), "save_note", { title: "Regra: sem emoji", content: "Nunca use emojis nos textos.", kind: "rule", tags: ["tom"] });
+    expect(saved.isError).toBeFalsy();
+    const content = await readFile(path.join(brainDir("projetox"), "regra-sem-emoji.md"), "utf8");
+    expect(content).toMatch(/^---\ntipo: "regra"\nautor: "Lia"\ndata: "[^"]+"\ntags: \["regra", "tom"\]\n---/);
+    const long = await callTool(tools("lia"), "save_note", { title: "Regra longa", content: "y".repeat(801), kind: "rule" });
+    expect(long).toMatchObject({ isError: true });
+    expect(long.text).toMatch(/few lines/);
+    expect((await callTool(tools("lia"), "save_note", { title: "Regra fora", content: "x", kind: "rule", replace: "projetoy/confidencial.md" })).isError).toBe(true);
+    const byMaestro = await callTool(tools("maestro"), "save_note", { title: "Regra do Y", content: "Sempre cite a fonte.", kind: "rule", brain: "projetoy" });
+    expect(byMaestro.isError).toBeFalsy();
+    expect(await readFile(path.join(brainDir("projetoy"), "regra-do-y.md"), "utf8")).toContain('tags: ["regra"]');
+  });
+
+  it("save_agent_rule: o agente de time grava só para si (sem parâmetro agent); o Maestro para qualquer agente, por id ou nome", async () => {
+    const { tools, runtime } = await setup();
+    const own = await callTool(tools("lia"), "save_agent_rule", { text: "Responda sempre em tópicos." });
+    expect(own.isError).toBeFalsy();
+    expect(own.text).toContain("Rule saved");
+    expect((await runtime.agentRules.read("lia")).content).toBe("- Responda sempre em tópicos.");
+    // Repetida: não duplica.
+    expect((await callTool(tools("lia"), "save_agent_rule", { text: "responda sempre em topicos." })).text).toContain("already has");
+    // `agent` não existe no esquema do time (campo extra é ignorado), e nada vai para outro agente.
+    await callTool(tools("lia"), "save_agent_rule", { text: "Outra regra.", agent: "clara" });
+    expect((await runtime.agentRules.read("clara")).content).toBe("");
+    // Maestro: id, nome exato; obrigatório; desconhecido é erro.
+    expect((await callTool(tools("maestro"), "save_agent_rule", { text: "Nunca use gírias.", agent: "clara" })).isError).toBeFalsy();
+    expect((await runtime.agentRules.read("clara")).content).toBe("- Nunca use gírias.");
+    const clara = (await runtime.state.read()).agents.find((agent) => agent.id === "clara")!;
+    expect((await callTool(tools("maestro"), "save_agent_rule", { text: "Sempre cite a fonte.", agent: clara.name })).isError).toBeFalsy();
+    expect((await runtime.agentRules.read("clara")).content).toBe("- Nunca use gírias.\n- Sempre cite a fonte.");
+    expect((await callTool(tools("maestro"), "save_agent_rule", { text: "Sem agente." })).isError).toBe(true);
+    expect((await callTool(tools("maestro"), "save_agent_rule", { text: "Quem?", agent: "fantasma" })).isError).toBe(true);
+  });
+
   it("parseNotePath só separa cérebro e arquivo (quem confere é o Brain)", () => {
     expect(parseNotePath("projetox/visao-geral")).toEqual({ brainId: "projetox", file: "visao-geral.md" });
     expect(parseNotePath("[[global/_regras.md]]")).toEqual({ brainId: "global", file: "_regras.md" });

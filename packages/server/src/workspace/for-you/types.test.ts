@@ -9,6 +9,7 @@ import {
 } from "@cyno/shared";
 import { afterEach, describe, expect, it } from "vitest";
 import { approvalTypeTool, describeForYouTypes } from "../../mcp/approval-type-tool";
+import { ForYouArchive } from "../../store/for-you-archive";
 import { WriteQueue } from "../../store/write-queue";
 import { call, createTask, createWorkspace, soloTeam, wsApi } from "../../dev/test-api";
 import { EventLog, useTestApp, type TestApp } from "../../dev/test-app";
@@ -44,10 +45,12 @@ async function memoryService(types: ForYouTypeDef[], items: ForYouItem[] = []) {
       events.push(...change.events);
     },
     publish: (event: ServerEvent) => void events.push(event),
+    forYouArchive: undefined as unknown as ForYouArchive,
   };
   const file = path.join(dir, "for-you-types.json");
   const queue = new WriteQueue();
   queues.push(queue);
+  state.forYouArchive = await ForYouArchive.open(path.join(dir, "archive"), queue);
   const service = new ForYouTypesService(types, { file, queue, state, log: { error: () => undefined }, now: () => new Date(AT) });
   const saved = async () => {
     await queue.idle();
@@ -188,6 +191,15 @@ describe("rotas dos tipos", () => {
     await expect(service.merge("comentario", "comentario")).rejects.toMatchObject({ statusCode: 400 });
     await expect(service.merge("outro", "comentario")).rejects.toMatchObject({ statusCode: 409 });
     await expect(service.merge("comentario", "nao-existe")).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("juntar também troca o tipo dos itens que já foram para o arquivo", async () => {
+    const { service, state } = await memoryService(legacyForYouTypes(AT), [item("A-0001", "post")]);
+    await state.forYouArchive.append([{ ...item("A-0002", "post"), status: "aprovado", decidedAt: AT }, { ...item("A-0003", "comentario"), status: "aprovado", decidedAt: AT }]);
+    await service.merge("post", "comentario");
+    const archived = await state.forYouArchive.find({ id: "A-0002" });
+    expect(archived.map((current) => current.type)).toEqual(["comentario"]);
+    expect((await state.forYouArchive.find({ id: "A-0003" }))[0]?.type).toBe("comentario");
   });
 
   it("juntar pela rota devolve o destino", async () => {

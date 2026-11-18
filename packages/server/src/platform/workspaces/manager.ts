@@ -320,6 +320,12 @@ export class WorkspaceManager {
     await rename(this.paths.workspaceDir(id), path.join(this.paths.deletedWorkspacesDir, `${id}-${stamp}`));
   }
 
+  /** O prazo da lista viva das aprovações mudou: varre todos os workspaces carregados agora (devolve quantas aprovações foram para o arquivo). */
+  async sweepApprovals(): Promise<number> {
+    const counts = await Promise.all([...this.runtimes.values()].map((runtime) => runtime.sweepApprovals()));
+    return counts.reduce((total, count) => total + count, 0);
+  }
+
   /** Para todas as filas e espera as gravações pendentes. */
   async close(): Promise<void> {
     await Promise.all([...this.runtimes.values()].map((runtime) => runtime.close()));

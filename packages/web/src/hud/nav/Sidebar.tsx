@@ -8,7 +8,7 @@ import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
 import { NavVersion } from "./NavVersion";
 import { AttentionCounter } from "../AttentionCounter";
-import { CynoItem, MovedHint, NavSections, NotificationsItem, TodayItem } from "./NavItems";
+import { CynoItem, NavSections, NotificationsItem, TodayItem } from "./NavItems";
 import { ResizeHandle } from "./ResizeHandle";
 
 /**
@@ -62,7 +62,6 @@ export function Sidebar() {
         {!empty && <FoldersItem />}
       </div>
       <div className="sidenav__scroll">
-        <MovedHint />
         {!empty && (
           <ul className="navsection__list navsection--top">
             <li>

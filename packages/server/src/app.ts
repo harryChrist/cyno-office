@@ -25,6 +25,8 @@ import { registerAuth, type AuthOptions } from "./platform/auth/routes";
 import { AuthStore } from "./platform/auth/store";
 import { installErrorHandlers } from "./platform/http/errors";
 import { registerHealthRoutes } from "./routes/health";
+import { registerPublicBoardRoute } from "./routes/board-share";
+import { BoardShareStore } from "./workspace/board/share-store";
 import { registerVersionRoutes } from "./routes/version";
 import { VersionService } from "./platform/version/service";
 import type { NpmRunner } from "./platform/version/updater";
@@ -106,6 +108,8 @@ declare module "fastify" {
     /** Instalador dos apps externos da Biblioteca (catálogo, pasta de apps, mini teste). */
     apps: AppInstaller;
     appRunner: AppToolRunner;
+    /** Os links públicos dos Quadros (DATA_DIR/board-shares.json). */
+    boardShares: BoardShareStore;
     /**
      * Retoma os workspaces (filas, Maestro, terminais das CLIs) uma vez só: o mesmo boot do `bootOn`.
      * O index.ts espera depois do listen para sair com erro se o boot falhar.
@@ -352,7 +356,23 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await installer.recover();
   // O mural da plataforma: o que um workspace compartilha para os outros (os workspaces entram por `bind`, depois que o gerenciador abre).
   const mural = await MuralService.openAt(deps.dataDir, now, (error) => app.log.warn({ err: error }, "não foi possível gravar o mural"));
+  const retention = new RetentionService({
+    dataDir: deps.dataDir,
+    claudeProjectsDir: deps.retention?.claudeProjectsDir,
+    activeTaskIds: (workspaceId) =>
+      new Set(manager.find(workspaceId)?.store.snapshot().tasks.filter((task) => isActiveTaskStatus(task.status)).map((task) => task.id) ?? []),
+    forgetLogs: (workspaceId, taskIds) => manager.find(workspaceId)?.agentLog.forget(taskIds, []),
+    now,
+    log: app.log,
+  });
+  await retention.load();
+  // O prazo da lista viva das aprovações mudou: cada workspace carregado varre o arquivo na hora.
+  retention.onChange((settings, before) => {
+    if (settings.approvalsLiveDays !== before.approvalsLiveDays) void manager.sweepApprovals();
+  });
   const manager = await WorkspaceManager.open(deps.dataDir, {
+    // O prazo da lista viva das aprovações vem das configurações da plataforma (lido a cada varredura).
+    approvalsLiveDays: () => retention.settings().approvalsLiveDays,
     library,
     agenda,
     mural,
@@ -528,16 +548,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ],
   });
 
-  const retention = new RetentionService({
-    dataDir: deps.dataDir,
-    claudeProjectsDir: deps.retention?.claudeProjectsDir,
-    activeTaskIds: (workspaceId) =>
-      new Set(manager.find(workspaceId)?.store.snapshot().tasks.filter((task) => isActiveTaskStatus(task.status)).map((task) => task.id) ?? []),
-    forgetLogs: (workspaceId, taskIds) => manager.find(workspaceId)?.agentLog.forget(taskIds, []),
-    now,
-    log: app.log,
-  });
-  await retention.load();
 
   registerHealthRoutes(app, { sceneLive: sceneLiveEnabled() });
   const versionService = new VersionService({
@@ -561,6 +571,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.code(204).send();
   });
   registerWorkspaceRoutes(app, manager);
+  // Links públicos dos Quadros: a rota pública fica fora de /api/w/:ws e só ela é aberta no portão da senha.
+  app.decorate("boardShares", await BoardShareStore.open(path.join(deps.dataDir, "board-shares.json"), now));
+  registerPublicBoardRoute(app, manager, () => app.boardShares, { now: () => now().getTime() });
   registerWorkspaceScopedRoutes(app, manager, now);
   registerLibraryRoutes(app, library);
   registerLibraryAppsRoutes(app, installer, appRunner);

@@ -1,11 +1,9 @@
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
+import { readdir } from "node:fs/promises";
 import { type CardsResponse, type ForYouItem, type MetricsReport, type RetroGenerateResult, type RetroView, type ServerEvent, type StoredRetro } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { call, createTask, soloTeam, wsApi } from "../dev/test-api";
 import { useTestApp, type TestApp } from "../dev/test-app";
 import type { AgentRunner, RunHooks, RunInput, RunOutcome } from "../engines/runner/types";
-import { parseFrontmatter } from "../workspace/brain/frontmatter";
 
 const setupApp = useTestApp();
 const DAY = 24 * 3_600_000;
@@ -38,7 +36,7 @@ async function ownerCutsEmoji(setup: TestApp, clock: ReturnType<typeof fakeClock
 }
 
 describe("API: a retrospectiva (O que aprendemos) de ponta a ponta", () => {
-  it("o dono corta emoji 3 vezes em 3 dias: gerar abre o cartão por molde, o lote o recusa, e só o clique grava a nota no Cérebro do quarto", async () => {
+  it("o dono corta emoji 3 vezes em 3 dias: gerar abre o cartão por molde, o lote o recusa, e só o clique grava a regra nas regras do agente", async () => {
     const clock = fakeClock();
     const setup = await setupApp({ runner: emojiRunner, now: clock.now });
     const roomId = await ownerCutsEmoji(setup, clock, 3);
@@ -69,16 +67,16 @@ describe("API: a retrospectiva (O que aprendemos) de ponta a ponta", () => {
     // O clique: aprovar com o texto editado.
     const approved = await call<ForYouItem>(setup.app, "POST", `${wsApi()}/for-you/${card.id}/decision`, { status: "aprovado", rule: { text: "Não usar emojis nos comentários, nunca." } }, 200);
     expect(approved).toMatchObject({ status: "aprovado", decidedBy: "usuario", rule: { text: "Não usar emojis nos comentários, nunca." } });
-    const [file] = await brainNotes();
-    const note = parseFrontmatter(await readFile(path.join(runtime.brain.dir(roomId), file!), "utf8"));
-    expect(note.frontmatter.tags).toEqual(["regra", "retro"]);
-    expect(note.frontmatter.origem).toBe("retro-2026-W46");
-    expect(note.body).toContain("Não usar emojis nos comentários, nunca.");
+    // Escopo de um agente: a regra vai para as regras DELE, não para uma nota da sala.
+    expect(await brainNotes()).toEqual([]);
+    expect((await runtime.agentRules.read(card.agentId)).content).toBe("- Não usar emojis nos comentários, nunca.");
+    expect(await call(setup.app, "GET", `${wsApi()}/agents/${card.agentId}/rules`)).toMatchObject({ agentId: card.agentId, content: "- Não usar emojis nos comentários, nunca." });
 
     // O relatório guardado (reports/retro/2026-W46.json) e as quatro formas dele.
     const report = await call<StoredRetro>(setup.app, "GET", `${wsApi()}/retro/2026-W46`);
     expect(report).toMatchObject({ kind: "retro", period: "2026-W46" });
     expect(report.rules[0]).toMatchObject({ state: "aprovada", text: "Não usar emojis nos comentários, nunca." });
+    expect(report.rules[0]!.notePath).toBeUndefined();
     const html = await setup.app.inject({ method: "GET", url: `${wsApi()}/retro/latest?format=html` });
     expect(html.statusCode).toBe(200);
     expect(html.headers["content-security-policy"]).toContain("default-src 'none'");

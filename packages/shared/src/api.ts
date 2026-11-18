@@ -5,6 +5,7 @@ import { AVATAR_OPTIONS, SCENE_AVATAR_OPTIONS } from "./avatar";
 import { isReservedRoomId, MAX_ID_LENGTH, SAFE_ID_PATTERN } from "./ids";
 import { ROOM_THEME_IDS } from "./themes";
 import type { BrainContext } from "./brain";
+import { brainOrganizeDecisionSchema, brainOrganizePlanSchema } from "./brain-organize";
 import { FOR_YOU_SOURCE_KINDS, FOR_YOU_SOURCE_LIMITS, FOR_YOU_ACTORS, FOR_YOU_DECISION_STATUSES, FOR_YOU_ID_PATTERN, FOR_YOU_KINDS, FOR_YOU_QUESTION_LIMITS, FOR_YOU_STATUSES, REJECTION_CATEGORIES, type ForYouItem, type ForYouSource } from "./for-you";
 import { BLOCKED_SPANS_MAX, BLOCKED_TYPES, DISPATCH_LIMITS, HANDOFF_INTENTS, HELP_KINDS, PROJECT_BRIEF_MAX, PROJECT_KINDS, PROJECT_LIMITS, PROJECT_ORIGINS, PROJECT_PRIORITIES, PROJECT_STATUSES, PROJECT_STEP_STATUSES, PROJECT_TASK_STATUSES, type Project } from "./projects";
 import { SPRINT_STATUSES, type Sprint } from "./sprints";
@@ -341,7 +342,7 @@ export const forYouItemSchema = z.object({
   why: z.string().max(2000).optional(),
   meta: z.record(z.string(), z.string()),
   text: forYouTextSchema,
-  originalText: forYouTextSchema,
+  originalText: forYouTextSchema.optional(),
   editedByUser: z.boolean(),
   response: z.string().max(4000).optional(),
   kind: z.enum(FOR_YOU_KINDS).optional(),
@@ -355,6 +356,7 @@ export const forYouItemSchema = z.object({
   routineId: z.string().max(16).optional(),
   routine: routineProposalSchema.optional(),
   rule: forYouRuleSchema.optional(),
+  organize: brainOrganizePlanSchema.optional(),
   mediaIds: z.array(z.string().max(16)).max(50).optional(),
   sources: z.array(forYouSourceSchema).max(L.sources).optional(),
   questions: z
@@ -615,6 +617,8 @@ export const forYouDecisionBodySchema = z
     routine: routineApprovalOverridesSchema.optional(),
     /** Cartão "regra", ao aprovar: o texto e o escopo que o dono ajustou (sem isto vale o que o cartão propôs). */
     rule: z.strictObject({ text: z.string().trim().min(1).max(FOR_YOU_RULE_LIMITS.text).optional(), scope: forYouRuleScopeSchema.optional() }).optional(),
+    /** Cartão "organizacao", ao aprovar: as ações da proposta que o dono desmarcou. */
+    organize: brainOrganizeDecisionSchema.optional(),
     /** Cartão "sprint", ao devolver: as tarefas entregues (`ref`) que voltam como retrabalho na sprint ativa. */
     returnRefs: z.array(z.string().max(12)).max(200).optional(),
   })

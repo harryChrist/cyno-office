@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { ACTIVITY_MAESTRO, ACTIVITY_SYSTEM, ACTIVITY_USER, MEDIA_KIND_LABELS, isSafeId, type ActivityEntry } from "@cyno/shared";
+import { ACTIVITY_MAESTRO, ACTIVITY_SYSTEM, ACTIVITY_USER, MEDIA_KIND_LABELS, forYouOriginalText, isSafeId, type ActivityEntry } from "@cyno/shared";
 import { readForYouAnyLayout, readMediaFile, readOfficeFile, readPlanSummaries, readRoutinesFile, readTasksAnyLayout } from "../../store/files";
 import { dataPaths } from "../../store/paths";
 import { taskCostsOf, readUsageDir } from "./cost";
@@ -275,7 +275,7 @@ async function backfillWorkspace(ctx: WorkspaceContext, cutoff: number, seen: Se
         add({ at: item.decidedAt, category: "aprovacao", action: "cancelada", actor: by, summary: `${by === ACTIVITY_USER ? "Você" : by === ACTIVITY_MAESTRO ? "O Maestro" : nameOf(by)} cancelou o pedido: ${label}`, refs, data: { type: item.type, ...(item.cancelReason ? { reason: item.cancelReason } : {}) } });
         continue;
       }
-      const edited = item.editedByUser && item.text !== item.originalText;
+      const edited = item.editedByUser && item.text !== forYouOriginalText(item);
       const verb = item.status === "aprovado" ? "aprovou" : item.status === "rejeitado" ? "rejeitou" : "respondeu";
       const action = item.status === "aprovado" ? "aprovada" : item.status === "rejeitado" ? "rejeitada" : "respondida";
       add({ at: item.decidedAt, category: "aprovacao", action, actor: ACTIVITY_USER, summary: `Você ${verb}: ${label}${edited && item.status === "aprovado" ? " (com a sua edição)" : ""}`, refs, data: { type: item.type, status: item.status, edited } });

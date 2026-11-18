@@ -221,7 +221,7 @@ describe("agentes de CLI de ponta a ponta (CLI falsa + MCP por HTTP)", () => {
     // O GET do agente junta o log da conversa (o painel mostra depois de recarregar).
     const agentLog = (await testApp.app.inject({ method: "GET", url: `${API}/agents/maestro/log` })).json() as { entries: AgentLogEntry[] };
     expect(agentLog.entries.filter((entry) => entry.kind === "chat").map((entry) => (entry as { from: string }).from)).toEqual(["user", "agent"]);
-    // A mensagem chegou sem "Pedido <id>:"; como abre a conversa, leva antes o contexto do Cérebro (briefing e índice, S1).
+    // A mensagem chegou sem "Pedido <id>:"; como abre a conversa, leva antes o contexto do Cérebro (regras e briefing, S1).
     const sent = await jsonLines<{ text: string }>(testApp.messageLog);
     const first = sent.at(-1)!.text;
     expect(first.startsWith(MAESTRO_PRIMER_HEADER)).toBe(true);
@@ -570,7 +570,7 @@ describe("sessão por tarefa, diário e renovação do Maestro (CLI falsa)", () 
     const seeded = (await jsonLines<{ text: string }>(testApp.messageLog)).find((message) => message.text.startsWith("(Conversa nova"))!;
     expect(seeded.text).toContain("## Pedidos em aberto");
     expect(seeded.text).toContain(`Pedido ${request.id}`);
-    expect(seeded.text).toContain("## Cérebro (briefing e índice)");
+    expect(seeded.text).toContain("## Cérebro (regras, briefing e títulos das notas)");
     expect(seeded.text).toContain("\n\n---\n\nResultado da tarefa");
   });
 });
@@ -635,6 +635,7 @@ describe("servidor MCP /mcp", () => {
       "get_metrics",
       "get_report",
       "propose_rule",
+      "propose_brain_cleanup",
       "set_approval_type",
       "list_room_options",
       "create_room",
@@ -647,6 +648,7 @@ describe("servidor MCP /mcp", () => {
       "search_notes",
       "read_note",
       "save_note",
+      "save_agent_rule",
       // Navegador compartilhado (ligado por padrão no workspace e no agente).
       ...BROWSER_TOOLS,
       ...MEDIA_TOOLS,
@@ -654,7 +656,7 @@ describe("servidor MCP /mcp", () => {
       ...MURAL_TOOLS,
     ]);
     expect(maestroTools[1]!.inputSchema.type).toBe("object");
-    expect((await names(claraToken)).map((tool) => tool.name)).toEqual(["get_task", "ask_user", "list_pending_items", "update_pending_item", "cancel_pending_item", "routine_items_list", "routine_item_add", "routine_item_update", "routine_item_stop", "routine_status", "routine_record", "request_help", "send_to_colleague", "submit_result", "report_progress", "request_approval", ...AGENDA_TOOLS, "search_notes", "read_note", "save_note", ...BROWSER_TOOLS, ...MEDIA_TOOLS, ...BOARD_TOOLS, ...MURAL_TOOLS]);
+    expect((await names(claraToken)).map((tool) => tool.name)).toEqual(["get_task", "ask_user", "list_pending_items", "update_pending_item", "cancel_pending_item", "routine_items_list", "routine_item_add", "routine_item_update", "routine_item_stop", "routine_status", "routine_record", "request_help", "send_to_colleague", "submit_result", "report_progress", "request_approval", ...AGENDA_TOOLS, "search_notes", "read_note", "save_note", "save_agent_rule", ...BROWSER_TOOLS, ...MEDIA_TOOLS, ...BOARD_TOOLS, ...MURAL_TOOLS]);
 
     const team = await mcp(testApp, maestroToken, { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "get_team", arguments: {} } });
     const teamText = (team.json() as { result: { content: { text: string }[] } }).result.content[0]!.text;

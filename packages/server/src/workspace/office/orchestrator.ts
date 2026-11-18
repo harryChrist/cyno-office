@@ -512,8 +512,8 @@ export class Orchestrator {
     const team = state.teams.find((candidate) => candidate.id === task?.teamId);
     const room = state.rooms.find((candidate) => candidate.id === task?.roomId);
     if (!task || !agent || !team || !room) throw new Error("tarefa sem agente, time ou sala válida");
-    // O texto da tarefa escolhe as notas curtas mais relevantes (o resto fica para search_notes).
-    const context = await this.deps.brain.buildContext(room.id, task.prompt);
+    // O contexto traz só as regras (as do agente, da sala e do lobby) e o briefing; o texto da tarefa ordena a lista de títulos das outras notas.
+    const context = await this.deps.brain.buildContext(room.id, task.prompt, { id: agent.id, name: agent.name });
     const diary = this.deps.diary && isCliEngine(agentEngine(agent)) ? await this.deps.diary.recent(agent.id).catch(() => "") : "";
     return { task, agent, team, room, context, ...(diary ? { diary } : {}), ...(resumedDecision ? { resumedDecision } : {}), signal };
   }
