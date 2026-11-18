@@ -41,6 +41,13 @@ npm run dev
 - **A senha é obrigatória** (veja "Primeiro acesso" abaixo e "Senha de acesso" em [decisoes-e-limitacoes.md](decisoes-e-limitacoes.md)): sem `auth.json` o app fica fechado até a senha ser criada. A segurança vive no próprio app; não depende de túnel nem de proxy. Para nem expor a porta na rede, use `WEB_HOST=127.0.0.1` e acesse por túnel SSH: `ssh -L 3067:127.0.0.1:3067 servidor` (e abra `http://localhost:3067`).
 - A porta é fixa (`strictPort`). Se a 3067 estiver ocupada, o Vite falha em vez de trocar de porta.
 
+## No Windows
+O Cyno roda em Linux (e em macOS). No Windows há dois caminhos:
+- **Docker Desktop (recomendado):** `npm run docker:up` (ou `docker compose up -d --build`) e abra `http://localhost:3067`. Veja "Com Docker" abaixo.
+- **WSL2 com Ubuntu:** instale o Ubuntu (`wsl --install -d Ubuntu`), clone o projeto **dentro** do Ubuntu e rode os comandos desta página no terminal dele.
+
+O `npm run dev`, o `npm start` e o pm2 **direto no Windows** (PowerShell ou CMD) não funcionam: o server abre terminais e CLIs de Linux para os agentes. O `npm run pm2:start` recusa o Windows com um aviso. Se uma versão anterior deixou o pm2 abrindo e fechando uma janela sem parar (erro `execvpe(/bin/bash) failed` do WSL), pare com `npx pm2 delete maestri-server maestri-web`.
+
 ## Com pm2
 O `ecosystem.config.cjs` já define dois processos: `maestri-server` (o server, sem watch) e `maestri-web` (compila a web e serve a versão compilada com `vite preview`, com o mesmo proxy e porta do dev). Ele lê um `.env` opcional na raiz e põe `~/.local/bin` no `PATH` (é onde ficam `claude` e `agy`).
 ```bash

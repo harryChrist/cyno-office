@@ -4,6 +4,9 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+### Corrigido
+- **pm2 no Windows não entra mais em ciclo:** no Windows, o `npm run pm2:start` chamava o `bash` do WSL, que falhava (`execvpe(/bin/bash) failed`), e o pm2 reiniciava os dois processos a cada 3 segundos, sem parar, abrindo e fechando uma janela. Agora a configuração do pm2 recusa o Windows com um aviso que aponta para o Docker (`npm run docker:up`) ou para o WSL2. Em qualquer sistema, um processo que cai logo depois de subir deixa de ser reiniciado para sempre: depois de algumas tentativas seguidas o pm2 para e marca o processo como "errored". A documentação ganhou a seção "No Windows".
+
 ## [0.2.0] - 2026-11-18
 
 ### Adicionado

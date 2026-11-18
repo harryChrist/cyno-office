@@ -54,7 +54,9 @@ npm install
 npm run dev
 ```
 
-**Em segundo plano com pm2** (`npm i -g pm2`):
+**No Windows:** use o Docker (abaixo) ou rode tudo de dentro do Ubuntu no WSL2. O `npm run dev` e o pm2 direto no Windows não funcionam.
+
+**Em segundo plano com pm2** (`npm i -g pm2`; só Linux e macOS):
 
 ```bash
 npm install
