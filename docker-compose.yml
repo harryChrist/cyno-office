@@ -14,9 +14,6 @@ services:
     environment:
       DATA_DIR: /data
     volumes:
-      - cyno-data:/data           # workspaces, projetos, senha (auth.json)
-      - cyno-home:/home/node      # logins das CLIs (~/.claude, ~/.claude.json, ~/.codex...)
-
-volumes:
-  cyno-data:
-  cyno-home:
+      # pastas do próprio projeto (ambas fora do git e da imagem: .gitignore e .dockerignore)
+      - ./data:/data              # workspaces, projetos, senha (auth.json)
+      - ./data-home:/home/node    # logins das CLIs (~/.claude, ~/.claude.json, ~/.codex...)
