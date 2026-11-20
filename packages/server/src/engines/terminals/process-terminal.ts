@@ -216,6 +216,8 @@ export class ProcessTerminal implements TerminalAgent {
   async dispose(): Promise<void> {
     this.disposed = true;
     await this.stop("Terminal encerrado");
+    // O session.json do primeiro turno ainda pode estar sendo gravado: sem esperar, um desligamento logo depois faria o agente voltar numa conversa nova.
+    await this.sessionWrites;
     this.listeners.clear();
   }
 

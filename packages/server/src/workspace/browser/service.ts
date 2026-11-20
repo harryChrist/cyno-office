@@ -184,7 +184,11 @@ export class BrowserService {
     if (this.closed) throw new BrowserError("The office browser is shutting down");
     this.touch();
     if (this.context) return this.context;
-    this.starting ??= this.start().finally(() => (this.starting = undefined));
+    this.starting ??= this.start().finally(() => {
+      this.starting = undefined;
+      // A ociosidade conta do fim da subida: com o Chromium lento para abrir, o relógio já teria vencido no meio da primeira navegação.
+      this.touch();
+    });
     return this.starting;
   }
 

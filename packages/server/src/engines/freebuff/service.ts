@@ -489,10 +489,15 @@ export class FreebuffService {
     const file = this.file;
     if (!file) return;
     const snapshot = JSON.parse(JSON.stringify(this.data)) as StoreData;
-    await this.queue.enqueue(async () => {
-      await mkdir(path.dirname(file), { recursive: true });
-      await writeJsonAtomic(file, snapshot);
-    });
+    try {
+      await this.queue.enqueue(async () => {
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeJsonAtomic(file, snapshot);
+      });
+    } catch (error) {
+      // Quase todo chamador usa `void this.changed()`: um erro aqui viraria rejeição sem dono (derruba o processo). A hora segue valendo em memória e a próxima mudança grava de novo.
+      this.deps.log?.warn({ err: error }, "engine-sessions.json: não consegui gravar");
+    }
   }
 }
 

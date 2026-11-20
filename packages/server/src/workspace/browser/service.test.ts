@@ -307,10 +307,11 @@ describe("BrowserService (Chromium de verdade)", { timeout: 60_000 }, () => {
   });
 
   it("fecha sozinho depois do tempo ocioso", async () => {
-    const { service } = await makeService({ idleMs: 400 });
+    const { service } = await makeService({ idleMs: 1500 });
     await service.open("clara", `${site.url}/`);
     expect(service.running).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Espera fechar, com folga: em máquina lenta (CI) o Chromium demora para abrir e para fechar.
+    for (let i = 0; i < 100 && service.running; i++) await new Promise((resolve) => setTimeout(resolve, 100));
     expect(service.running).toBe(false);
     expect(service.state().tabs).toEqual([]);
   });

@@ -433,9 +433,16 @@ describe("AppInstaller: desinstalar e atualizar", () => {
   it("não desinstala nem atualiza com operação em andamento", async () => {
     const world = await setup();
     let release!: () => void;
-    world.behavior.steps.venv = () => new Promise<void>((resolve) => (release = resolve));
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => (entered = resolve));
+    world.behavior.steps.venv = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+        entered();
+      });
     await world.installer.install("fake");
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Espera o passo começar de verdade (um tempo fixo falhava em máquina lenta, como a do CI).
+    await reached;
     await expect(world.installer.uninstall("fake")).rejects.toMatchObject({ statusCode: 409 });
     await expect(world.installer.update("fake")).rejects.toMatchObject({ statusCode: 409 });
     release();
