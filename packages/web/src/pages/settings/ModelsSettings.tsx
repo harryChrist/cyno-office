@@ -26,7 +26,7 @@ function SubagentFields({
   const listId = `${testId}-models`;
   return (
     <div className="ui-form__row settings__models-row">
-      <Field label={engine === "claude" ? "Claude Code" : "Antigravity"} hint={engine === "claude" ? "Vazio = o mesmo modelo do agente." : "Gemini Flash é o mais leve; o nível vem no nome."}>
+      <Field label={engine === "claude" ? "Claude Code" : "Antigravity"} hint={engine === "claude" ? "Vazio = o do agente." : "Gemini Flash é o mais leve."}>
         {(props) => (
           <>
             <input
@@ -150,7 +150,7 @@ function DefaultsCard({
           title="Agentes"
           seal={seal}
           state={<StateBadge tone="value">{describeModelChoice(value.agentes)}</StateBadge>}
-          line="Cada agente novo (pelo botão ou pelo Maestro) nasce com isto; depois, o motor/modelo é do agente (painel dele)."
+          line="Todo agente novo nasce com isto. Depois, o modelo é escolhido no painel do agente."
         />
         <div className="ui-form__row settings__models-row">
           <EngineFields values={draft.agentes} onChange={(agentes) => setDraft({ ...draft, agentes })} locked={state.saving} testIdPrefix={`${testId}-agentes`} />
@@ -162,7 +162,7 @@ function DefaultsCard({
           title="Subagentes"
           seal={seal}
           state={<StateBadge tone="value">{subagentsState(value)}</StateBadge>}
-          line="Os subagentes internos das CLIs (cópias focadas do agente) usam isto por padrão; o agente pode pedir outro modelo para uma peça difícil."
+          line="Modelo padrão dos subagentes internos das CLIs. O agente pode pedir outro para uma peça difícil."
         />
         <SubagentFields engine="claude" model={draft.claude.model} effort={draft.claude.effort} onChange={(model, effort) => setDraft({ ...draft, claude: { model, effort } })} testId={`${testId}-sub-claude`} />
         <SubagentFields engine="gemini" model={draft.gemini.model} effort={draft.gemini.effort} onChange={(model, effort) => setDraft({ ...draft, gemini: { model, effort } })} testId={`${testId}-sub-gemini`} />
@@ -188,9 +188,13 @@ function DefaultsCard({
 /** Lembrete comum às duas seções de modelos. */
 function DefaultsNote() {
   return (
-    <p className="settings__card-hint">
-      Padrões são só o valor inicial: o agente guarda o próprio motor, modelo e esforço, e é isso que vale quando ele trabalha. Motor real (Claude Code, Antigravity) roda na sua assinatura.
-    </p>
+    <div>
+      <p className="settings__card-hint">Padrões são só o valor inicial. Cada agente guarda o próprio motor, modelo e esforço.</p>
+      <details className="settings__more">
+        <summary>Saiba mais</summary>
+        <p>O que vale quando o agente trabalha é o que ele guarda. Motor real (Claude Code, Antigravity) roda na sua assinatura.</p>
+      </details>
+    </div>
   );
 }
 
@@ -242,7 +246,7 @@ export function GlobalModelsSettings({ onOpenWorkspaceModels, onLoaded }: { onOp
       {global ? (
         <DefaultsCard
           title="Para workspaces novos"
-          hint="Copiados para os padrões de cada workspace criado daqui para frente. Os workspaces que já existem não mudam."
+          hint="Valem para os workspaces criados daqui para frente. Os que já existem não mudam."
           maestroHint="O Maestro de cada workspace novo nasce com isto."
           seal="plataforma"
           value={global}
@@ -259,7 +263,7 @@ export function GlobalModelsSettings({ onOpenWorkspaceModels, onLoaded }: { onOp
       {global && <CynoModelCard value={cynoChoiceOf(global)} onSaved={() => void api.getModelDefaults().then((response) => apply(response.defaults), () => undefined)} />}
       {onOpenWorkspaceModels && (
         <SeeAlso action="Abrir Modelos e Maestro" onClick={onOpenWorkspaceModels} testId="settings-models-to-workspace">
-          Os agentes novos do workspace aberto usam os padrões dele, não estes.
+          O workspace aberto usa os padrões dele, não estes.
         </SeeAlso>
       )}
     </div>
@@ -297,8 +301,12 @@ function CynoModelCard({ value, onSaved }: { value: ModelChoice; onSaved: () => 
         title="Modelo do Cyno"
         seal="plataforma"
         state={<StateBadge tone="value">{describeModelChoice(value)}</StateBadge>}
-        line="O Cyno é o agente da plataforma (a página inicial). Trocar o modelo vale na próxima vez que ele acordar; trocar o motor faz a conversa dele recomeçar."
+        line="Agente da plataforma (página inicial). Vale na próxima vez que ele acordar."
       />
+      <details className="settings__more">
+        <summary>Saiba mais</summary>
+        <p>Trocar o modelo vale quando o Cyno acordar. Trocar o motor faz a conversa dele recomeçar.</p>
+      </details>
       <div className="ui-form__row settings__models-row">
         <EngineFields values={draft} onChange={setDraft} locked={state.saving} testIdPrefix="settings-models-cyno" role="cyno" />
       </div>
@@ -331,13 +339,13 @@ export function WorkspaceModelsSettings({ workspace, onOpenGlobalModels }: { wor
     <div className="settings__groups" data-testid="settings-models">
       <DefaultsNote />
       <p className="settings__card-hint" data-testid="settings-models-copy-note">
-        Estes padrões foram copiados dos padrões da plataforma quando o workspace foi criado. Mudar aqui não muda a plataforma, e mudar a plataforma não muda este workspace.
+        Copiados da plataforma quando o workspace foi criado. Mudar aqui não muda a plataforma, nem o contrário.
       </p>
       {workspace.models && (
         <DefaultsCard
           title="Padrões deste workspace"
-          hint="Preenchem cada agente novo deste workspace e dizem o modelo dos subagentes. Os agentes que já existem não mudam."
-          maestroHint="Só vale se este workspace ganhar um Maestro novo; para trocar o do Maestro atual, abra o painel dele."
+          hint="Valem para os agentes novos deste workspace. Os que já existem não mudam."
+          maestroHint="Só vale para um Maestro novo. Para o atual, abra o painel dele."
           seal="workspace"
           value={workspace.models}
           onSave={(models) => api.updateWorkspaceModels(workspaceId, models)}
@@ -347,21 +355,28 @@ export function WorkspaceModelsSettings({ workspace, onOpenGlobalModels }: { wor
       <section className="settings__card" data-testid="settings-maestro">
         <header className="settings__card-head">
           <h4 className="settings__card-title">Maestro deste workspace</h4>
-          <p className="settings__card-hint">Vale para o Maestro com motor Claude Code (o terminal interativo dele, com comandos / e Remote Control).</p>
+          <p className="settings__card-hint">Vale para o Maestro com motor Claude Code.</p>
         </header>
         <SettingSwitch
           title="Manter o Maestro sempre rodando"
-          line="Ligado: o terminal do Maestro sobe junto com o servidor, volta na mesma conversa depois de um reinício e nunca para por ociosidade (o Remote Control fica sempre disponível no app do Claude e em claude.ai/code). Desligado: sobe quando você pede algo ou abre o terminal, e para depois do tempo ocioso."
+          line="Ligado, o Maestro sobe com o servidor e nunca para por ociosidade. Desligado, só sobe quando você pede."
           seal="workspace"
           checked={maestroKeepAlive(workspace.maestro)}
           inherited={workspace.maestro?.keepAlive === undefined}
           onToggle={(keepAlive) => api.updateWorkspaceMaestro(workspaceId, { keepAlive })}
           testId="settings-maestro-keep-alive"
         />
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>
+            Ligado: o terminal do Maestro volta na mesma conversa depois de um reinício e o Remote Control fica sempre disponível no app do Claude e em claude.ai/code. Desligado: ele sobe quando você pede algo ou abre o terminal e
+            para depois do tempo ocioso.
+          </p>
+        </details>
         <ResetDefaultButton workspaceId={workspaceId} fields={["maestro.keepAlive"]} own={workspace.maestro?.keepAlive !== undefined} testId="settings-maestro-reset" />
       </section>
       <SeeAlso action="Abrir Modelos padrão" onClick={onOpenGlobalModels} testId="settings-models-to-global">
-        Os padrões dos workspaces criados daqui para frente ficam na área "Da plataforma".
+        Os padrões dos workspaces novos ficam em "Da plataforma".
       </SeeAlso>
     </div>
   );

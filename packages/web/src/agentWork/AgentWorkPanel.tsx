@@ -7,6 +7,8 @@ import { latestChatStatus, useChatStatusStore } from "../store/chatStatusStore";
 import { useMediaStore } from "../store/mediaStore";
 import { useNavStore } from "../store/navStore";
 import { useOfficeStore } from "../store/officeStore";
+import { useScriptsStore } from "../store/scriptsStore";
+import { runningChipLabel, runningOfAgent } from "../pages/scripts/scriptsView";
 import { useTaskFocus } from "../store/taskFocus";
 import { useTerminalsStore } from "../store/terminalsStore";
 import { useViewStore } from "../store/viewStore";
@@ -173,6 +175,7 @@ export function AgentWorkPanel({ agentId, onClose }: { agentId: string; onClose:
   useEffect(() => ensureMedia(), [ensureMedia]);
   const terminalInfo = useTerminalsStore((state) => state.byAgent[agentId]);
   const now = useClock();
+  const runningScripts = useScriptsStore((state) => state.runs);
 
   // Histórico do agente ao abrir (e de novo a cada reconexão).
   useEffect(() => {
@@ -215,8 +218,13 @@ export function AgentWorkPanel({ agentId, onClose }: { agentId: string; onClose:
     close();
     useTaskFocus.getState().open(id);
   };
+  const openScript = (id: string) => {
+    close();
+    useNavStore.getState().go("scripts", id);
+  };
   const actions: TimelineActions = {
     onOpenThread: setChosenThread,
+    onOpenScript: openScript,
     onOpenAgent: (id) => {
       if (id !== agentId) useWorkPanelStore.getState().openAgent(id);
     },
@@ -282,6 +290,7 @@ export function AgentWorkPanel({ agentId, onClose }: { agentId: string; onClose:
 
   // O que ele faz agora, em frase ("📖 Lendo App.tsx"): só enquanto trabalha e com uma ferramenta na mão.
   const phrase = live ? livePhrase(agentEntries, now) : undefined;
+  const agentScripts = useMemo(() => runningOfAgent(runningScripts ?? [], agentId), [runningScripts, agentId]);
   const subtitle = details ? (
     <>
       {details.agent.role}
@@ -296,6 +305,11 @@ export function AgentWorkPanel({ agentId, onClose }: { agentId: string; onClose:
         <span className="work-chip work-chip--phrase" data-testid="work-phrase">
           <span aria-hidden="true">{phrase.icon}</span> {phrase.text}
         </span>
+      )}
+      {agentScripts.length > 0 && (
+        <button type="button" className="work-chip work-chip--script" onClick={() => openScript(agentScripts[0]!.id)} title="Abrir a saída ao vivo na página Scripts" data-testid="agent-scripts-chip">
+          {runningChipLabel(agentScripts.length)}
+        </button>
       )}
       {activeSubagents > 0 && (
         <span className="work-chip work-chip--sub" data-testid="work-subagents">
@@ -355,6 +369,7 @@ export function AgentWorkPanel({ agentId, onClose }: { agentId: string; onClose:
                 <AgentTerminalView
                   entries={agentEntries}
                   agentId={agentId}
+                  onOpenScript={openScript}
                   agentName={name}
                   taskTitle={taskTitle}
                   live={live}

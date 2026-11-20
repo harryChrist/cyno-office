@@ -8,19 +8,25 @@ import { ErrorText } from "../../ui/widgets";
 import { OptionHead, StateBadge } from "./SettingsOption";
 
 const STATE_BADGE: Record<PushState, { tone: "on" | "off" | "warn" | "value"; text: string }> = {
-  insecure: { tone: "warn", text: "Precisa de endereço seguro" },
-  unsupported: { tone: "off", text: "Sem suporte neste navegador" },
-  blocked: { tone: "warn", text: "Bloqueado no navegador" },
-  off: { tone: "off", text: "Desligado neste aparelho" },
-  on: { tone: "on", text: "Ligado neste aparelho" },
+  insecure: { tone: "warn", text: "Precisa de https" },
+  unsupported: { tone: "off", text: "Sem suporte" },
+  blocked: { tone: "warn", text: "Bloqueado" },
+  off: { tone: "off", text: "Desligado" },
+  on: { tone: "on", text: "Ligado" },
 };
 
 const STATE_HINT: Record<PushState, string> = {
-  insecure: "Este endereço não é seguro (http no IP da rede), e o navegador só deixa o aviso com o site fechado funcionar em endereço seguro. Abra o Cyno pelo endereço https do dono (ou por localhost, no próprio computador) e volte aqui.",
-  unsupported: "Este navegador não tem o que é preciso. No iPhone e no iPad, adicione o Cyno à tela de início (Compartilhar, depois Adicionar à Tela de Início) e abra por lá.",
-  blocked: "O navegador está bloqueando as notificações deste site, e um site não consegue desbloquear a si mesmo: quem libera é você, no navegador. O passo a passo está logo abaixo.",
-  off: "Ligar pede a permissão de notificação do navegador, só agora.",
-  on: "Quando algo esperar você e o site não estiver aberto e visível, o aviso chega mesmo com o navegador fechado.",
+  insecure: "Este endereço não é seguro (http no IP da rede).",
+  unsupported: "Este navegador não tem o que é preciso.",
+  blocked: "O navegador bloqueou as notificações deste site. Só você pode liberar.",
+  off: "Ligar pede a permissão de notificação do navegador.",
+  on: "Com o site fechado, o aviso chega mesmo com o navegador fechado.",
+};
+
+/** Detalhe de cada estado, num bloco recolhido (só os estados que têm o que explicar). */
+const STATE_MORE: Partial<Record<PushState, { summary: string; text: string }>> = {
+  insecure: { summary: "Como resolver", text: "O navegador só deixa o aviso com o site fechado funcionar em endereço seguro. Abra o Cyno pelo endereço https do dono (ou por localhost, no próprio computador) e volte aqui." },
+  unsupported: { summary: "No iPhone e no iPad", text: "Adicione o Cyno à tela de início (Compartilhar, depois Adicionar à Tela de Início) e abra por lá." },
 };
 
 const dateLabel = (iso: string): string => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -30,18 +36,19 @@ function PushHelpBlock({ busy, onRetry }: { busy: boolean; onRetry: () => void }
   const help = pushHelpFor(pushDeviceKind(typeof navigator === "undefined" ? "" : navigator.userAgent));
   return (
     <div className="settings__push-help" data-testid="settings-push-help">
-      <p className="settings__card-hint">
-        <strong>{help.title}</strong>
-      </p>
-      {help.why && <p className="settings__card-hint">{help.why}</p>}
-      <ol className="settings__push-steps">
-        {help.steps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-      <p className="settings__card-hint" data-testid="settings-push-optional">
-        {PUSH_OPTIONAL_NOTE}
-      </p>
+      <details className="settings__more">
+        <summary>Como liberar no navegador</summary>
+        <p>
+          <strong>{help.title}</strong>
+        </p>
+        {help.why && <p>{help.why}</p>}
+        <ol className="settings__push-steps">
+          {help.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+        <p data-testid="settings-push-optional">{PUSH_OPTIONAL_NOTE}</p>
+      </details>
       <div className="settings__actions">
         <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={busy} onClick={onRetry} data-testid="settings-push-retry">
           Tentar de novo
@@ -143,16 +150,29 @@ export function PushSettings() {
       <OptionHead
         title="Avisar com o site fechado"
         seal="plataforma"
-        line="O Cyno chama você no celular ou no computador mesmo com nenhuma aba aberta. Só avisa o que espera você, respeitando o que você ligou em “O que avisa”, o silêncio e o “não perturbe”. Com o site aberto e visível, vale o aviso na tela."
+        line="Avisa no celular ou no computador mesmo sem nenhuma aba aberta, só o que espera você."
         state={badge ? <StateBadge tone={badge.tone}>{badge.text}</StateBadge> : null}
       />
+      <details className="settings__more">
+        <summary>O que entra e o que não entra</summary>
+        <p>Respeita o que você ligou em “O que avisa”, o silêncio e o “não perturbe”. Com o site aberto e visível, vale o aviso na tela.</p>
+      </details>
       {state && (
         <p className="settings__card-hint" data-testid="settings-push-hint" data-state={state}>
           {STATE_HINT[state]}
         </p>
       )}
+      {state && STATE_MORE[state] && (
+        <details className="settings__more">
+          <summary>{STATE_MORE[state]?.summary}</summary>
+          <p>{STATE_MORE[state]?.text}</p>
+        </details>
+      )}
       {(state === "off" || state === "on") && (
-        <p className="settings__card-hint">Precisa de endereço seguro (https ou localhost): em http://192.168.x.x o navegador não deixa. No iPhone só funciona com o site adicionado à tela de início.</p>
+        <details className="settings__more">
+          <summary>O que o navegador exige</summary>
+          <p>Endereço seguro (https ou localhost): em http://192.168.x.x o navegador não deixa. No iPhone só funciona com o site adicionado à tela de início.</p>
+        </details>
       )}
       {(state === "blocked" || (state === "off" && notGiven)) && <PushHelpBlock busy={busy} onRetry={() => void retry()} />}
       {canAct && (

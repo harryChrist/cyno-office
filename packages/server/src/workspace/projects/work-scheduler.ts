@@ -362,7 +362,10 @@ export class WorkScheduler {
   private waitNote(agent: Agent, holdsSlot: boolean, load: Load, settings: DispatchSettings): Hold | undefined {
     const by = agentAddress(this.ctx.deps.workspaceId, agent.id);
     const block = this.ctx.deps.availability?.(agent);
-    if (block) return { note: `${agent.name} indisponível (${block.reason === "quota" ? "sem cota" : "motor fora do ar"}): espera voltar`, blocked: { type: block.reason === "quota" ? "cota" : "acesso", by } };
+    if (block) {
+      const quota = block.reason === "quota" || block.reason === "paused";
+      return { note: `${agent.name} indisponível (${block.reason === "paused" ? "pausado no limite do plano" : quota ? "sem cota" : "motor fora do ar"}): espera voltar`, blocked: { type: quota ? "cota" : "acesso", by } };
+    }
     if ((load.perAgent.get(agent.id) ?? 0) >= settings.perAgent) return { note: `Esperando ${agent.name} ficar livre`, blocked: { type: "agente", by } };
     if (!holdsSlot && load.running >= settings.maxRunning) return { note: `Esperando vaga (${settings.maxRunning} tarefa(s) por vez)` };
     return undefined;

@@ -82,7 +82,7 @@ export function EngineCard({ engine, defaults, now, testing, anyTesting, testErr
       )}
       {engine.state === "no_login" && login && (
         <p className="engine-card__warn" data-testid="engine-login-needed">
-          Sem login: rode <code>{login}</code> no seu terminal e entre na conta.
+          Sem login. Rode <code>{login}</code> no seu terminal.
         </p>
       )}
       {lastTest && (
@@ -171,7 +171,7 @@ export function EngineCard({ engine, defaults, now, testing, anyTesting, testErr
             <p className="engine-config__row" data-testid="engine-config-login">
               <span className="engine-config__label">Como entrar</span>
               <span>
-                No seu terminal, rode <code>{login}</code> e siga as instruções (o Cyno nunca toca na sua senha).{" "}
+                Rode <code>{login}</code> no seu terminal. O Cyno nunca toca na sua senha.{" "}
                 <button type="button" className="ui-link" onClick={() => void copyText(login)} data-testid="engine-copy-login">
                   Copiar comando
                 </button>
@@ -267,7 +267,7 @@ function PathForm({ engine, onSaved }: { engine: EngineStatus; onSaved: (engines
       </span>
       <span className="engine-config__hint">
         Em uso: {engine.path ?? "nenhum"}
-        {engine.pathSource ? ` (${engine.pathSource === "config" ? "escolhido aqui" : engine.pathSource === "env" ? "variável de ambiente" : "PATH"})` : ""}. Vale para as próximas subidas dos agentes.
+        {engine.pathSource ? ` (${engine.pathSource === "config" ? "escolhido aqui" : engine.pathSource === "env" ? "variável de ambiente" : "PATH"})` : ""}. Vale a partir da próxima subida dos agentes.
       </span>
       <ErrorText testId="engine-path-error">{state.error}</ErrorText>
     </form>
@@ -377,7 +377,7 @@ export function EnginesPanel({ onLoaded, onOpenModels }: { onLoaded?: (engines: 
   return (
     <div className="settings__groups">
       <div className="settings__toolbar">
-        <p className="settings__card-hint">Os agentes rodam nas CLIs da sua assinatura, em segundo plano. Aqui você vê o que está instalado e funcionando, testa e escolhe o padrão.</p>
+        <p className="settings__card-hint">Veja o que está instalado, teste e escolha o padrão. Os agentes rodam nas CLIs da sua assinatura.</p>
         <button type="button" className="ui-button ui-button--secondary ui-button--small" onClick={refresh} disabled={busy} aria-busy={busy} data-testid="settings-engines-refresh">
           {busy ? "Detectando…" : "Detectar de novo"}
         </button>

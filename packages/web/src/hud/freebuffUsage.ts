@@ -1,4 +1,4 @@
-import { freebuffCostText, openFreebuffSessions, USAGE_STALE_MS, usageAgeLabel, type FreebuffUsageDetail, type SubscriptionUsage, type UsageTone } from "@cyno/shared";
+import { freebuffCostText, freebuffWalletState, openFreebuffSessions, USAGE_STALE_MS, usageAgeLabel, type FreebuffUsageDetail, type SubscriptionUsage, type UsageTone } from "@cyno/shared";
 
 /**
  * O Freebuff no "Uso do plano": a cota dele é em HORAS, não em janelas de tokens. Aqui as horas do dia
@@ -31,6 +31,8 @@ export type FreebuffUsageView = {
   total?: number;
   remaining?: number;
   wallet?: number;
+  /** A cota do dia acabou e o Freebuff já gasta da carteira. */
+  usingWallet: boolean;
   /** 0..100 das horas do dia usadas; null = total desconhecido. */
   percent: number | null;
   tone: UsageTone;
@@ -108,6 +110,7 @@ export function freebuffUsageView(usage: SubscriptionUsage | undefined, now: num
     ...(total !== undefined ? { total } : {}),
     ...(remaining !== undefined ? { remaining } : {}),
     ...(wallet !== undefined ? { wallet } : {}),
+    usingWallet: freebuffWalletState(detail, now).usingWallet,
     percent,
     tone,
     shortText,

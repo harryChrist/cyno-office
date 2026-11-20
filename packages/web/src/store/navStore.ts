@@ -27,6 +27,10 @@ export const EXTRA_PAGES = [
   { id: "biblioteca", label: "Biblioteca" },
   // O navegador do workspace: atalho (botão no Office e no rodapé da barra), sem item de menu.
   { id: "navegador", label: "Navegador dos agentes" },
+  // Os scripts que os agentes rodam (`#/<ws>/scripts[/<id>]`): atalho da barra e dos painéis dos agentes, sem item de menu.
+  { id: "scripts", label: "Scripts dos agentes" },
+  // Os arquivos das pastas do workspace, só leitura (`#/<ws>/arquivos[/<raiz>/<caminho>]`): item do grupo Trabalho, depois do Quadro.
+  { id: "arquivos", label: "Arquivos" },
 ] as const;
 export type PageId = (typeof PAGES)[number]["id"] | (typeof EXTRA_PAGES)[number]["id"];
 
@@ -207,6 +211,12 @@ function staysWithoutWorkspace(page: PageId, sub: string): boolean {
   return page === "configuracoes" || page === "cyno" || page === "agenda" || page === "biblioteca" || (page === "gestao" && sub === "atividade");
 }
 
+/** Quem tem trabalho por salvar (a página Arquivos, com edição aberta) pede para a troca de workspace esperar: devolve false para ficar. */
+let workspaceGuard: ((next: string) => boolean) | null = null;
+export function setWorkspaceGuard(guard: ((next: string) => boolean) | null): void {
+  workspaceGuard = guard;
+}
+
 export const useNavStore = create<NavState>()((set, get) => ({
   ...initialLocation(),
   go: (page, sub = "", replace = false) => {
@@ -218,6 +228,7 @@ export const useNavStore = create<NavState>()((set, get) => ({
   },
   setWorkspace: (workspaceId) => {
     const { page, workspaceId: current } = get();
+    if (current !== null && current !== workspaceId && workspaceGuard && !workspaceGuard(workspaceId)) return;
     // Primeira escolha (sem workspace no endereço) só completa o endereço, sem criar histórico,
     // e mantém o resto dele (ex.: a nota aberta no Cérebro, a seção das Configurações).
     const same = current === null || current === workspaceId;

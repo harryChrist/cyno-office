@@ -225,8 +225,12 @@ async function callTool(name, args) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let iteration = 0;
-const step = (shouldEndTurn, fullResponse, toolCalls = [], toolResults = []) =>
-  log("DEBUG", undefined, { iteration: ++iteration, agentId: "main-agent", shouldEndTurn, duration: 5, fullResponse, toolCalls, toolResults, stepCreditsUsed: 0 });
+// Como o Freebuff de verdade: uma linha "Start agent" com o contexto lido e uma "End agent" com a resposta e os créditos do passo.
+const step = (shouldEndTurn, fullResponse, toolCalls = [], toolResults = []) => {
+  iteration += 1;
+  log("DEBUG", `Start agent fake-agent step ${iteration}`, { iteration, contextTokenCount: 1000 + iteration * 100, systemTokens: 500, messageCount: iteration });
+  log("DEBUG", `End agent fake-agent step ${iteration}`, { iteration, agentId: "main-agent", shouldEndTurn, duration: 5, fullResponse, toolCalls, toolResults, stepCreditsUsed: 0 });
+};
 
 async function turn(text) {
   working = true;

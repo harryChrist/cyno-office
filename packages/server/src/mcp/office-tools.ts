@@ -8,6 +8,7 @@ import type { CliAgentRunner } from "../engines/terminals/cli-runner";
 import { agentTools, type AgentToolsDeps } from "./agent-tools";
 import { brainTools, type BrainToolsDeps } from "./brain-tools";
 import { browserTools, type BrowserToolsDeps } from "./browser-tools";
+import type { ScriptToolsDeps } from "./script-tools";
 import { agendaTools, type AgendaToolsDeps } from "./agenda-tools";
 import { approvalTypeTool, delegationTypeNote, mentionedForYouType, type ApprovalTypeDeps } from "./approval-type-tool";
 import { boardTools, type BoardToolsDeps } from "./board-tools";
@@ -55,6 +56,8 @@ export type OfficeToolsDeps = {
   teamNote?: () => string;
   /** Navegador compartilhado (ferramentas `browser_*`, só para quem tem o navegador liberado). */
   browser?: BrowserToolsDeps;
+  /** Scripts demorados que o servidor roda (`start_script` & cia), só para agentes de time com o terminal ligado. */
+  scripts?: ScriptToolsDeps;
   /** Biblioteca de mídia (`media_*`, e o `mediaIds`/`sources` do request_approval). */
   media?: MediaToolsDeps;
   /** Quadros (`board_*`): páginas e dados para o dono olhar, para o Maestro e os agentes de time. */

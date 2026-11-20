@@ -8,9 +8,9 @@ export const isOneShotEngine = (id: string): id is OneShotEngineId => (ONE_SHOT_
 /** Só o que a documentação do OpenRouter diz (openrouter.ai/docs/api-reference/limits); nenhum número inventado. */
 export const FREE_LIMIT_NOTE = "Os modelos gratuitos têm limite de pedidos: segundo a documentação do OpenRouter, 20 por minuto e 50 por dia (1.000 por dia depois de comprar 10 créditos).";
 
-export const KEY_SAFETY_NOTE = "A chave fica só neste servidor (arquivo com acesso só seu), vai só ao OpenClaw e ao Hermes e nunca volta para esta tela.";
+export const KEY_SAFETY_NOTE = "A chave fica só neste servidor, em arquivo com acesso só seu, vai só ao OpenClaw e ao Hermes e nunca volta para esta tela.";
 
-export const PROGRAM_ACCOUNT_NOTE = "O programa usa a configuração que você fez nele, do jeito dele: assinatura (OAuth), chaves de API de qualquer provedor ou modelos locais. O custo sai de onde o programa estiver ligado; aqui ele só aparece, e quem manda na conta é você.";
+export const PROGRAM_ACCOUNT_NOTE = "O programa usa a configuração que você fez nele: assinatura, chaves de API ou modelos locais. O custo sai de onde ele estiver ligado.";
 
 const GLYPH: Record<EngineStep["state"], string> = { done: "✓", todo: "○", error: "✗", current: "▶" };
 export const stepGlyph = (state: EngineStep["state"]) => GLYPH[state];

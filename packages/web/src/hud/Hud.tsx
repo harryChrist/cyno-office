@@ -98,7 +98,7 @@ export function TopBar() {
             Não foi possível carregar o escritório.
           </p>
         )}
-        {!empty && <AttentionCounter variant="pill" />}
+        {!empty && <AttentionCounter />}
         {!empty && <NotificationsBell />}
         <ActivityButton />
         <SettingsButton />

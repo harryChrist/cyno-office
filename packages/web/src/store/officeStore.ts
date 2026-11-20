@@ -7,6 +7,7 @@ import { useAgentLogStore } from "./agentLogStore";
 import { useAgentUsageStore } from "./agentUsageStore";
 import { useCalendarStore } from "./calendarStore";
 import { isBrowserEvent, useBrowserStore } from "./browserStore";
+import { isScriptEvent, useScriptsStore } from "./scriptsStore";
 import { isBoardEvent, useBoardStore } from "./boardStore";
 import { isMediaEvent, useMediaStore } from "./mediaStore";
 import { useGoalHitsStore } from "./goalHitsStore";
@@ -124,6 +125,7 @@ export const useOfficeStore = create<OfficeStoreState>()((set, get) => ({
     useNoticesStore.getState().reset();
     useConnectorsStore.getState().reset();
     useBrowserStore.getState().reset();
+    useScriptsStore.getState().reset();
     useTerminalsStore.getState().reset();
     useWorkStore.getState().reset();
     useAgentUsageStore.getState().reset();
@@ -200,6 +202,11 @@ export const useOfficeStore = create<OfficeStoreState>()((set, get) => ({
       useBrowserStore.getState().apply(event);
       return;
     }
+    // Scripts dos agentes (a saída em si vem por GET): store próprio.
+    if (isScriptEvent(event)) {
+      useScriptsStore.getState().apply(event);
+      return;
+    }
     const { office, progress, forYou, forYouTypes } = get();
     const next = officeReducer({ office, progress, forYou, forYouTypes }, event);
     if (event.type === "foryou:upserted" || event.type === "foryou:deleted" || event.type === "foryou:archived" || isForYouTypesEvent(event)) forYouEvents++;
@@ -234,6 +241,8 @@ function resyncOutsideSnapshot(snapshot: Extract<ServerEvent, { type: "office:sn
   else void useConnectorsStore.getState().load();
   if (snapshot.browser) useBrowserStore.getState().replace(snapshot.browser);
   else void useBrowserStore.getState().load();
+  if (snapshot.scripts) useScriptsStore.getState().replace(snapshot.scripts.runs);
+  else void useScriptsStore.getState().load();
   // Logs carregados podem ter perdido eventos: os painéis abertos recarregam (sem limpar o que já mostram).
   useAgentLogStore.getState().invalidate();
   // Já estava ao vivo (reconexão sem histórico): o calendário carregado (o período da tela) e o

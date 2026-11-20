@@ -14,26 +14,28 @@ export const AREA_LABELS: Record<SettingsArea, string> = { plataforma: "Da plata
 export const SEAL_LABELS: Record<SettingsSeal, string> = { plataforma: "Toda a plataforma", workspace: "Só este workspace", navegador: "Só neste navegador" };
 
 /**
- * Seções da página, na ordem em que aparecem (cada área em sequência). O id vai no endereço
+ * Seções das Configurações, na ordem em que aparecem (cada área em sequência). Elas se juntam em páginas
+ * (`SETTINGS_PAGES`): o índice lista as páginas e uma página mostra as suas seções. O id vai no endereço
  * (`#/<ws>/configuracoes/motores`). Cuidado: o id de uma seção nunca pode ser o id de uma página
  * (`navegador`, `gestao`...), senão o endereço sem workspace (`#/configuracoes/<seção>`) se confunde.
  */
 export const SETTINGS_SECTIONS = [
   { id: "senha", area: "plataforma", label: "Acesso e senha", hint: "Quem pode abrir o app", seal: "plataforma" },
   { id: "motores", area: "plataforma", label: "Motores", hint: "O que está instalado e funcionando", seal: "plataforma" },
+  { id: "limites", area: "plataforma", label: "Limites do plano", hint: "Pausar o trabalho quando o plano chega perto do fim", seal: "plataforma" },
   { id: "modelos-padrao", area: "plataforma", label: "Modelos padrão", hint: "Maestro, agentes, subagentes e Cyno", seal: "plataforma" },
   { id: "cyno-ajustes", area: "plataforma", label: "Cyno", hint: "Sono, teto de turnos e resumo", seal: "plataforma" },
   { id: "avisos", area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", seal: "plataforma" },
-  { id: "conectores-locais", area: "plataforma", label: "Conectores locais", hint: "Comandos e apps nesta máquina", seal: "plataforma" },
-  { id: "historico", area: "plataforma", label: "Histórico guardado", hint: "Conversas, logs e aprovações antigas", seal: "plataforma" },
   { id: "versao", area: "plataforma", label: "Versão e atualizações", hint: "Qual versão roda e se há novidade", seal: "plataforma" },
+  { id: "historico", area: "plataforma", label: "Histórico guardado", hint: "Conversas, logs e aprovações antigas", seal: "plataforma" },
+  { id: "conectores-locais", area: "plataforma", label: "Conectores locais", hint: "Comandos e apps nesta máquina", seal: "plataforma" },
   { id: "escritorio", area: "plataforma", label: "Aparência", hint: "Sons e bichos do escritório", seal: "navegador" },
   { id: "atalhos", area: "plataforma", label: "Atalhos do teclado", hint: "Abrir o chat do Maestro pelo teclado", seal: "navegador" },
   { id: "modelos", area: "workspace", label: "Modelos e Maestro", hint: "Agentes novos e o Maestro daqui", seal: "workspace" },
-  { id: "acesso", area: "workspace", label: "O que os agentes acessam", hint: "Internet, navegador e terminal", seal: "workspace" },
-  { id: "pastas", area: "workspace", label: "Pastas de trabalho", hint: "Projetos e vaults que os agentes usam", seal: "workspace" },
-  { id: "seguranca", area: "workspace", label: "Segurança na web", hint: "Rede local, domínios e aprovação", seal: "workspace" },
   { id: "distribuicao", area: "workspace", label: "Trabalho em paralelo", hint: "Quantos trabalham ao mesmo tempo", seal: "workspace" },
+  { id: "acesso", area: "workspace", label: "O que os agentes acessam", hint: "Internet, navegador e terminal", seal: "workspace" },
+  { id: "seguranca", area: "workspace", label: "Segurança na web", hint: "Rede local, domínios e aprovação", seal: "workspace" },
+  { id: "pastas", area: "workspace", label: "Pastas de trabalho", hint: "Projetos e vaults que os agentes usam", seal: "workspace" },
   { id: "relatorios", area: "workspace", label: "Relatórios da Gestão", hint: "Resumo do dia e revisão da semana", seal: "workspace" },
   { id: "aprovacoes", area: "workspace", label: "Tipos de aprovação", hint: "O que conta como aprovação", seal: "workspace" },
   { id: "conectores", area: "workspace", label: "Conectores", hint: "Ferramentas externas (MCP)", seal: "workspace" },
@@ -67,6 +69,9 @@ const SECTION_ALIASES: Readonly<Record<string, SettingsSectionId>> = {
   update: "versao",
   armazenamento: "historico",
   motor: "motores",
+  limite: "limites",
+  pausa: "limites",
+  cota: "limites",
   plataforma: "senha",
   workspace: "modelos",
   navegador: "seguranca",
@@ -90,6 +95,43 @@ export function settingsSectionsOf(area: SettingsArea): SettingsSection[] {
 }
 
 /**
+ * Páginas das Configurações: o que o índice lista. Cada uma junta uma ou mais seções de assunto parecido, para
+ * uma seção pequena não virar página sozinha. A página é conhecida pela sua primeira seção (é ela que vai no
+ * endereço); as seções de uma página são vizinhas em `SETTINGS_SECTIONS`.
+ */
+export const SETTINGS_PAGES = [
+  { area: "plataforma", label: "Acesso e senha", hint: "Quem pode abrir o app", sections: ["senha"] },
+  { area: "plataforma", label: "Motores", hint: "O que está instalado e funcionando", sections: ["motores"] },
+  { area: "plataforma", label: "Limites do plano", hint: "Pausar o trabalho quando o plano chega perto do fim", sections: ["limites"] },
+  { area: "plataforma", label: "Modelos e Cyno", hint: "Modelos padrão e o jeito do Cyno", sections: ["modelos-padrao", "cyno-ajustes"] },
+  { area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", sections: ["avisos"] },
+  { area: "plataforma", label: "Sistema", hint: "Versão, histórico guardado e conectores locais", sections: ["versao", "historico", "conectores-locais"] },
+  { area: "plataforma", label: "Aparência e atalhos", hint: "Sons, bichos e teclado deste navegador", sections: ["escritorio", "atalhos"] },
+  { area: "workspace", label: "Agentes e Maestro", hint: "Modelos e quantos trabalham juntos", sections: ["modelos", "distribuicao"] },
+  { area: "workspace", label: "Acesso e segurança", hint: "Internet, navegador, terminal e domínios", sections: ["acesso", "seguranca"] },
+  { area: "workspace", label: "Pastas de trabalho", hint: "Projetos e vaults que os agentes usam", sections: ["pastas"] },
+  { area: "workspace", label: "Relatórios e aprovações", hint: "Resumo do dia, revisão da semana e o que pede o seu OK", sections: ["relatorios", "aprovacoes"] },
+  { area: "workspace", label: "Conectores", hint: "Ferramentas externas (MCP)", sections: ["conectores"] },
+] as const satisfies readonly { area: SettingsArea; label: string; hint: string; sections: readonly [SettingsSectionId, ...SettingsSectionId[]] }[];
+export type SettingsPageInfo = (typeof SETTINGS_PAGES)[number];
+
+/** A página que mostra uma seção. */
+export function settingsPageOf(section: SettingsSectionId): SettingsPageInfo {
+  return SETTINGS_PAGES.find((page) => (page.sections as readonly SettingsSectionId[]).includes(section)) ?? SETTINGS_PAGES[0];
+}
+
+/** As páginas de uma área, na ordem do índice. */
+export function settingsPagesOf(area: SettingsArea): SettingsPageInfo[] {
+  return SETTINGS_PAGES.filter((page) => page.area === area);
+}
+
+/** O selo de uma página: o das suas seções quando todas concordam; senão nenhum (cada seção mostra o seu). */
+export function settingsPageSeal(page: SettingsPageInfo): SettingsSeal | null {
+  const seals = new Set(page.sections.map((id) => settingsSection(id).seal));
+  return seals.size === 1 ? [...seals][0]! : null;
+}
+
+/**
  * Seção aberta a partir do endereço: `#/<ws>/configuracoes/<seção>` ou, sem workspace,
  * `#/configuracoes/<seção>`. Ids antigos viram a seção equivalente; qualquer outra coisa = a primeira.
  */
@@ -101,10 +143,18 @@ export function settingsSectionFromHash(hash: string): SettingsSectionId {
   return SECTION_ALIASES[raw] ?? DEFAULT_SETTINGS_SECTION;
 }
 
-/** Endereço das Configurações numa seção (a primeira seção fica sem sufixo; sem workspace, `#/configuracoes/...`). */
-export function settingsHash(workspaceId: Location["workspaceId"], section: SettingsSectionId): string {
+/**
+ * Endereço das Configurações numa seção (sem workspace, `#/configuracoes/...`). A primeira seção fica sem sufixo,
+ * a não ser com `explicit`: no celular o endereço sem seção é o menu, então abrir a primeira página pede o sufixo.
+ */
+export function settingsHash(workspaceId: Location["workspaceId"], section: SettingsSectionId, explicit = false): string {
   const base = hashFor({ workspaceId, page: "configuracoes" });
-  return section === DEFAULT_SETTINGS_SECTION ? base : `${base}/${section}`;
+  return section === DEFAULT_SETTINGS_SECTION && !explicit ? base : `${base}/${section}`;
+}
+
+/** O endereço diz qual seção abrir (`.../configuracoes/<algo>`)? Sem isso, no celular, abre o menu. */
+export function settingsHashHasSection(hash: string): boolean {
+  return /(^|\/)configuracoes\/[^/?]+/.test(hash.replace(/^#\/?/, ""));
 }
 
 // ---------- Opções (para a busca e o resumo) ----------
@@ -121,6 +171,8 @@ export const SETTINGS_OPTIONS: readonly SettingsOption[] = [
   { id: "motor-freebuff", section: "motores", title: "Freebuff", line: "Terminal de IA gratuito, pago por anúncios (por hora aberta): serve a qualquer papel.", seal: "plataforma", keywords: "motor freebuff codebuff gratuito anúncios horas" },
   { id: "motor-openclaw", section: "motores", title: "OpenClaw", line: "Assistente de código aberto (agent exec): conta pelo OpenRouter ou pela configuração do próprio programa, modelo e Verificar.", seal: "plataforma", keywords: "motor openclaw openrouter chave conta provedor modelo verificar instalado" },
   { id: "motor-hermes", section: "motores", title: "Hermes", line: "Agente de terminal da Nous Research: instalar, conta pelo OpenRouter ou pela configuração do próprio programa, modelo e Verificar.", seal: "plataforma", keywords: "motor hermes nous openrouter instalar chave conta provedor modelo verificar" },
+  { id: "limite-plano", section: "limites", title: "Pausar ao chegar no limite do plano", line: "Ao bater o percentual, os agentes do motor param e voltam sozinhos quando a janela reinicia.", seal: "plataforma", keywords: "limite uso plano pausa pausar cota 5 horas semanal semana percentual 90 reset voltar assinatura" },
+  { id: "limite-carteira", section: "limites", title: "Não gastar a carteira do Freebuff", line: "Para o Freebuff quando a cota do dia acaba, em vez de gastar o saldo da carteira.", seal: "plataforma", keywords: "freebuff carteira wallet saldo horas cota diária" },
   { id: "padrao-maestro", section: "modelos-padrao", title: "Modelo padrão do Maestro", line: "Vale para o Maestro de cada workspace novo.", seal: "plataforma", keywords: "modelo maestro sonnet opus haiku esforço padrão" },
   { id: "padrao-agentes", section: "modelos-padrao", title: "Modelo padrão dos agentes", line: "Cada agente novo nasce com este motor e modelo.", seal: "plataforma", keywords: "modelo agentes sonnet opus haiku gemini esforço padrão" },
   { id: "padrao-subagentes", section: "modelos-padrao", title: "Modelo padrão dos subagentes", line: "As cópias focadas que os agentes chamam usam este modelo.", seal: "plataforma", keywords: "modelo subagentes sonnet haiku gemini flash padrão" },
@@ -181,7 +233,7 @@ export function sectionsWithMatches(matches: readonly SettingsOption[]): Set<Set
   return new Set(matches.map((option) => option.section));
 }
 
-// ---------- Resumo do topo e avisos ----------
+// ---------- Estado no índice e avisos ----------
 
 /** Nome curto de um modelo: "sonnet" -> "Sonnet"; "gemini-3.8-flash-medium" -> "Gemini 3.8 Flash". */
 export function modelShortName(choice: Partial<ModelChoice> | undefined): string {
@@ -194,29 +246,34 @@ export function modelShortName(choice: Partial<ModelChoice> | undefined): string
   return model;
 }
 
-export type SummaryItem = { id: string; label: string; value: string; tone: "ok" | "warn" | "neutral"; section: SettingsSectionId };
+/** Estado curto que vai ao lado do nome da seção no índice (o índice faz as vezes de resumo). */
+export type NavBadge = { text: string; tone: "ok" | "warn" | "neutral" };
 
-/** Os pontos que o dono mais confere. Dado que ainda não chegou vira "…" (neutro), nunca um valor inventado. */
-export function buildSummary(input: {
+/**
+ * O estado das seções que o dono mais confere, em poucas letras: senha ligada ou desligada, quantos motores
+ * funcionam, se há pausa por limite do plano, o modelo padrão e quantos conectores há. Dado que ainda não chegou
+ * não vira selo.
+ */
+export function navBadges(input: {
   auth: { enabled: boolean } | null;
   engines: readonly EngineInfo[] | null;
   defaults: Pick<ModelDefaults, "agentes"> | null;
   connectorCount: number | null;
-}): SummaryItem[] {
+  /** Pausas por limite do plano valendo agora (ausente ou null: ainda não se sabe). */
+  pauses?: number | null;
+}): Partial<Record<SettingsSectionId, NavBadge>> {
   const { auth, engines, defaults, connectorCount } = input;
-  const cli = engines?.filter((info) => info.engine !== "mock") ?? null;
-  return [
-    { id: "senha", label: "Senha", value: auth ? (auth.enabled ? "ligada" : "desligada") : "…", tone: auth ? (auth.enabled ? "ok" : "warn") : "neutral", section: "senha" },
-    {
-      id: "motores",
-      label: "Motores",
-      value: cli ? (cli.length === 0 ? "nenhum" : cli.map((info) => `${info.label} ${info.available ? "✓" : "✗"}`).join(", ")) : "…",
-      tone: cli ? (cli.length > 0 && cli.every((info) => info.available) ? "ok" : "warn") : "neutral",
-      section: "motores",
-    },
-    { id: "modelo", label: "Modelo padrão", value: defaults ? modelShortName(defaults.agentes) : "…", tone: "neutral", section: "modelos-padrao" },
-    { id: "conectores", label: "Conectores", value: connectorCount === null ? "…" : connectorCount === 1 ? "1 conector" : `${connectorCount} conectores`, tone: "neutral", section: "conectores" },
-  ];
+  const badges: Partial<Record<SettingsSectionId, NavBadge>> = {};
+  if (auth) badges.senha = auth.enabled ? { text: "ligada", tone: "ok" } : { text: "desligada", tone: "warn" };
+  if (engines) {
+    const cli = engines.filter((info) => info.engine !== "mock");
+    const working = cli.filter((info) => info.available).length;
+    badges.motores = cli.length === 0 ? { text: "nenhum", tone: "warn" } : { text: `${working} de ${cli.length}`, tone: working === cli.length ? "ok" : "warn" };
+  }
+  if (input.pauses) badges.limites = { text: input.pauses === 1 ? "1 pausa" : `${input.pauses} pausas`, tone: "warn" };
+  if (defaults) badges["modelos-padrao"] = { text: modelShortName(defaults.agentes), tone: "neutral" };
+  if (connectorCount !== null) badges.conectores = { text: String(connectorCount), tone: "neutral" };
+  return badges;
 }
 
 export type SettingsWarning = { id: string; text: string; section: SettingsSectionId };

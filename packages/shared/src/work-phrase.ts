@@ -240,6 +240,11 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   read_note: row("🧠", "ler nota", "Lendo uma nota do Cérebro", "Leu uma nota do Cérebro"),
   save_note: row("🧠", "salvar nota", "Anotando no Cérebro", "Salvou uma nota no Cérebro"),
   save_agent_rule: row("🧠", "salvar regra do agente", "Anotando uma regra de agente", "Salvou uma regra de agente"),
+  // Scripts demorados rodados pelo servidor
+  start_script: row("⚙️", "lançar script", "Lançando um script", "Lançou um script"),
+  check_script: row("⚙️", "acompanhar script", "Acompanhando um script", "Acompanhou um script"),
+  stop_script: row("🛑", "parar script", "Parando um script", "Parou um script"),
+  list_scripts: row("⚙️", "listar scripts", "Conferindo os scripts", "Conferiu os scripts"),
   // Navegador compartilhado
   browser_open: row("🧭", "abrir site", "Abrindo um site", "Abriu um site"),
   browser_tabs: row("🧭", "ver abas", "Conferindo as abas do navegador", "Conferiu as abas do navegador"),
@@ -367,6 +372,7 @@ export function officeToolDoneWith(tool: string, input?: Input): string {
   if (tool === "browser_open" && value("url")) return `Abriu ${hostOfInput(value("url"))}`;
   if (tool === "browser_type" && value("text")) return `Digitou “${clip(value("text"), 40)}”${input?.submit === true ? " e enviou" : ""}`;
   if (tool === "browser_press" && value("key")) return `Apertou ${value("key")}`;
+  if (tool === "start_script" && value("title")) return `Lançou um script: ${clip(value("title"), 60)}`;
   if (tool === "browser_scroll" && value("direction") === "up") return "Rolou a página para cima";
   return officeToolDone(tool);
 }
@@ -381,6 +387,8 @@ function describeOffice(tool: string, input: Input): WorkPhrase {
       return value("url") ? make(known.icon, `Abrindo ${hostOfInput(value("url"))}`, value("url")) : make(known.icon, known.doing);
     case "browser_type":
       return value("text") ? make(known.icon, `Digitando “${clip(value("text"), 28)}”`) : make(known.icon, known.doing);
+    case "start_script":
+      return value("title") ? make(known.icon, `Lançando um script: ${clip(value("title"), 26)}`, value("command")) : make(known.icon, known.doing, value("command"));
     case "browser_press":
       return value("key") ? make(known.icon, `Apertando ${value("key")}`) : make(known.icon, known.doing);
     case "send_to_colleague":

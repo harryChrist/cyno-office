@@ -118,6 +118,6 @@ describe("cartão de motor", () => {
     expect(html).toContain("FORM");
     expect(html).toContain("Editar em Modelos padrão");
     expect(html).toContain("Como entrar");
-    expect(html).toContain("o Cyno nunca toca na sua senha");
+    expect(html).toContain("O Cyno nunca toca na sua senha");
   });
 });

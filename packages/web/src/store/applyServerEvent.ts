@@ -105,6 +105,10 @@ export function applyServerEvent(office: OfficeState, event: ServerEvent): Offic
     case "browser:activity":
       // Navegador compartilhado: store próprio (ver browserStore.ts).
       return office;
+    case "script:updated":
+    case "script:removed":
+      // Scripts dos agentes: store próprio (ver scriptsStore.ts).
+      return office;
     case "project:upserted":
     case "project:deleted":
       // Planos dos pedidos têm store próprio (ver workStore.ts).

@@ -6,6 +6,8 @@ import { ForYouPage } from "./foryou/ForYouPage";
 import { GestaoShell } from "./gestao/GestaoShell";
 import { LibraryPage } from "./library/LibraryPage";
 import { QuadroPage } from "./quadro/QuadroPage";
+import { FilesPage } from "./files/FilesPage";
+import { ScriptsPage } from "./scripts/ScriptsPage";
 import "./pages.css";
 import { SettingsPage } from "./settings/SettingsPage";
 import { WorkPage } from "./work/WorkPage";
@@ -23,6 +25,8 @@ export function Pages() {
       {/* `#/agenda` é a agenda inteira; `#/agenda/<ws>` já vem filtrada nele. */}
       {page === "agenda" && <AgendaPage />}
       {page === "navegador" && <BrowserPage />}
+      {page === "scripts" && <ScriptsPage />}
+      {page === "arquivos" && <FilesPage />}
       {page === "configuracoes" && <SettingsPage />}
       {page === "cyno" && <CynoPage />}
       {page === "biblioteca" && <LibraryPage />}

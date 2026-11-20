@@ -115,6 +115,8 @@ export default defineConfig({
             { name: "bichos-prefs", test: /web[\\/]src[\\/]cena[\\/]bichos[\\/](birdHome|prefs)\.ts/, priority: 5 },
             { name: "cidade", test: /packages[\\/]cena[\\/](client[\\/]src[\\/]world[\\/]city[\\/]|shared[\\/]world[\\/](city|social-labels))/, priority: 4 },
             { name: "cena", test: /packages[\\/]cena[\\/]/, priority: 3 },
+            // O realçador de código da página Arquivos só é baixado quando um arquivo de código abre.
+            { name: "realce", test: /node_modules[\\/]highlight\.js[\\/]/, priority: 2 },
             { name: "vendor", test: /node_modules[\\/]/, priority: 1 },
           ],
         },

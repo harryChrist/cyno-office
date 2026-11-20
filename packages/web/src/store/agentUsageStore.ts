@@ -32,6 +32,7 @@ export function addAgentTurn(summary: AgentUsageResponse, turn: AgentUsageTurn):
     ...(usage
       ? {
           measuredTurns: base.measuredTurns + 1,
+          ...(usage.estimated ? { estimatedTurns: (base.estimatedTurns ?? 0) + 1 } : {}),
           inputTokens: base.inputTokens + usage.inputTokens,
           outputTokens: base.outputTokens + usage.outputTokens,
           cacheReadTokens: base.cacheReadTokens + usage.cacheReadTokens,

@@ -193,7 +193,8 @@ export class UsageHistory {
         const startedAt = state.startedAt;
         state.tag = undefined;
         state.startedAt = undefined;
-        void this.append(this.recordFor(agentId, provider, state, { tag, usage: event.usage, turns: 1, startedAt }));
+        // Tokens estimados (Freebuff) ficam só no "Por agente" ao vivo: o histórico de Gastos guarda o que a CLI mediu.
+        void this.append(this.recordFor(agentId, provider, state, { tag, usage: event.usage?.estimated ? undefined : event.usage, turns: 1, startedAt }));
       } else if (event.type === "turn_cut") {
         // Turno cortado (cancelado, terminal parado ou caído): o gasto parcial entra marcado `partial`, sem contar como turno.
         // O id é fixo por tentativa (agente + tag + início): o mesmo corte, visto duas vezes, grava uma linha só, e a

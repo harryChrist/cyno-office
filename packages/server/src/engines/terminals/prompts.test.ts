@@ -87,6 +87,17 @@ describe("instruções: acesso dos agentes", () => {
     expect(text).not.toContain("rede local");
   });
 
+  it("terminal ligado: comando demorado vai por start_script e se acompanha com check_script; sem terminal a regra não aparece", () => {
+    const withTerminal = agentPrompt(agent(), office(agent()), "Lab", undefined, { access: workspaceAccess({ terminal: true }) });
+    expect(withTerminal).toContain("`start_script(command, title, cwd?, timeout_minutes?)`");
+    expect(withTerminal).toContain("`check_script(id)`");
+    expect(withTerminal).toContain("só então entregue com `submit_result`");
+    const gemini = agent({ engine: "gemini" });
+    expect(agentPrompt(gemini, office(gemini), "Lab", undefined, { access: workspaceAccess({ terminal: true }) })).toContain("NÃO rode no seu terminal (`run_command`)");
+    expect(agentPrompt(agent(), office(agent()), "Lab", undefined, { access: workspaceAccess() })).not.toContain("start_script");
+    expect(agentPrompt(agent({ terminal: false }), office(agent({ terminal: false })), "Lab", undefined, { access: workspaceAccess({ terminal: true }) })).not.toContain("start_script");
+  });
+
   it("Antigravity: com internet usa search_web; sem internet a busca fica proibida nas instruções", () => {
     const gemini = agent({ engine: "gemini" });
     expect(agentPrompt(gemini, office(gemini), "Lab", undefined, { access: workspaceAccess() })).toContain("Para a internet, use `search_web`");

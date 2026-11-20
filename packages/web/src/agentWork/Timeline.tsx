@@ -4,11 +4,13 @@ import { ConnectorIcon } from "../connectors/ConnectorIcon";
 import { connectorForTool } from "../connectors/connectorView";
 import { Markdown } from "../ui/markdown/Markdown";
 import { useConnectorsStore } from "../store/connectorsStore";
+import { useScriptsStore } from "../store/scriptsStore";
 import { plainText } from "../ui/markdown/markdown";
 import { percent } from "../ui/format";
 import { ProgressBar } from "../ui/widgets";
 import { formatDuration } from "./agentLogTimeline";
 import { isBrowserTool, officeToolDoneWith, officeToolName } from "./officeTools";
+import { scriptLaunchedBy } from "./scriptTool";
 import { clockLabel, type RequestItem, type StepItem, type TimelineItem } from "./timeline";
 
 /** O que os itens podem abrir (cada tela decide para onde levar). */
@@ -21,6 +23,8 @@ export type TimelineActions = {
   onOpenAgent?: (agentId: string) => void;
   /** "Abrir": a thread de um subagente (troca a aba). */
   onOpenThread?: (threadId: string) => void;
+  /** "Ver saída ao vivo": a página Scripts, no script que a ferramenta lançou. */
+  onOpenScript?: (scriptId: string) => void;
 };
 
 /** Os links internos de um texto do log não levam a lugar nenhum (só o Cérebro tem notas). */
@@ -240,10 +244,13 @@ function parseInput(json: string | undefined): Record<string, unknown> | undefin
 const TOOL_STATE_LABELS: Partial<Record<StepItem["state"], string>> = { running: "rodando…", ok: "ok", error: "erro" };
 
 /** Ferramenta: nome, resumo, estado e duração; a saída (e o input) abrem no clique. Ferramenta de conector: ícone + "Conector › ferramenta". */
-function ToolLine({ item }: { item: StepItem }) {
+function ToolLine({ item, actions }: { item: StepItem; actions: TimelineActions }) {
   const tool = item.tool!;
   const connectors = useConnectorsStore((state) => state.list);
   const viaConnector = connectorForTool(connectors, tool.name);
+  const scriptId = scriptLaunchedBy(tool.name, tool.output);
+  const script = useScriptsStore((state) => (scriptId ? state.runs?.find((run) => run.id === scriptId) : undefined));
+  const scriptsLoaded = useScriptsStore((state) => state.runs !== null);
   const office = officeToolName(tool.name);
   const browser = office && isBrowserTool(office) ? office : undefined;
   const meta = [TOOL_STATE_LABELS[item.state], tool.durationMs !== undefined ? formatDuration(tool.durationMs) : undefined].filter(Boolean).join(" · ");
@@ -269,6 +276,11 @@ function ToolLine({ item }: { item: StepItem }) {
         )}
         {tool.summary && (!tool.phrase || tool.phrase.icon === "🛠️") && <span className="tl-tool__summary">{tool.summary}</span>}
         {meta && <span className="tl-tool__meta">{meta}</span>}
+        {scriptId && actions.onOpenScript && (script || !scriptsLoaded) && (
+          <button type="button" className="tl-step__link tl-tool__script" onClick={() => actions.onOpenScript!(scriptId)} data-testid="timeline-script-open">
+            {script?.status === "running" ? "Ver saída ao vivo" : "Ver saída"}
+          </button>
+        )}
       </p>
       {(tool.output || tool.input) && (
         <details className="tl-tool__more">
@@ -322,7 +334,7 @@ function StepEntry({ item, now, mode, actions }: { item: StepItem; now: Date; mo
       <div className={`tl-step__body${item.variant === "result" ? " tl-step__body--result" : ""}`}>
         {item.variant === "result" && !terminal && <p className="tl-result__label">Resultado</p>}
         {item.tool ? (
-          <ToolLine item={item} />
+          <ToolLine item={item} actions={actions} />
         ) : rich ? (
           <Markdown source={item.text} resolveWiki={noWiki} headingOffset={3} className="md--compact" />
         ) : (

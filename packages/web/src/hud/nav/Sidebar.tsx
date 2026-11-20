@@ -7,12 +7,11 @@ import { useRailTip } from "./navHooks";
 import { FoldersItem } from "./FoldersNav";
 import { NavFooter } from "./NavFooter";
 import { NavVersion } from "./NavVersion";
-import { AttentionCounter } from "../AttentionCounter";
-import { CynoItem, NavSections, NotificationsItem, TodayItem } from "./NavItems";
+import { CynoItem, NavSections } from "./NavItems";
 import { ResizeHandle } from "./ResizeHandle";
 
 /**
- * Barra lateral do computador: logo e workspace em cima, notificações, as páginas por seção e,
+ * Barra lateral do computador: logo e workspace em cima, "Para você", as páginas por seção e,
  * no rodapé, os agentes e as Configurações. Recolhe para uma coluna de ícones (lembra a escolha).
  */
 export function Sidebar() {
@@ -62,19 +61,6 @@ export function Sidebar() {
         {!empty && <FoldersItem />}
       </div>
       <div className="sidenav__scroll">
-        {!empty && (
-          <ul className="navsection__list navsection--top">
-            <li>
-              <AttentionCounter />
-            </li>
-            <li>
-              <NotificationsItem />
-            </li>
-            <li>
-              <TodayItem />
-            </li>
-          </ul>
-        )}
         <NavSections />
       </div>
       <NavFooter showCollapse />

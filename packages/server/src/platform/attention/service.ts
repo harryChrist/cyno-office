@@ -273,6 +273,29 @@ export class AttentionService {
     });
   }
 
+  /**
+   * Pausa por limite de uso do plano (e o aviso de que voltou): é um alerta do tipo "Limite de uso", que não entra
+   * no número da aba. `ref` é único por pausa (ou por volta); `expiresAt` o tira sozinho (o reset da janela).
+   */
+  raiseUsagePause(input: { ref: string; level: AttentionLevel; text: string; expiresAt?: number }): void {
+    if (this.closed) return;
+    this.raise({
+      kind: "usage",
+      level: input.level,
+      ref: input.ref,
+      scope: "usage-pause",
+      build: () => cutText(input.text),
+      target: targetOf("usage", {}),
+      needsOwnerOverride: false,
+      ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
+    });
+  }
+
+  /** Tira o alerta de uma pausa (a pausa acabou). */
+  clearUsagePause(ref: string): void {
+    this.clearRef(`usage:plataforma:${ref}`, "resolved");
+  }
+
   /** Tira os alertas de orçamento abertos (cuja `ref` passa no filtro; sem filtro, todos). */
   clearBudget(keep?: (ref: string) => boolean): void {
     const prefix = "budget:plataforma:";

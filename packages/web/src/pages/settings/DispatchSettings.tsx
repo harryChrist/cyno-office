@@ -48,8 +48,12 @@ export function DispatchSettings({ workspace }: { workspace: Workspace }) {
             {saved.maxRunning} ao mesmo tempo · {saved.perAgent} por agente
           </StateBadge>
         }
-        line={`Quando você aprova um projeto, o servidor distribui as tarefas sozinho. Aqui vai o limite: com ${saved.maxRunning} ao mesmo tempo, a ${saved.maxRunning + 1}ª tarefa espera uma vaga. Subir deixa o trabalho mais rápido, mas gasta mais da sua assinatura de uma vez; descer deixa mais calmo e mais lento. As tarefas que esperam você não contam.`}
+        line={`Limite de tarefas rodando juntas. Com ${saved.maxRunning}, a ${saved.maxRunning + 1}ª espera uma vaga.`}
       />
+      <details className="settings__more">
+        <summary>Subir ou descer o limite</summary>
+        <p>Quando você aprova um projeto, o servidor distribui as tarefas sozinho. Subir deixa o trabalho mais rápido, mas gasta mais da sua assinatura de uma vez. Descer deixa mais calmo e mais lento. As tarefas que esperam você não contam.</p>
+      </details>
       <ResetDefaultButton workspaceId={workspace.id} fields={["dispatch.maxRunning", "dispatch.perAgent"]} own={!untouched} testId="settings-dispatch-reset" />
       {!showControls && (
         <div>
@@ -78,7 +82,7 @@ export function DispatchSettings({ workspace }: { workspace: Workspace }) {
               </select>
             </label>
             <label htmlFor={`${id}-agent`} className="settings__dispatch-field">
-              <span>Por agente (tarefas de um mesmo agente ao mesmo tempo)</span>
+              <span>Por agente (ao mesmo tempo)</span>
               <select
                 id={`${id}-agent`}
                 className="ui-input"

@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import websocket from "@fastify/websocket";
-import { ENGINE_RETRY_PATH, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EnginesResponse, type ModelDefaults, type OneShotEngineId, type RunMode, type ServerEvent } from "@cyno/shared";
+import { ENGINE_RETRY_PATH, WS_HEARTBEAT_MS, agentEngine, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EnginesResponse, type ModelDefaults, type OneShotEngineId, type RunMode, type ServerEvent } from "@cyno/shared";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 import { AgendaService } from "./platform/agenda/agenda-service";
@@ -40,6 +40,9 @@ import { sceneLiveEnabled } from "./workspace/scene-live/service";
 import { DEFAULT_MAESTRO_TIMINGS, type MaestroTimings } from "./sim/coordinator";
 import { registerMcpRoute } from "./mcp/route";
 import { registerUsageRoutes } from "./routes/usage";
+import { UsageGuard } from "./platform/usage-guard/service";
+import { pauseAppliesTo } from "./platform/usage-guard/rules";
+import { registerUsageGuardRoutes } from "./routes/usage-guard";
 import { registerEngineRoutes, type EngineRoutesDeps } from "./routes/engines";
 import { EngineSettingsStore } from "./platform/models/engine-settings";
 import { registerSettingsRoutes } from "./routes/settings";
@@ -293,7 +296,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return list;
   });
   // Cota esgotada ou CLI ausente: os agentes daquele motor esperam (nunca trocam de motor sozinhos).
-  const availability: EngineAvailability = new EngineAvailability({ usage, engines: () => engines.known(), now });
+  // eslint-disable-next-line prefer-const -- atribuído depois (a pausa por limite de uso precisa da cadeia de atenção e dos workspaces)
+  let guardRef: UsageGuard | undefined;
+  const availability: EngineAvailability = new EngineAvailability({ usage, engines: () => engines.known(), now, paused: (engine, model) => guardRef?.blockFor(engine, model) });
   // "Sua agenda": o tempo do dono, uma só para a plataforma inteira (os agentes de todos os workspaces marcam nela).
   const agendaNames = new Map<string, string>();
   const agenda = await AgendaService.openAt(deps.dataDir, now, { workspaceName: (id) => agendaNames.get(id) });
@@ -463,6 +468,38 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   app.decorate("attention", attention);
 
+  // Pausa por limite de uso do plano: barra o motor pela disponibilidade e fala com os agentes e o Maestro dos workspaces.
+  const usageGuard = await UsageGuard.open({
+    file: platformPaths(deps.dataDir).usageGuardFile,
+    now,
+    usage,
+    refresh: (engine) => (engine === "claude" ? accountUsage : engine === "gemini" ? antigravityUsage : undefined)?.refresh(),
+    onChange: () => availability.notify(),
+    attention,
+    log: app.log,
+    ...(deps.attentionTickMs ? { tickMs: deps.attentionTickMs } : {}),
+    notifier: {
+      paused: (pause, text) => {
+        for (const workspace of manager.list()) {
+          const runtime = manager.find(workspace.id);
+          if (!runtime) continue;
+          for (const agent of runtime.store.snapshot().agents) {
+            // Só quem está trabalhando agora recebe (a nota entra no turno em curso ou no próximo limite de turno).
+            if (pauseAppliesTo(pause, agentEngine(agent), agent.model)) runtime.cliRunner.note(agent.id, text);
+          }
+        }
+      },
+      released: (pause, text) => {
+        for (const workspace of manager.list()) {
+          const runtime = manager.find(workspace.id);
+          if (!runtime || !runtime.store.snapshot().agents.some((agent) => pauseAppliesTo(pause, agentEngine(agent), agent.model))) continue;
+          runtime.cliMaestro.deliverNote({ id: `limite-${Date.now()}`, text, line: "O limite de uso voltou: pausa liberada" });
+        }
+      },
+    },
+  });
+  guardRef = usageGuard;
+
   // O aviso com o site fechado (Web Push): chaves VAPID e aparelhos em data/platform/push.json (0600).
   const pushStore = await PushStore.open(platformPaths(deps.dataDir).pushFile, app.log);
   const push = new PushService({
@@ -577,11 +614,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerWorkspaceScopedRoutes(app, manager, now);
   registerLibraryRoutes(app, library);
   registerLibraryAppsRoutes(app, installer, appRunner);
-  registerWsRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000 });
+  registerWsRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? WS_HEARTBEAT_MS });
   // Cena ao vivo (o servidor simula o Escritório): desligada por padrão (CYNO_SCENE_LIVE=1 liga).
-  registerSceneLiveRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000, enabled: sceneLiveEnabled() });
+  registerSceneLiveRoute(app, manager, { heartbeatMs: deps.wsHeartbeatMs ?? WS_HEARTBEAT_MS, enabled: sceneLiveEnabled() });
   registerMcpRoute(app, manager, mcpTokens, cyno);
-  registerCynoRoutes(app, cyno, { heartbeatMs: deps.wsHeartbeatMs ?? 30_000, attention });
+  registerCynoRoutes(app, cyno, { heartbeatMs: deps.wsHeartbeatMs ?? WS_HEARTBEAT_MS, attention });
   registerAttentionRoutes(app, attention, now);
   registerPushRoutes(app, pushStore, push, now);
   registerAgendaRoutes(app, agenda, manager, now);
@@ -589,6 +626,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerPlatformTodayRoute(app, manager, agenda, now);
   registerPlatformDayStatsRoute(app, manager, now);
   registerUsageRoutes(app, { claude: accountUsage, gemini: antigravityUsage });
+  registerUsageGuardRoutes(app, usageGuard);
   // OpenClaw e Hermes: o passo a passo, o Verificar e a instalação (com confirmação) da tela Motores.
   // eslint-disable-next-line prefer-const -- atribuído logo abaixo (a instalação pede o serviço de volta ao terminar)
   let oneShotEngines: OneShotEngines;
@@ -696,6 +734,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   let booted: Promise<void> | undefined;
   const bootWorkspaces = () => (booted ??= manager.start().then(async () => {
     attention.start();
+    usageGuard.start();
     await budget.start();
   }));
   app.decorate("bootWorkspaces", bootWorkspaces);
@@ -721,6 +760,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await booted?.catch(() => undefined);
     await budget.close();
     await push.close();
+    await usageGuard.close();
     await attention.close();
     await cyno.close();
     await manager.close();

@@ -18,20 +18,20 @@ const KIND_ROWS: { kind: AttentionKind; title: string; line: string }[] = [
   { kind: "approval", title: ATTENTION_KIND_LABELS.approval, line: "Um agente pediu o seu OK em Aprovações." },
   { kind: "question", title: ATTENTION_KIND_LABELS.question, line: "Um agente fez uma pergunta que só você responde." },
   { kind: "plan", title: ATTENTION_KIND_LABELS.plan, line: "Um plano espera o seu OK para começar." },
-  { kind: "sprint", title: ATTENTION_KIND_LABELS.sprint, line: "Uma sprint terminou e a entrega espera a sua conferência." },
+  { kind: "sprint", title: ATTENTION_KIND_LABELS.sprint, line: "Uma sprint terminou e espera a sua conferência." },
   { kind: "routine", title: ATTENTION_KIND_LABELS.routine, line: "Uma proposta de rotina espera o seu OK." },
-  { kind: "help", title: ATTENTION_KIND_LABELS.help, line: "Pedido de acesso, ou ajuda que o Maestro não resolveu em 5 minutos." },
-  { kind: "failed", title: ATTENTION_KIND_LABELS.failed, line: "Uma tarefa falhou. Toca um som discreto, se o som estiver ligado." },
-  { kind: "blocked", title: ATTENTION_KIND_LABELS.blocked, line: "Uma tarefa não roda porque a que ela espera foi cancelada ou falhou: refazer, tirar a dependência ou cancelar." },
+  { kind: "help", title: ATTENTION_KIND_LABELS.help, line: "Pedido de acesso ou ajuda que o Maestro não resolveu em 5 minutos." },
+  { kind: "failed", title: ATTENTION_KIND_LABELS.failed, line: "Uma tarefa falhou." },
+  { kind: "blocked", title: ATTENTION_KIND_LABELS.blocked, line: "Uma tarefa travou porque a que ela espera falhou ou foi cancelada." },
   { kind: "engine_down", title: ATTENTION_KIND_LABELS.engine_down, line: "O terminal de um agente caiu e não voltou." },
-  { kind: "usage", title: ATTENTION_KIND_LABELS.usage, line: "A assinatura chegou a 80%, a 95% ou esgotou. Só avisa, nunca trava." },
-  { kind: "delivery", title: ATTENTION_KIND_LABELS.delivery, line: "Um pedido seu foi entregue. Fica no sino, sem som e sem contar em “Esperando você”; ligue para avisar também na tela." },
+  { kind: "usage", title: ATTENTION_KIND_LABELS.usage, line: "A assinatura chegou a 80%, a 95% ou esgotou. Só avisa." },
+  { kind: "delivery", title: ATTENTION_KIND_LABELS.delivery, line: "Um pedido seu foi entregue. Vem desligado." },
 ];
 
 const PERMISSION_TEXT: Record<NotificationPermissionState, { tone: "on" | "off" | "warn" | "value"; text: string; hint?: string }> = {
   granted: { tone: "on", text: "Permitida" },
   default: { tone: "value", text: "Ainda não pedida" },
-  denied: { tone: "warn", text: "Bloqueada no navegador", hint: "Libere nas configurações do site (o cadeado ao lado do endereço) e volte aqui." },
+  denied: { tone: "warn", text: "Bloqueada", hint: "Libere nas configurações do site (o cadeado ao lado do endereço) e volte aqui." },
   unsupported: { tone: "off", text: "Sem suporte", hint: "Este navegador não mostra notificações." },
 };
 
@@ -90,7 +90,7 @@ export function AttentionSettings() {
         <SettingSwitch
           title="Aviso na tela"
           seal="navegador"
-          line="Quando algo passa a esperar você, aparece um aviso com o botão “Responder”, em qualquer página. Ele só leva até o item: nunca aprova nada sozinho."
+          line="Um aviso com o botão “Responder”, em qualquer página. Ele só leva até o item e nunca aprova nada."
           checked={device.toasts}
           onToggle={async (on) => setDevice({ toasts: on })}
           testId="settings-attn-toasts"
@@ -101,11 +101,15 @@ export function AttentionSettings() {
         <SettingSwitch
           title="Som dos avisos"
           seal="navegador"
-          line="Um sino curto quando algo espera você, que toca mesmo com a aba escondida. Desligado por padrão: o navegador só libera o som depois de um clique seu."
+          line="Um sino curto quando algo espera você, mesmo com a aba escondida."
           checked={device.sound}
           onToggle={toggleSound}
           testId="settings-attn-sound"
         />
+        <details className="settings__more">
+          <summary>Por que vem desligado</summary>
+          <p>O navegador só libera o som depois de um clique seu. Ao ligar, toca uma amostra.</p>
+        </details>
         <div className="settings__switches">
           <label className="settings__field">
             <span>Volume · {volume}%</span>
@@ -133,9 +137,9 @@ export function AttentionSettings() {
               data-testid="settings-attn-volume"
             />
           </label>
-          <SettingSwitch title="Quando algo espera você" seal="navegador" line="O sino para aprovação, pergunta, plano, pedido de ajuda e terminal que caiu." checked={device.soundKinds.pedidos} disabled={!device.sound} onToggle={async (on) => setDevice({ soundKinds: { pedidos: on } })} testId="settings-attn-sound-pedidos" />
+          <SettingSwitch title="Quando algo espera você" seal="navegador" line="Aprovação, pergunta, plano, ajuda e terminal que caiu." checked={device.soundKinds.pedidos} disabled={!device.sound} onToggle={async (on) => setDevice({ soundKinds: { pedidos: on } })} testId="settings-attn-sound-pedidos" />
           <SettingSwitch title="Quando uma tarefa falha" seal="navegador" line="Um som mais baixo e curto, diferente do sino." checked={device.soundKinds.falhas} disabled={!device.sound} onToggle={async (on) => setDevice({ soundKinds: { falhas: on } })} testId="settings-attn-sound-falhas" />
-          <SettingSwitch title="Limite de uso e outros avisos" seal="navegador" line="Aviso de 80%, 95% e esgotado da assinatura." checked={device.soundKinds.informativos} disabled={!device.sound} onToggle={async (on) => setDevice({ soundKinds: { informativos: on } })} testId="settings-attn-sound-info" />
+          <SettingSwitch title="Limite de uso e outros avisos" seal="navegador" line="80%, 95% e esgotado da assinatura." checked={device.soundKinds.informativos} disabled={!device.sound} onToggle={async (on) => setDevice({ soundKinds: { informativos: on } })} testId="settings-attn-sound-info" />
         </div>
       </section>
 
@@ -143,22 +147,35 @@ export function AttentionSettings() {
         <SettingSwitch
           title="Notificação do navegador"
           seal="navegador"
-          line="Com a aba escondida, o navegador mostra uma notificação; ao clicar nela, o Cyno volta e abre o item. No celular funciona com o site aberto em segundo plano."
+          line="Com a aba escondida, o navegador notifica e, ao clicar, o Cyno abre o item."
           checked={device.browserNotifications && permission === "granted"}
           disabled={permission === "unsupported"}
           onToggle={toggleNotifications}
           testId="settings-attn-notify"
         />
         <p className="settings__card-hint" data-testid="settings-attn-permission">
-          Permissão do navegador: <StateBadge tone={permissionInfo.tone}>{permissionInfo.text}</StateBadge>
-          {permissionInfo.hint ? ` ${permissionInfo.hint}` : ""}
+          Permissão: <StateBadge tone={permissionInfo.tone}>{permissionInfo.text}</StateBadge>
         </p>
+        {permissionInfo.hint && (
+          <details className="settings__more">
+            <summary>{permission === "denied" ? "Como liberar no navegador" : "Saiba mais"}</summary>
+            <p>{permissionInfo.hint}</p>
+          </details>
+        )}
+        <details className="settings__more">
+          <summary>No celular</summary>
+          <p>Funciona com o site aberto em segundo plano. Para avisar com o site fechado, use o cartão abaixo.</p>
+        </details>
       </section>
 
       <PushSettings />
 
       <section className="settings__card" data-testid="settings-attention-kinds">
-        <OptionHead title="O que avisa" seal="plataforma" line="Desligar um tipo tira o aviso, o som e a notificação dele. O alerta continua no número e no sino." />
+        <OptionHead title="O que avisa" seal="plataforma" line="Desligar um tipo tira aviso, som e notificação. O sino continua contando." />
+        <details className="settings__more">
+          <summary>Como cada tipo se comporta</summary>
+          <p>Tarefa que falhou toca um som discreto, se o som estiver ligado. Tarefa travada pode ser refeita, ficar sem a dependência ou ser cancelada. Pedido entregue fica só no sino, sem som e sem contar em “Esperando você”; ligue para avisar também na tela.</p>
+        </details>
         <div className="settings__switches">
           {KIND_ROWS.map((row) => (
             <SettingSwitch key={row.kind} title={row.title} seal="plataforma" line={row.line} checked={row.kind === "delivery" ? account.kinds.delivery === true : account.kinds[row.kind] !== false} onToggle={(on) => save({ kinds: { ...account.kinds, [row.kind]: on } })} testId={`settings-attn-kind-${row.kind}`} />
@@ -167,7 +184,7 @@ export function AttentionSettings() {
       </section>
 
       <section className="settings__card" data-testid="settings-attention-mute">
-        <OptionHead title="Silenciar um workspace" seal="plataforma" line="Sem aviso, som nem notificação daquele workspace, pelo tempo que você escolher. Os alertas dele continuam contando." />
+        <OptionHead title="Silenciar um workspace" seal="plataforma" line="Sem aviso, som nem notificação dele pelo tempo escolhido. Os alertas continuam contando." />
         {workspaces.length === 0 ? (
           <p className="settings__card-hint">Ainda não há workspace.</p>
         ) : (
@@ -204,7 +221,7 @@ export function AttentionSettings() {
       </section>
 
       <section className="settings__card" data-testid="settings-attention-dnd">
-        <OptionHead title="Não perturbe" seal="plataforma" line="Pausa todos os avisos por um tempo, em todos os aparelhos. O número e o sino continuam certos." state={<StateBadge tone={account.dndUntil && Date.parse(account.dndUntil) > now ? "warn" : "off"}>{dndText(account, now, (iso) => clockLabel(iso, now))}</StateBadge>} />
+        <OptionHead title="Não perturbe" seal="plataforma" line="Pausa todos os avisos por um tempo, em todos os aparelhos." state={<StateBadge tone={account.dndUntil && Date.parse(account.dndUntil) > now ? "warn" : "off"}>{dndText(account, now, (iso) => clockLabel(iso, now))}</StateBadge>} />
         <div className="settings__actions">
           <button type="button" className="ui-button ui-button--secondary ui-button--small" onClick={() => void save({ dndUntil: dndChoice("1h", Date.now()) })} data-testid="settings-attn-dnd-1h">
             Por 1 hora

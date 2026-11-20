@@ -1,4 +1,4 @@
-import { engineBlock, quotaBlock, type AgentEngine, type EngineBlock, type EngineInfo, type FreebuffAgentRef } from "@cyno/shared";
+import { engineBlock, isCliEngine, quotaBlock, type AgentEngine, type EngineBlock, type EngineInfo, type FreebuffAgentRef } from "@cyno/shared";
 import type { SubscriptionUsageTracker } from "./subscription-usage";
 
 /** Maior espera de um setTimeout (~24,8 dias). */
@@ -11,6 +11,8 @@ export type EngineAvailabilityDeps = {
   /** Motores já detectados (sem detecção ainda = undefined: nada fica indisponível por isso). */
   engines?: () => readonly EngineInfo[] | undefined;
   now: () => Date;
+  /** Pausa por limite de uso do plano que o dono configurou (platform/usage-guard): o motor/modelo está pausado agora? */
+  paused?: (engine: AgentEngine, model?: string) => EngineBlock | undefined;
 };
 
 /**
@@ -44,7 +46,9 @@ export class EngineAvailability {
    */
   block(engine: AgentEngine | undefined, model?: string, agent?: FreebuffAgentRef): EngineBlock | undefined {
     const block = engineBlock(engine, { usage: this.deps.usage.snapshot(), engines: this.deps.engines?.(), now: this.deps.now().getTime() }, model, agent);
-    return block?.reason === "quota" && engine && this.retrying.has(engine) ? undefined : block;
+    const open = block?.reason === "quota" && engine && this.retrying.has(engine) ? undefined : block;
+    // Sem outro motivo: a pausa por limite de uso do plano (o simulado nunca pausa; "Tentar agora" não a ignora, só o dono libera).
+    return open ?? (engine && isCliEngine(engine) ? this.deps.paused?.(engine, model) : undefined);
   }
 
   /**

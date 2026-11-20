@@ -26,8 +26,12 @@ export function ConnectorsSettings() {
         </h4>
         <p className="settings__card-hint">
           {count ? `${agents === 0 ? "Nenhum agente usa" : agents === 1 ? "1 agente usa" : `${agents} agentes usam`} o que foi liberado. ` : ""}
-          Os conectores (servidores MCP) ficam na Biblioteca, que é da plataforma inteira: lá você vê todos, libera cada um a workspaces e agentes e enxerga quem usa o quê.
+          Os conectores ficam na Biblioteca. Lá você libera cada um a workspaces e agentes.
         </p>
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>A Biblioteca é da plataforma inteira: mostra todos os conectores (servidores MCP) e quem usa o quê.</p>
+        </details>
         <div className="ui-actions">
           <button type="button" className="ui-button" onClick={() => openLibrary({ tab: "conectores", workspaceId })} data-testid="settings-connectors-open-library">
             Abrir na Biblioteca

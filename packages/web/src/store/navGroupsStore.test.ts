@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { savedCollapsedGroups, useNavGroupsStore } from "./navGroupsStore";
+import { savedGroupChoices, useNavGroupsStore } from "./navGroupsStore";
 
 /** localStorage de mentira (o ambiente dos testes é node). */
 function fakeStorage(seed: Record<string, string> = {}): Storage {
@@ -19,30 +19,37 @@ function fakeStorage(seed: Record<string, string> = {}): Storage {
 describe("navGroupsStore", () => {
   beforeEach(() => {
     vi.stubGlobal("window", { localStorage: fakeStorage() });
-    useNavGroupsStore.setState({ collapsed: [] });
+    useNavGroupsStore.setState({ choices: {} });
   });
 
-  it("os grupos começam abertos", () => {
-    expect(useNavGroupsStore.getState().isOpen("nav-gestao")).toBe(true);
-    expect(savedCollapsedGroups()).toEqual([]);
+  it("sem escolha nenhuma, cada grupo segue a página atual", () => {
+    expect(useNavGroupsStore.getState().choices["nav-gestao"]).toBeUndefined();
+    expect(savedGroupChoices()).toEqual({});
   });
 
-  it("recolher e abrir de novo, lembrando por navegador", () => {
-    const { toggle } = useNavGroupsStore.getState();
-    toggle("nav-gestao");
-    expect(useNavGroupsStore.getState().isOpen("nav-gestao")).toBe(false);
-    expect(useNavGroupsStore.getState().isOpen("nav-biblioteca")).toBe(true);
-    expect(savedCollapsedGroups()).toEqual(["nav-gestao"]);
-    toggle("nav-gestao");
-    expect(useNavGroupsStore.getState().isOpen("nav-gestao")).toBe(true);
-    expect(savedCollapsedGroups()).toEqual([]);
+  it("abrir e fechar, lembrando por navegador", () => {
+    const { choose } = useNavGroupsStore.getState();
+    choose("nav-gestao", true);
+    choose("nav-biblioteca", false);
+    expect(useNavGroupsStore.getState().choices).toEqual({ "nav-gestao": true, "nav-biblioteca": false });
+    expect(savedGroupChoices()).toEqual({ "nav-gestao": true, "nav-biblioteca": false });
   });
 
-  it("valor salvo estragado vira tudo aberto", () => {
-    vi.stubGlobal("window", { localStorage: fakeStorage({ "cyno:nav-groups-collapsed": "{nao-json" }) });
-    expect(savedCollapsedGroups()).toEqual([]);
-    vi.stubGlobal("window", { localStorage: fakeStorage({ "cyno:nav-groups-collapsed": '{"a":1}' }) });
-    expect(savedCollapsedGroups()).toEqual([]);
+  it("esquecer a escolha de um grupo", () => {
+    const { choose, clear } = useNavGroupsStore.getState();
+    choose("nav-gestao", false);
+    clear("nav-gestao");
+    expect(useNavGroupsStore.getState().choices).toEqual({});
+    expect(savedGroupChoices()).toEqual({});
+  });
+
+  it("valor salvo estragado vira nenhuma escolha", () => {
+    vi.stubGlobal("window", { localStorage: fakeStorage({ "cyno:nav-groups": "{nao-json" }) });
+    expect(savedGroupChoices()).toEqual({});
+    vi.stubGlobal("window", { localStorage: fakeStorage({ "cyno:nav-groups": '["a"]' }) });
+    expect(savedGroupChoices()).toEqual({});
+    vi.stubGlobal("window", { localStorage: fakeStorage({ "cyno:nav-groups": '{"a":true,"b":1}' }) });
+    expect(savedGroupChoices()).toEqual({ a: true });
   });
 
   it("sem armazenamento, funciona só na sessão", () => {
@@ -56,7 +63,7 @@ describe("navGroupsStore", () => {
         },
       },
     });
-    useNavGroupsStore.getState().toggle("nav-gestao");
-    expect(useNavGroupsStore.getState().isOpen("nav-gestao")).toBe(false);
+    useNavGroupsStore.getState().choose("nav-gestao", true);
+    expect(useNavGroupsStore.getState().choices["nav-gestao"]).toBe(true);
   });
 });

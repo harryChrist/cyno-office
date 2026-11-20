@@ -1164,6 +1164,23 @@
   border-color: transparent;
 }
 
+/* Chip de scripts rodando: botão que abre a página Scripts. */
+.work-chip--script {
+  font-family: inherit;
+  color: var(--ui-info);
+  cursor: pointer;
+  background: var(--ui-info-bg);
+  border-color: transparent;
+}
+
+.work-chip--script:hover {
+  filter: brightness(1.2);
+}
+
+.tl-tool__script {
+  margin-left: 4px;
+}
+
 .work-head__buttons {
   display: flex;
   align-items: center;

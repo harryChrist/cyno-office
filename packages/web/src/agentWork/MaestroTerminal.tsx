@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { clipboardKey, TerminalSocket, terminalSocketUrl, terminalStatusLabel, type TerminalConnection } from "./maestroTerminalClient";
 
 /** Cor de um token do tema (as variáveis --ui-* do app), com reserva. */
-function token(name: string, fallback: string): string {
+export function token(name: string, fallback: string): string {
   try {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
   } catch {
@@ -16,7 +16,7 @@ function token(name: string, fallback: string): string {
 }
 
 /** Tema escuro do xterm com as cores do app (fundo do painel, texto, destaque roxo). */
-function xtermTheme(): ITheme {
+export function xtermTheme(): ITheme {
   return {
     background: token("--ui-bg", "#0b0d1a"),
     foreground: token("--ui-text", "#e7e9f6"),

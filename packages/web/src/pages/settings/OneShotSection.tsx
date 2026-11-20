@@ -157,7 +157,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
             <span>Cercar os arquivos do agente</span>
           </label>
           <p className={`oneshot__fence-state${engine.fence.active ? " oneshot__fence-state--on" : ""}`} data-testid="oneshot-fence-state">
-            {engine.fence.active ? "Cerca ativa: o agente só alcança a pasta dele." : !engine.fence.available ? "Sem cerca neste computador." : engine.fence.enabled ? "Sem cerca neste motor e nesta conta." : "Cerca desligada: o agente alcança o que o seu usuário alcança."}
+            {engine.fence.active ? "Ativa: o agente só alcança a pasta dele." : !engine.fence.available ? "Indisponível neste computador." : engine.fence.enabled ? "Sem cerca neste motor e nesta conta." : "Desligada: o agente alcança o que o seu usuário alcança."}
             {!engine.fence.active && engine.fence.reason ? ` ${engine.fence.reason}` : ""}
             {engine.fence.active && engine.fence.abi ? ` (Landlock, ABI ${engine.fence.abi})` : ""}
           </p>
@@ -285,7 +285,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                 </div>
                 {!programMode && (
                   <>
-                    <p className="oneshot__hint">O jeito mais fácil: a chave fica isolada na pasta do Cyno e vai ao programa só por variável de ambiente, em cada turno.</p>
+                    <p className="oneshot__hint">O jeito mais fácil. A chave fica isolada na pasta do Cyno.</p>
                     <p className="oneshot__detail" data-testid="oneshot-key-line">
                       {keyLine(engine.openrouterKey, now)}
                     </p>
@@ -326,7 +326,12 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                         {keyWarning}
                       </p>
                     )}
-                    <p className="oneshot__hint">{KEY_SAFETY_NOTE} Gere a chave em openrouter.ai › Keys.</p>
+                    <details className="settings__more">
+                      <summary>Segurança da chave</summary>
+                      <p>
+                        {KEY_SAFETY_NOTE} Ela vai ao programa só por variável de ambiente, em cada turno. Gere a chave em openrouter.ai, em Keys.
+                      </p>
+                    </details>
                   </>
                 )}
                 {programMode && setup && (
@@ -372,10 +377,13 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                           </p>
                         )}
                         {engine.program.missing && engine.program.missing.length > 0 && <p className="oneshot__detail">Usado pelo programa, mas sem conta ligada: {engine.program.missing.join(", ")}.</p>}
-                        <p className="oneshot__hint">
-                          Lido pelo comando de estado do próprio programa (<code>{engine.program.command}</code>), só o nome, o tipo e a contagem: nenhum segredo é lido nem mostrado.
-                          {engine.program.verified ? "" : " Formato lido do código-fonte, não verificado com o programa de verdade."}
-                        </p>
+                        <details className="settings__more">
+                          <summary>Como isso é lido</summary>
+                          <p>
+                            Lido pelo comando de estado do próprio programa (<code>{engine.program.command}</code>), só o nome, o tipo e a contagem: nenhum segredo é lido nem mostrado.
+                            {engine.program.verified ? "" : " Formato lido do código-fonte, não verificado com o programa de verdade."}
+                          </p>
+                        </details>
                       </div>
                     ) : (
                       <p className="oneshot__detail">Ainda não li o estado do programa.</p>
@@ -397,7 +405,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                         </li>
                       ))}
                     </ul>
-                    <p className="oneshot__hint">O Cyno não roda esses comandos de login por conta própria e não lê os segredos que o programa guarda.</p>
+                    <p className="oneshot__hint">O Cyno não roda esses comandos nem lê os segredos do programa.</p>
                     <details className="oneshot__more">
                       <summary>O que o Cyno escreve nesta forma</summary>
                       <ul data-testid="oneshot-writes">
@@ -431,7 +439,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                 />
                 {chosen && (
                   <p className="oneshot__detail" data-testid="oneshot-model-price">
-                    {programMode ? "O custo depende do provedor do modelo (assinatura, chave de API ou local) e aparece em Gastos quando o programa informa." : priceLine(engine.modelPrice)}
+                    {programMode ? "O custo depende do provedor do modelo e aparece em Gastos quando o programa informa." : priceLine(engine.modelPrice)}
                     {!programMode && engine.choices?.unlisted ? ` · ${UNLISTED_HINT}` : ""}
                   </p>
                 )}
@@ -441,7 +449,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
                   </p>
                 )}
                 {programMode ? (
-                  <p className="oneshot__hint">Sem modelo escolhido, vale o padrão do próprio programa{engine.program?.defaultModel ? ` (${engine.program.defaultModel})` : ""}. Qualquer provedor ligado serve: use provedor/modelo.</p>
+                  <p className="oneshot__hint">Sem escolha, vale o padrão do programa{engine.program?.defaultModel ? ` (${engine.program.defaultModel})` : ""}. Use o formato provedor/modelo.</p>
                 ) : (
                   <p className="oneshot__hint">{FREE_LIMIT_NOTE}</p>
                 )}
@@ -535,7 +543,7 @@ export function OneShotSection({ engine, now, onStatus }: Props) {
             ))}
           </select>
           <p className="oneshot__hint" data-testid="oneshot-gateways-line">
-            Cada agente em turno sobe um gateway do Hermes (~270 MB); os que passam do teto esperam vaga na fila.
+            Cada agente em turno usa um gateway do Hermes (~270 MB). Os que passam do teto esperam na fila.
             {` Agora: ${engine.gateways.inUse} em uso${engine.gateways.waiting > 0 ? `, ${engine.gateways.waiting} esperando vaga` : ""}.`}
           </p>
         </div>

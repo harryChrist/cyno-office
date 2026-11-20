@@ -1,6 +1,7 @@
 import type { ActivityEntry } from "./activity";
 import type { AgentLogEntry } from "./agent-log";
 import type { BrowserActivity, BrowserState } from "./browser";
+import type { ScriptRun, ScriptsState } from "./scripts";
 import type { Connector, ConnectorActivity } from "./connectors";
 import type { LibrarySkillView } from "./library-skills";
 import type { LibraryApp, LibraryConnector } from "./library";
@@ -74,6 +75,8 @@ export type ServerEvent =
       /** Conectores (sem segredos) e as abas do navegador compartilhado. */
       connectors?: Connector[];
       browser?: BrowserState;
+      /** Scripts dos agentes: os que rodam agora e os terminados recentes. */
+      scripts?: ScriptsState;
       /**
        * Id do hub de eventos do workspace (muda quando o server reinicia) e o `seq` do último evento
        * já refletido neste retrato. O cliente os devolve na reconexão (`?since=&epoch=`).
@@ -171,6 +174,10 @@ export type ServerEvent =
   | { type: "browser:tabs"; browser: BrowserState }
   /** Um agente usou o navegador: só para o visual (globo no balão do agente). */
   | { type: "browser:activity"; activity: BrowserActivity }
+  /** Um script de agente começou, mudou (estado, última linha, bytes; no máximo ~1 por segundo por script) ou terminou. A saída em si vem por GET. */
+  | { type: "script:updated"; run: ScriptRun }
+  /** Um script terminado saiu da lista (limpeza dos mais velhos). */
+  | { type: "script:removed"; id: string }
   /** Entrada nova na Atividade (do workspace; as do servidor vão para todos). Só ao vivo: o histórico vem por GET. */
   | { type: "activity:appended"; entry: ActivityEntry }
   /** Aviso visível do servidor (ex.: uma gravação falhou depois das novas tentativas). Só ao vivo, sem histórico. */
@@ -230,6 +237,8 @@ const EVENT_TYPES: Record<ServerEventType, true> = {
   "library:job-log": true,
   "browser:tabs": true,
   "browser:activity": true,
+  "script:updated": true,
+  "script:removed": true,
   "activity:appended": true,
   "system:warning": true,
 };

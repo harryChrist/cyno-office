@@ -127,6 +127,16 @@ export function freebuffBlock(detail: FreebuffUsageDetail | undefined, agent: Fr
   return undefined;
 }
 
+/** Freebuff: a cota do dia acabou e ele já gasta da carteira? (a leitura de antes do virar do dia não vale) */
+export function freebuffWalletState(detail: Pick<FreebuffUsageDetail, "hours" | "settings"> | undefined, now: number): { wallet?: number; dailyExhausted: boolean; usingWallet: boolean } {
+  if (!detail) return { dailyExhausted: false, usingWallet: false };
+  const { remaining, wallet, resetsAt } = detail.hours;
+  const need = detail.settings.multiplier ?? 1;
+  const stale = resetsAt !== undefined && Date.parse(resetsAt) <= now;
+  const dailyExhausted = !stale && remaining !== undefined && remaining < need;
+  return { ...(wallet !== undefined ? { wallet } : {}), dailyExhausted, usingWallet: dailyExhausted && (wallet ?? 0) >= need };
+}
+
 /** "2 horas por hora aberta" / "1 hora por hora aberta". */
 export function freebuffCostText(multiplier: number): string {
   return `${multiplier === 1 ? "1 hora" : `${multiplier} horas`} por hora aberta`;

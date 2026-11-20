@@ -63,6 +63,13 @@ function terminalRules(agent: Agent, folders: readonly EffectiveFolder[] = []): 
   ];
 }
 
+/** Comando demorado (só agentes de time com o terminal ligado): quem roda é o servidor, com a saída ao vivo para o usuário. */
+function scriptRules(agent: Agent): string[] {
+  return [
+    `- Comando demorado (mais de ~1 minuto: laço sobre muitos itens, esperas entre passos, download, crawler, build ou suíte de testes completa, migração de dados): NÃO rode no seu terminal (${terminalToolLabel(agent)}); use \`start_script(command, title, cwd?, timeout_minutes?)\`. O servidor roda em segundo plano, guarda a saída inteira e o usuário a vê ao vivo e pode parar. Depois acompanhe com \`check_script(id)\` (ele espera novidade) até o estado deixar de ser "running", e só então entregue com \`submit_result\`: o script é parado quando a tarefa termina. Nada de \`ps\`/\`cat\` para espiar. Não serve para comando interativo (ninguém digita nele). Comando rápido continua no seu terminal. \`stop_script(id)\` para um seu; \`list_scripts()\` lista os seus.`,
+  ];
+}
+
 /** Regras do motor para quem CONVERSA com o dono (o Maestro e o Cyno em Freebuff, OpenClaw ou Hermes): o texto do turno é a resposta. */
 function conversationEngineRules(agent: Agent, access: EffectiveAccess): string[] {
   const engine = agentEngine(agent);
@@ -82,7 +89,7 @@ function conversationEngineRules(agent: Agent, access: EffectiveAccess): string[
 /** Regras de ferramentas do agente (o que usar, segurança na web e no terminal, e as do motor). */
 export function toolRules(agent: Agent, policy: WorkspaceAccess, conversation = false, folders: readonly EffectiveFolder[] = []): string[] {
   const access = effectiveAccess(policy, agent);
-  return [toolsRule(agent, access), ...COMMON_RULES, ...(access.internet ? webRules(policy) : []), ...(access.terminal ? terminalRules(agent, folders) : []), ...engineRules(agent, access, conversation)];
+  return [toolsRule(agent, access), ...COMMON_RULES, ...(access.internet ? webRules(policy) : []), ...(access.terminal ? terminalRules(agent, folders) : []), ...(access.terminal && !conversation ? scriptRules(agent) : []), ...engineRules(agent, access, conversation)];
 }
 
 /**

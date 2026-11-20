@@ -39,6 +39,7 @@ import { freebuffFolderName } from "../freebuff/files";
 import type { FreebuffRuntime } from "../freebuff/runtime";
 import { FreebuffTerminal } from "../freebuff/terminal";
 import { PtyTerminal, type PtySpawnFn } from "./pty-terminal";
+import type { FencePolicy } from "./fence";
 import { removeAgentEngineData } from "./engine-homes";
 import { HermesAdapter, type HermesAdapterOptions } from "./hermes-adapter";
 import { OpenClawAdapter, type OpenClawAdapterOptions } from "./openclaw-adapter";
@@ -176,6 +177,20 @@ type Entry = {
   runConfig?: string;
   /** Reinício pendente (troca de modelo/esforço/internet com o agente ocupado): checado até ficar livre. */
   restartTimer?: ReturnType<typeof setInterval>;
+};
+
+/** O que o serviço de scripts usa de um agente (veja `TerminalManager.scriptContext`). */
+export type ScriptAgentContext = {
+  agentId: string;
+  agentName: string;
+  /** Pasta do agente (cwd padrão do script). */
+  cwd: string;
+  /** Pastas de trabalho efetivas do agente que existem no disco. */
+  folders: { path: string; write: boolean }[];
+  /** O terminal está ligado para este agente (workspace E agente)? Sem isso nenhum script roda. */
+  terminal: boolean;
+  /** A cerca de arquivos do agente (só OpenClaw e Hermes, e só onde o computador tem Landlock). */
+  fence?: { policy: FencePolicy; python: string };
 };
 
 /** Acesso de uma subida: o do workspace E o do agente, com os domínios da política. */
@@ -551,6 +566,31 @@ export class TerminalManager {
 
   private workspaceFolders(): readonly WorkFolder[] {
     return this.deps.folders?.() ?? [];
+  }
+
+  /**
+   * O que o serviço de scripts precisa saber de um agente para rodar um comando com o MESMO poder do terminal dele (nunca mais): a pasta,
+   * as pastas de trabalho, se o terminal está ligado (efetivo: workspace E agente) e, nos motores cercados (OpenClaw, Hermes), a cerca que o
+   * adaptador daria a ele. Sem cerca neste computador (ou no motor): `fence` ausente, e o script roda sem ela, como o próprio agente.
+   */
+  async scriptContext(agentId: string): Promise<ScriptAgentContext | undefined> {
+    const agent = this.deps.state.read().agents.find((candidate) => candidate.id === agentId);
+    if (!agent) return undefined;
+    const engine = agentEngine(agent);
+    const access = terminalAccess(this.workspaceAccess(), agent);
+    const agentDir = this.deps.paths.agentDir(agentId);
+    const cwd = engine === "freebuff" ? path.join(agentDir, freebuffFolderName(this.deps.workspaceId, agentId)) : agentDir;
+    const folders = await this.usableFolders(agent);
+    let fence: ScriptAgentContext["fence"];
+    if (access.terminal && (engine === "openclaw" || engine === "hermes")) {
+      try {
+        const spec: TerminalSpec = { agentId, cwd, systemPrompt: "", mcpConfigFile: path.join(cwd, "mcp.json"), tools: [], access, ...(folders.length > 0 ? { folders } : {}) };
+        fence = this.oneShotAdapter(engine)?.fence?.(spec);
+      } catch (error) {
+        this.deps.log.warn({ err: error, agentId }, "não foi possível montar a cerca do script; ele roda sem cerca");
+      }
+    }
+    return { agentId, agentName: agent.name, cwd, folders: folders.map((folder) => ({ path: folder.path, write: folder.write })), terminal: access.terminal, ...(fence ? { fence } : {}) };
   }
 
   /** Pastas que já foram avisadas como sumidas (agente + caminho): o aviso sai uma vez, não a cada subida. */

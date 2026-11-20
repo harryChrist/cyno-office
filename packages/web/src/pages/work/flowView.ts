@@ -94,3 +94,45 @@ export function dependsSummary(project: Tasks, task: Pick<ProjectTask, "dependsO
   });
   return names.length > 0 ? `Depois de ${joinNames([...new Set(names)])}` : "";
 }
+
+export type DependsRow = { ref: string; title: string; ownerId: string; status: ProjectTaskStatus; done: boolean; stateLabel: string };
+export type DependsOverview = {
+  /** As que ainda travam (não concluídas) primeiro, depois as feitas; dentro de cada grupo, a ordem em que foram marcadas. */
+  rows: DependsRow[];
+  total: number;
+  pending: number;
+  /** "Esperando 1 de 2", "Nada travando: pode começar"… Vazio quando não espera ninguém. */
+  summary: string;
+};
+
+const DEP_STATE_LABEL: Partial<Record<ProjectTaskStatus, string>> = {
+  concluida: "feita",
+  em_andamento: "fazendo",
+  esperando_voce: "esperando você",
+  falhou: "falhou",
+  cancelada: "cancelada",
+};
+
+/** O que a tarefa realmente espera: só as dependências marcadas, separadas em "ainda falta" e "feita", mais a frase-resumo. */
+export function dependsOverview(project: Tasks, task: Pick<ProjectTask, "dependsOn" | "status">): DependsOverview {
+  const rows = task.dependsOn.flatMap((ref): DependsRow[] => {
+    const dep = project.tasks.find((candidate) => candidate.ref === ref);
+    if (!dep) return [];
+    const done = dep.status === "concluida";
+    return [{ ref, title: dep.title, ownerId: dep.ownerId, status: dep.status, done, stateLabel: DEP_STATE_LABEL[dep.status] ?? "ainda não começou" }];
+  });
+  const ordered = [...rows.filter((row) => !row.done), ...rows.filter((row) => row.done)];
+  const pending = rows.filter((row) => !row.done).length;
+  const started = task.status !== "backlog" && task.status !== "a_fazer";
+  const summary =
+    rows.length === 0 ? "" : pending > 0 ? `Esperando ${pending} de ${rows.length}` : started ? "Todas as dependências foram feitas" : "Nada travando: pode começar";
+  return { rows: ordered, total: rows.length, pending, summary };
+}
+
+/** Filtra as opções da lista completa pelo nome da tarefa ou do responsável (sem acento nem caixa). */
+export function filterDependsChoices(choices: DependsChoice[], query: string, ownerName: (id: string) => string): DependsChoice[] {
+  const norm = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const needle = norm(query.trim());
+  if (!needle) return choices;
+  return choices.filter((choice) => norm(`${choice.title} ${choice.ownerId ? ownerName(choice.ownerId) : ""}`).includes(needle));
+}

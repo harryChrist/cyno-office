@@ -42,3 +42,20 @@ export function useSettingsLayout(): SettingsLayout {
   }, []);
   return layout;
 }
+
+const PHONE_QUERY = `(max-width: ${SETTINGS_BREAKPOINTS.phone - 1}px)`;
+
+/** Janela de celular (a mesma que o CSS das Configurações trata como "uma coluna"); acompanha o redimensionamento. */
+export function useIsPhone(): boolean {
+  const read = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(PHONE_QUERY).matches;
+  const [phone, setPhone] = useState(read);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(PHONE_QUERY);
+    const update = () => setPhone(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return phone;
+}

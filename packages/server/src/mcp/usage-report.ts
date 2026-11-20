@@ -50,7 +50,7 @@ export async function usageReport(input: UsageReportInput): Promise<string> {
   if (perAgent && perAgent.agents.length > 0) {
     lines.push("", "## Agents since " + perAgent.since.slice(0, 16).replace("T", " ") + " UTC (estimate)");
     for (const tally of perAgent.agents.slice(0, 10)) {
-      const tokens = tally.measuredTurns > 0 ? `, ${Math.round((tally.inputTokens + tally.outputTokens + tally.cacheCreationTokens) / 1000)}k tokens (+${Math.round(tally.cacheReadTokens / 1000)}k cache)` : "";
+      const tokens = tally.measuredTurns > 0 ? `, ${tally.estimatedTurns ? "~" : ""}${Math.round((tally.inputTokens + tally.outputTokens + tally.cacheCreationTokens) / 1000)}k tokens${tally.estimatedTurns ? " (estimated)" : ""} (+${Math.round(tally.cacheReadTokens / 1000)}k cache)` : "";
       lines.push(`- ${input.names.get(tally.agentId) ?? tally.agentId}: ${tally.turns} turn(s)${tokens}`);
     }
   }

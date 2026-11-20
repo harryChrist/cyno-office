@@ -76,6 +76,7 @@ export class AgentUsageLedger {
       tally.lastAt = new Date(turn.at).toISOString();
       if (turn.usage) {
         tally.measuredTurns += turn.turns;
+        if (turn.usage.estimated && turn.turns > 0) tally.estimatedTurns = (tally.estimatedTurns ?? 0) + turn.turns;
         tally.inputTokens += turn.usage.inputTokens;
         tally.outputTokens += turn.usage.outputTokens;
         tally.cacheReadTokens += turn.usage.cacheReadTokens;

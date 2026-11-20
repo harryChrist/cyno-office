@@ -15,6 +15,9 @@
 }
 
 .settings__nav {
+  /* Segura dentro da área de rolagem os filhos de posição absoluta (textos .sr-only); soltos, eles esticavam a
+     página inteira e criavam uma segunda rolagem com um vazio enorme embaixo. */
+  position: relative;
   display: grid;
   align-content: start;
   min-height: 0;
@@ -118,13 +121,6 @@
   white-space: nowrap;
 }
 
-.settings__nav-group-name {
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 12px;
-  color: var(--ui-text);
-}
-
 .settings__nav-group-note {
   font-size: 11px;
   color: var(--ui-text-3);
@@ -142,8 +138,10 @@
 
 .settings__nav-item {
   display: grid;
-  gap: 2px;
-  padding: 9px 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 1px 8px;
+  padding: 8px 12px;
   font: inherit;
   text-align: left;
   color: var(--ui-text-2);
@@ -169,16 +167,57 @@
 }
 
 .settings__nav-label {
+  grid-column: 1;
+  overflow: hidden;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
+/* A frase de cada página aparece no menu do celular e nos resultados da busca; no índice do computador vira dica. */
 .settings__nav-hint {
+  display: none;
+  grid-column: 1;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--ui-text-3);
+}
+
+.settings__nav-item--result .settings__nav-hint {
+  display: block;
+}
+
+.settings__nav-item--result .settings__nav-label {
+  white-space: normal;
+}
+
+/* Estado do que mais se confere (senha, motores, modelo padrão, conectores): texto discreto, só o alerta ganha cor. */
+.settings__nav-badge {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  max-width: 96px;
+  overflow: hidden;
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-text-3);
+}
+
+.settings__nav-badge--warn {
+  color: var(--ui-warn);
+}
+
+.settings__nav-chev {
+  display: none;
+  grid-row: 1 / span 2;
+  grid-column: 3;
   color: var(--ui-text-3);
 }
 
 .settings__panel {
+  position: relative;
   min-width: 0;
   min-height: 0;
   padding: 18px 24px 28px;
@@ -506,56 +545,6 @@
   justify-items: start;
 }
 
-/* Celular: o menu fica em cima, cada grupo com o seu título e as seções em pílulas que quebram linha (sem rolar de lado). */
-@media (max-width: 720px) {
-  .settings {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    gap: 14px;
-  }
-
-  .settings__panel {
-    padding: 14px;
-    overflow-y: visible;
-  }
-
-  .settings__nav {
-    overflow-y: visible;
-    gap: 8px;
-    padding: 8px;
-  }
-
-  .settings__nav-group {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .settings__nav-group-head {
-    flex: 1 0 100%;
-    grid-auto-flow: column;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-    padding: 2px 4px;
-  }
-
-  .settings__nav-item {
-    padding: 6px 12px;
-    background: var(--ui-surface-2);
-    border-color: var(--ui-border);
-    border-radius: var(--ui-radius-pill);
-  }
-
-  .settings__nav-label {
-    font-size: 13px;
-  }
-
-  .settings__nav-hint {
-    display: none;
-  }
-}
-
 /* Modelos padrão */
 .settings__models-group {
   display: grid;
@@ -749,11 +738,6 @@
   display: none;
 }
 
-.settings__panel > .settings__top,
-.settings__panel > .settings__area {
-  max-width: 980px;
-}
-
 .settings__search {
   padding: 2px 2px 4px;
 }
@@ -779,10 +763,11 @@
 .settings__nav-group-title {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
+  min-height: 30px;
   margin: 0;
-  padding: 4px 12px 6px;
+  padding: 2px 8px 4px 12px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -790,71 +775,10 @@
   color: var(--ui-text-3);
 }
 
-/* Resumo do topo */
-.settings__top {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.settings__summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.settings__summary-item {
-  display: grid;
-  gap: 3px;
-  width: 100%;
-  height: 100%;
-  padding: 11px 14px;
-  font: inherit;
-  text-align: left;
-  color: var(--ui-text);
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-left: 3px solid var(--ui-border-strong);
-  border-radius: var(--ui-radius-panel);
-  cursor: pointer;
-  transition:
-    background-color var(--ui-fast),
-    border-color var(--ui-fast);
-}
-
-.settings__summary-item:hover {
-  background: var(--ui-hover);
-}
-
-.settings__summary-item--ok {
-  border-left-color: var(--ui-ok);
-}
-
-.settings__summary-item--warn {
-  border-left-color: var(--ui-warn);
-}
-
-.settings__summary-label {
-  font-size: 11.5px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ui-text-3);
-}
-
-.settings__summary-value {
-  font-size: 14.5px;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
 .settings__warnings {
   display: grid;
   gap: 6px;
-  margin: 0;
+  margin: 0 0 18px;
   padding: 0;
   list-style: none;
 }
@@ -865,12 +789,13 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 4px 12px;
-  padding: 9px 14px;
+  padding: 8px 12px 8px 14px;
   font-size: 13px;
   line-height: 1.45;
-  color: var(--ui-text);
-  background: var(--ui-warn-bg);
-  border: 1px solid color-mix(in srgb, var(--ui-warn) 45%, transparent);
+  color: var(--ui-text-2);
+  background: transparent;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-warn);
   border-radius: var(--ui-radius-button);
 }
 
@@ -897,70 +822,86 @@
   color: var(--ui-text-3, var(--ui-text-2));
 }
 
-/* Áreas */
+/* Áreas (plataforma e workspace): só agrupam as seções; quem diz onde se está é o índice e o cabeçalho da página. */
 .settings__area {
   display: grid;
-  gap: 18px;
-  margin-bottom: 34px;
+  gap: 26px;
 }
 
-.settings__area-head {
+/* Seletor do workspace, no título do grupo "Do workspace" do índice. */
+.settings__ws-picker {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.settings__ws-picker select {
+  width: 100%;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Cabeçalho da página aberta: o nome, o selo (quando não é o padrão) e uma frase. */
+.settings__page-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 22px;
+}
+
+.settings__page-title-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding: 14px 16px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-left: 3px solid var(--ui-accent);
-  border-radius: var(--ui-radius-panel);
+  gap: 6px 12px;
 }
 
-.settings__area--workspace .settings__area-head {
-  border-left-color: var(--ui-ok);
-}
-
-.settings__area-title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
+.settings__page-title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 750;
+  font-size: 22px;
+  font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--ui-text);
 }
 
-.settings__area-ws {
-  overflow-wrap: anywhere;
-  font-weight: 650;
-  color: var(--ui-text-2);
-}
-
-.settings__area-hint {
-  flex: 1 1 100%;
+.settings__page-hint {
   margin: 0;
-  font-size: 13px;
-  color: var(--ui-text-2);
-}
-
-.settings__area-hint strong {
-  color: var(--ui-text);
-}
-
-.settings__ws-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--ui-text-3);
 }
 
-.settings__ws-picker select {
-  min-width: 140px;
-  max-width: 100%;
+.settings__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  min-height: 44px;
+  margin: -6px 0 2px -8px;
+  padding: 0 12px 0 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-accent);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ui-radius-button);
+  cursor: pointer;
+}
+
+.settings__back:active {
+  background: var(--ui-hover);
+}
+
+.settings__back:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
+/* Única seção da página: o cabeçalho da página já diz o nome dela. */
+.settings__sec--solo > .settings__sec-head {
+  display: none;
 }
 
 .settings__sec {
@@ -985,30 +926,19 @@
 }
 
 /* Selo (o que vale), estado (como está) e marca de padrão */
+/* Selo de onde a opção vale: sempre neutro (quem separa plataforma de workspace é o índice). */
 .opt-seal {
   display: inline-flex;
   align-items: center;
   padding: 1px 9px;
   font-size: 11.5px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 18px;
   white-space: nowrap;
   color: var(--ui-text-2);
   background: var(--ui-surface-2);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-pill);
-}
-
-.opt-seal--workspace {
-  color: var(--ui-text);
-  background: color-mix(in srgb, var(--ui-ok) 12%, var(--ui-surface-2));
-  border-color: color-mix(in srgb, var(--ui-ok) 38%, transparent);
-}
-
-.opt-seal--plataforma {
-  color: var(--ui-text);
-  background: var(--ui-accent-bg);
-  border-color: color-mix(in srgb, var(--ui-accent) 38%, transparent);
 }
 
 .opt-state {
@@ -1025,8 +955,7 @@
 }
 
 .opt-state--on {
-  color: var(--ui-ok);
-  border-color: color-mix(in srgb, var(--ui-ok) 45%, transparent);
+  color: var(--ui-text);
 }
 
 .opt-state--off {
@@ -1108,57 +1037,10 @@ h5.opt-head__title {
   display: flex;
 }
 
-/* Celular: o índice vira uma faixa de pílulas em cima (sem rolar de lado) e as peças empilham. */
-@media (max-width: 720px) {
-  .settings__nav-group-title {
-    flex: 1 0 100%;
-    padding: 2px 4px;
-  }
-
-  .settings__nav-group + .settings__nav-group {
-    margin-top: 2px;
-    padding-top: 8px;
-  }
-
-  .settings__results {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .settings__results .settings__nav-hint {
-    display: block;
-    font-size: 11px;
-  }
-
-  .settings__results .settings__nav-empty {
-    flex: 1 0 100%;
-  }
-
-  .settings__ws-picker {
-    flex: 1 1 100%;
-    margin-left: 0;
-  }
-
-  .settings__ws-picker select {
-    flex: 1;
-  }
-
-  .settings__area-head {
-    padding: 12px;
-  }
-
-  .settings__area-title {
-    font-size: 18px;
-  }
-
+@media (max-width: 767px) {
   .opt-head__state {
     flex: 1 1 100%;
     margin-left: 0;
-  }
-
-  .settings__summary {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -1190,4 +1072,71 @@ h5.opt-head__title {
   border: 1px solid var(--ui-border-strong);
   border-bottom-width: 2px;
   border-radius: 7px;
+}
+
+/* Detalhe que não precisa ficar sempre à vista (passo a passo, ressalva, como funciona): recolhido atrás de "Saiba mais". */
+.settings__more {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ui-text-2);
+}
+
+.settings__more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+  list-style: none;
+  cursor: pointer;
+  border-radius: var(--ui-radius-sm);
+}
+
+.settings__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings__more > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--ui-fast);
+}
+
+.settings__more[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.settings__more > summary:hover {
+  color: var(--ui-text);
+}
+
+.settings__more > summary:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.settings__more > :not(summary) {
+  max-width: 74ch;
+  margin: 6px 0 0;
+}
+
+.settings__more > :is(ol, ul) {
+  padding-left: 20px;
+}
+
+/* Num cartão, o selo "Só neste navegador" aparece uma vez (na primeira opção), não em cada linha. */
+.settings__card > :not(:first-child) .opt-seal--navegador,
+.settings__card > :first-child ~ .opt-head .opt-seal--navegador {
+  display: none;
+}
+
+/* Página toda "Só neste navegador": o selo fica só no título dela. */
+.settings__panel[data-page-seal="navegador"] .settings__sec .opt-seal--navegador {
+  display: none;
 }

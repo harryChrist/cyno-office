@@ -70,9 +70,13 @@ export function CynoSettings() {
           title="Quando o Cyno dorme"
           seal="plataforma"
           inherited={settings.idleMinutes === defaults.idleMinutes}
-          state={<StateBadge tone="value">Dorme depois de {settings.idleMinutes} min parado</StateBadge>}
-          line="O Cyno só fica de pé enquanto você conversa com ele. Sem mensagem por este tempo, o processo para (a conversa continua guardada) e a próxima mensagem o acorda de novo. Mexer aqui vale na próxima vez que ele subir."
+          state={<StateBadge tone="value">Dorme após {settings.idleMinutes} min parado</StateBadge>}
+          line="Sem mensagem por este tempo, o Cyno para. A próxima mensagem o acorda."
         />
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>O Cyno só fica de pé enquanto você conversa com ele. A conversa continua guardada. Mudar o tempo vale na próxima vez que ele subir.</p>
+        </details>
         <div className="settings__retention-row">
           <label htmlFor={idleId} className="settings__retention-label">
             Minutos até dormir
@@ -105,8 +109,12 @@ export function CynoSettings() {
               {turnsToday} de {settings.dailyTurnCap} hoje
             </StateBadge>
           }
-          line="Cada mensagem sua (ou pedido de um Maestro) que acorda o Cyno conta um turno. Ao bater o teto, o Cyno para de responder até amanhã (horário de Brasília) e o chat explica. Protege a cota da sua assinatura."
+          line="Ao bater o teto, o Cyno para de responder até amanhã. Protege a cota da sua assinatura."
         />
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>Cada mensagem sua (ou pedido de um Maestro) que acorda o Cyno conta um turno. O dia vira no horário de Brasília e o chat explica quando o teto é atingido.</p>
+        </details>
         <div className="settings__retention-row">
           <label htmlFor={capId} className="settings__retention-label">
             Turnos por dia
@@ -131,7 +139,7 @@ export function CynoSettings() {
       <section className="settings__card" data-testid="settings-cyno-digest">
         <SettingSwitch
           title="Resumo diário no chat"
-          line="Na hora marcada (Brasília), o chat do Cyno ganha uma mensagem com o resumo dos workspaces, montada por código: não acorda o Cyno nem gasta turno nem cota. Desligado por padrão."
+          line="O chat ganha um resumo dos workspaces na hora marcada. Não gasta turno nem cota."
           seal="plataforma"
           checked={settings.digest.enabled}
           inherited={!settings.digest.enabled}

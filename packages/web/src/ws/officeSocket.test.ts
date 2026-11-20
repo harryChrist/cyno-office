@@ -57,6 +57,8 @@ beforeEach(() => {
     location: { protocol: "http:", host: "office.local" },
     setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
     clearTimeout: (id: number) => clearTimeout(id),
+    setInterval: (fn: () => void, ms: number) => setInterval(fn, ms),
+    clearInterval: (id: number) => clearInterval(id),
     addEventListener: (type: string, fn: () => void) => listeners.window.set(type, fn),
     removeEventListener: (type: string) => listeners.window.delete(type),
   });
@@ -170,5 +172,62 @@ describe("connectOfficeSocket: cursor, replay e ressincronização", () => {
     expect(FakeSocket.instances).toHaveLength(2);
     stop();
     expect(listeners.document.size + listeners.window.size).toBe(0);
+  });
+});
+
+describe("connectOfficeSocket: conexão que morre em silêncio", () => {
+  const beat = { type: "heartbeat" };
+
+  it("aberta mas calada depois de já ter ouvido uma batida: troca de conexão sozinha e pede só o que faltou", async () => {
+    const statuses: string[] = [];
+    const stop = await connected([], statuses);
+    last().receive(snapshot("e1", 1));
+    last().receive(beat);
+    // Ainda dentro do limite: nada muda.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    // O socket continua "aberto" (ninguém avisou a queda), mas o servidor não fala mais.
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(last().url).toContain("since=1&epoch=e1");
+    expect(statuses).toEqual(["connecting", "open", "reconnecting"]);
+    // O socket velho foi largado: uma mensagem atrasada dele não chega mais, e o close dele não reconecta de novo.
+    FakeSocket.instances[0]!.drop();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(FakeSocket.instances).toHaveLength(2);
+    stop();
+  });
+
+  it("com as batidas chegando, ou contra um servidor que nunca bateu, a conexão fica como está", async () => {
+    const stop = await connected([]);
+    last().receive(snapshot("e1", 1));
+    // Servidor antigo (sem batida): o silêncio não conta.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+    // Batidas regulares: nunca passa do limite.
+    for (let i = 0; i < 10; i += 1) {
+      last().receive(beat);
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+    expect(FakeSocket.instances).toHaveLength(1);
+    stop();
+    // Parado: o conferidor de silêncio não troca mais nada.
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(FakeSocket.instances).toHaveLength(1);
+  });
+
+  it("aba que volta para a frente com a conexão calada há mais de uma batida troca na hora", async () => {
+    const statuses: string[] = [];
+    const stop = await connected([], statuses);
+    last().receive(snapshot("e1", 1));
+    last().receive(beat);
+    // Página congelada (celular em segundo plano): o relógio anda, os timers não.
+    vi.setSystemTime(Date.now() + 45_000);
+    listeners.document.get("visibilitychange")!();
+    await settle();
+    expect(FakeSocket.instances).toHaveLength(2);
+    expect(last().url).toContain("since=1&epoch=e1");
+    expect(statuses).toEqual(["connecting", "open", "reconnecting"]);
+    stop();
   });
 });

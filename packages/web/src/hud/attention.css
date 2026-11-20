@@ -3,27 +3,6 @@
  * que espera o dono. As cores vêm dos tokens --ui-* (a de atenção é o âmbar --ui-warn).
  */
 
-/* ---------- Contador na barra lateral ---------- */
-.navitem--attention .navitem__badge {
-  color: var(--ui-text-2);
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.navitem--attention[aria-disabled="true"] {
-  cursor: default;
-  color: var(--ui-text-3, var(--ui-text-2));
-}
-
-.navitem--attention-on .nav-icon {
-  color: var(--ui-warn);
-}
-
-.navitem__badge--attn {
-  color: #2b1d00 !important;
-  background: var(--ui-warn) !important;
-  box-shadow: 0 0 12px var(--ui-warn-bg);
-}
-
 /* ---------- Pílula do celular e da barra de cima ---------- */
 .attn-pill {
   display: inline-flex;

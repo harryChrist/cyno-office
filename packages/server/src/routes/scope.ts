@@ -8,6 +8,8 @@ import { registerAgentLogRoutes } from "./agent-log";
 import { registerAgentRoutes } from "./agents";
 import { registerAgentRulesRoutes, registerBrainOrganizeRoute, registerBrainRoutes } from "./brains";
 import { registerBrowserRoutes } from "./browser";
+import { registerFileRoutes } from "./files";
+import { registerScriptRoutes } from "./scripts";
 import { registerCalendarRoutes } from "./calendar";
 import { registerConnectorRoutes } from "./connectors";
 import { registerForYouRoutes, registerForYouTypeRoutes } from "./for-you";
@@ -102,6 +104,8 @@ export function registerWorkspaceScopedRoutes(app: FastifyInstance, manager: Wor
       registerActivityRoutes(scope, (request) => path.join(runtimeOf(request).store.paths.root, "activity"));
       registerConnectorRoutes(scope, (request) => runtimeOf(request).connectors);
       registerBrowserRoutes(scope, (request) => runtimeOf(request).browser);
+      registerScriptRoutes(scope, (request) => runtimeOf(request).scripts);
+      registerFileRoutes(scope, (request) => runtimeOf(request).files);
     },
     { prefix: WORKSPACE_PREFIX },
   );

@@ -11,7 +11,7 @@ import {
   retentionLabel,
   retentionOptions,
   sameModelDefaults,
-  buildSummary,
+  navBadges,
   DEFAULT_SETTINGS_SECTION,
   isRemoteHost,
   modelShortName,
@@ -19,6 +19,11 @@ import {
   searchSettings,
   sectionsWithMatches,
   settingsHash,
+  settingsHashHasSection,
+  settingsPageOf,
+  settingsPageSeal,
+  settingsPagesOf,
+  SETTINGS_PAGES,
   settingsSection,
   settingsSectionFromHash,
   settingsSectionsOf,
@@ -59,6 +64,16 @@ describe("seção das Configurações no endereço", () => {
     for (const section of SETTINGS_SECTIONS) expect(settingsSectionFromHash(settingsHash(null, section.id))).toBe(section.id);
   });
 
+  it("no celular o endereço sem seção é o menu: a primeira página pede a seção escrita", () => {
+    expect(settingsHash("ws1", "senha", true)).toBe("#/ws1/configuracoes/senha");
+    expect(settingsHash(null, "motores", true)).toBe("#/configuracoes/motores");
+    expect(settingsHashHasSection("#/ws1/configuracoes")).toBe(false);
+    expect(settingsHashHasSection("#/configuracoes")).toBe(false);
+    expect(settingsHashHasSection("#/ws1/configuracoes/senha")).toBe(true);
+    expect(settingsHashHasSection("#/configuracoes/motores")).toBe(true);
+    expect(settingsHashHasSection("#/ws1/arquivos")).toBe(false);
+  });
+
   it("links antigos e apelidos caem na seção equivalente", () => {
     // "modelos" continua existindo: é a seção do workspace (padrões + Maestro).
     expect(settingsSectionFromHash("#/principal/configuracoes/modelos")).toBe("modelos");
@@ -71,8 +86,8 @@ describe("seção das Configurações no endereço", () => {
 
 describe("áreas das Configurações", () => {
   it("Da plataforma: acesso, motores, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
-    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "modelos-padrao", "cyno-ajustes", "avisos", "conectores-locais", "historico", "versao", "escritorio", "atalhos"]);
-    expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "acesso", "pastas", "seguranca", "distribuicao", "relatorios", "aprovacoes", "conectores"]);
+    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "limites", "modelos-padrao", "cyno-ajustes", "avisos", "versao", "historico", "conectores-locais", "escritorio", "atalhos"]);
+    expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "distribuicao", "acesso", "seguranca", "pastas", "relatorios", "aprovacoes", "conectores"]);
     // As áreas vêm em ordem na página (toda a plataforma antes do workspace).
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id));
   });
@@ -141,35 +156,63 @@ describe("endereços das seções novas e antigas", () => {
   });
 });
 
-describe("resumo do topo", () => {
-  const defaults = { agentes: { engine: "claude", model: "sonnet", effort: "medium" } } as const;
-  it("junta senha, motores, modelo padrão e conectores", () => {
-    const items = buildSummary({ auth: { enabled: true }, engines: [MOCK, CLAUDE, AGY_ON], defaults, connectorCount: 3 });
-    expect(items.map((item) => [item.id, item.value])).toEqual([
-      ["senha", "ligada"],
-      ["motores", "Claude Code ✓, Antigravity ✓"],
-      ["modelo", "Sonnet"],
-      ["conectores", "3 conectores"],
-    ]);
-    expect(items.find((item) => item.id === "motores")?.tone).toBe("ok");
+describe("páginas das Configurações", () => {
+  it("toda seção mora em uma página só, na mesma área e na ordem das seções", () => {
+    expect(SETTINGS_PAGES.flatMap((page) => [...page.sections])).toEqual(SETTINGS_SECTIONS.map((section) => section.id));
+    for (const page of SETTINGS_PAGES) for (const id of page.sections) expect(settingsSection(id).area).toBe(page.area);
+    expect(SETTINGS_PAGES.length).toBeLessThan(SETTINGS_SECTIONS.length);
   });
 
-  it("motor fora do ar e senha desligada pedem atenção; dado que não chegou é reticências", () => {
-    const items = buildSummary({ auth: { enabled: false }, engines: [CLAUDE, AGY_OFF], defaults, connectorCount: 1 });
-    expect(items[0]).toMatchObject({ value: "desligada", tone: "warn" });
-    expect(items[1]).toMatchObject({ value: "Claude Code ✓, Antigravity ✗", tone: "warn" });
-    expect(items[3]!.value).toBe("1 conector");
-    const loading = buildSummary({ auth: null, engines: null, defaults: null, connectorCount: null });
-    expect(loading.map((item) => item.value)).toEqual(["…", "…", "…", "…"]);
-    expect(loading.every((item) => item.tone === "neutral")).toBe(true);
+  it("acha a página de uma seção e as páginas de cada área", () => {
+    expect(settingsPageOf("historico").label).toBe("Sistema");
+    expect(settingsPageOf("distribuicao").sections[0]).toBe("modelos");
+    expect(settingsPageOf("senha").sections).toEqual(["senha"]);
+    expect(settingsPagesOf("plataforma").map((page) => page.label)).toEqual(["Acesso e senha", "Motores", "Limites do plano", "Modelos e Cyno", "Avisos", "Sistema", "Aparência e atalhos"]);
+    expect(settingsPagesOf("workspace").map((page) => page.label)).toEqual(["Agentes e Maestro", "Acesso e segurança", "Pastas de trabalho", "Relatórios e aprovações", "Conectores"]);
   });
 
-  it("nome curto do modelo", () => {
+  it("o selo da página só existe quando as seções concordam", () => {
+    expect(settingsPageSeal(settingsPageOf("escritorio"))).toBe("navegador");
+    expect(settingsPageSeal(settingsPageOf("modelos"))).toBe("workspace");
+    expect(settingsPageSeal(settingsPageOf("versao"))).toBe("plataforma");
+  });
+});
+
+describe("nome curto do modelo", () => {
+  it("encurta o nome dos modelos conhecidos", () => {
     expect(modelShortName({ engine: "claude", model: "opus" })).toBe("Opus");
     expect(modelShortName({ engine: "claude", model: "claude-haiku-4-5" })).toBe("Haiku");
     expect(modelShortName({ engine: "gemini", model: "gemini-3.8-flash-medium" })).toBe("Gemini 3.8 Flash");
     expect(modelShortName({ engine: "claude" })).toBe("padrão da CLI");
     expect(modelShortName({ engine: "gemini", model: "outro" })).toBe("outro");
+  });
+});
+
+describe("estado das seções no índice", () => {
+  const defaults = { agentes: { engine: "claude", model: "sonnet", effort: "medium" } } as const;
+  it("resume senha, motores, modelo padrão e conectores em poucas letras", () => {
+    expect(navBadges({ auth: { enabled: false }, engines: [MOCK, CLAUDE, AGY_OFF], defaults, connectorCount: 3 })).toEqual({
+      senha: { text: "desligada", tone: "warn" },
+      motores: { text: "1 de 2", tone: "warn" },
+      "modelos-padrao": { text: "Sonnet", tone: "neutral" },
+      conectores: { text: "3", tone: "neutral" },
+    });
+    expect(navBadges({ auth: { enabled: true }, engines: [CLAUDE, AGY_ON], defaults: null, connectorCount: null })).toEqual({
+      senha: { text: "ligada", tone: "ok" },
+      motores: { text: "2 de 2", tone: "ok" },
+    });
+  });
+
+  it("pausa por limite do plano aparece só quando há alguma", () => {
+    const base = { auth: null, engines: null, defaults: null, connectorCount: null };
+    expect(navBadges({ ...base, pauses: 0 })).toEqual({});
+    expect(navBadges({ ...base, pauses: 1 })).toEqual({ limites: { text: "1 pausa", tone: "warn" } });
+    expect(navBadges({ ...base, pauses: 2 })).toEqual({ limites: { text: "2 pausas", tone: "warn" } });
+  });
+
+  it("sem motor nenhum pede atenção; dado que não chegou não vira selo", () => {
+    expect(navBadges({ auth: null, engines: [MOCK], defaults: null, connectorCount: null })).toEqual({ motores: { text: "nenhum", tone: "warn" } });
+    expect(navBadges({ auth: null, engines: null, defaults: null, connectorCount: null })).toEqual({});
   });
 });
 

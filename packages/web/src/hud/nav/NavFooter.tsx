@@ -2,7 +2,7 @@ import { useNavLayoutStore } from "../../store/navLayoutStore";
 import { useWorkspaceView } from "../../store/workspaceStore";
 import { NavIcon } from "../navIcons";
 import { SocketIndicator } from "../SocketIndicator";
-import { AgentsItem, PageItem, ShortcutsRow } from "./NavItems";
+import { AgentsItem, PageItem } from "./NavItems";
 import { NavUsage } from "./NavUsage";
 import { SETTINGS_ITEM } from "./navItems";
 
@@ -14,7 +14,6 @@ export function NavFooter({ onNavigate, onBeforeOpen, showCollapse }: { onNaviga
   return (
     <div className="navfoot">
       <SocketIndicator />
-      {showCollapse && <ShortcutsRow onNavigate={onNavigate} />}
       <NavUsage onBeforeOpen={onBeforeOpen} />
       {!empty && <AgentsItem onBeforeOpen={onBeforeOpen} />}
       <div className="navfoot__row">

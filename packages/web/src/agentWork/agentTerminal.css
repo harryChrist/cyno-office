@@ -510,6 +510,24 @@
   opacity: 0;
 }
 
+/* "ver saída": o atalho para a página Scripts na linha que lançou um script (sempre à vista, é a ação principal da linha). */
+.aterm__open {
+  margin-left: 8px;
+  padding: 0 7px;
+  font-family: var(--ui-font-mono);
+  font-size: 10.5px;
+  color: var(--ui-accent, #a99bff);
+  cursor: pointer;
+  background: rgba(139, 124, 255, 0.12);
+  border: 1px solid rgba(139, 124, 255, 0.4);
+  border-radius: var(--ui-radius-sm, 6px);
+}
+
+.aterm__open:hover,
+.aterm__open:focus-visible {
+  background: rgba(139, 124, 255, 0.22);
+}
+
 .aterm__line:hover .aterm__copy,
 .aterm__copy:focus-visible,
 .aterm__copy[data-done] {

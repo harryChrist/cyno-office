@@ -1,9 +1,9 @@
 import type { Agent, Project, ProjectTask } from "@cyno/shared";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { Modal, ErrorText } from "../../ui/widgets";
 import { AgentAvatar } from "./Agent";
-import { dependsChoices, flowItems } from "./flowView";
+import { dependsChoices, dependsOverview, filterDependsChoices, flowItems } from "./flowView";
 import { StatusIcon } from "./treeParts";
 import type { TaskActions } from "./useTaskActions";
 
@@ -74,24 +74,98 @@ export function FlowBlock({ project, mother, agents, onSelect }: { project: Proj
   );
 }
 
-/** "Depois de": as irmãs que esta tarefa espera (marcar acrescenta, desmarcar tira). Só antes de a tarefa começar. */
+/**
+ * "Depois de": por padrão só o que a tarefa realmente espera (o que falta primeiro, o que já foi feito apagado).
+ * "Escolher tarefas" abre a lista completa com caixas de marcar e busca. Só antes de a tarefa começar.
+ */
 export function DependsField({ project, task, agents, actions, locked }: { project: Project; task: ProjectTask; agents: ReadonlyMap<string, Agent>; actions: TaskActions; locked: boolean }) {
   const choices = useMemo(() => dependsChoices(project, task), [project, task]);
+  const overview = useMemo(() => dependsOverview(project, task), [project, task]);
   const legend = useId();
+  const searchId = useId();
+  const [editing, setEditing] = useState(false);
+  const [query, setQuery] = useState("");
+  const name = (id: string) => agents.get(id)?.name ?? id;
+  const shown = useMemo(() => filterDependsChoices(choices, query, (id) => agents.get(id)?.name ?? id), [choices, query, agents]);
+  const open = editing && !locked;
+  // O botão que abriu (ou recolheu) some da tela: o foco segue para a lista aberta e, ao recolher, volta para "Editar".
+  const fieldRef = useRef<HTMLFieldSetElement>(null);
+  const toggled = useRef(false);
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    const target = open ? "input" : '[data-testid="task-panel-depends-edit"]';
+    fieldRef.current?.querySelector<HTMLElement>(target)?.focus();
+  }, [open]);
   if (choices.length === 0 && task.dependsOn.length === 0) return null;
   const toggle = (ref: string, on: boolean) => void actions.update(task.ref, { dependsOn: on ? [...task.dependsOn, ref] : task.dependsOn.filter((dep) => dep !== ref) });
+  const close = () => {
+    setEditing(false);
+    setQuery("");
+  };
   return (
-    <fieldset className="tp__field tp__field--wide fl-depends" aria-labelledby={legend} data-testid="task-panel-depends" disabled={locked || actions.busy}>
+    <fieldset ref={fieldRef} className="tp__field tp__field--wide fl-depends" aria-labelledby={legend} data-testid="task-panel-depends" disabled={locked || actions.busy}>
       <legend id={legend}>Depois de</legend>
-      {choices.map((choice) => (
-        <label key={choice.ref} className="fl-check">
-          <input type="checkbox" checked={choice.checked} onChange={(event) => toggle(choice.ref, event.currentTarget.checked)} data-testid={`task-panel-depends-${choice.ref}`} />
-          <AgentAvatar agent={agents.get(choice.ownerId)} size={18} />
-          <span>
-            {choice.ownerId ? <b>{agents.get(choice.ownerId)?.name ?? choice.ownerId} · </b> : null}{choice.title}
-          </span>
-        </label>
-      ))}
+      {!open && (
+        <>
+          {overview.rows.length === 0 ? (
+            <p className="fl-dep-none">Não espera nenhuma tarefa</p>
+          ) : (
+            <>
+              <p className={`fl-dep-sum${overview.pending > 0 ? " fl-dep-sum--wait" : ""}`} data-testid="task-panel-depends-summary">
+                {overview.summary}
+              </p>
+              <ul className="fl-dep-list">
+                {overview.rows.map((row) => (
+                  <li key={row.ref} className={`fl-dep-row${row.done ? " fl-dep-row--done" : ""}`} data-testid={`task-panel-depends-row-${row.ref}`}>
+                    <AgentAvatar agent={agents.get(row.ownerId)} size={18} />
+                    <span className="fl-dep-name">
+                      {row.ownerId ? <b>{name(row.ownerId)} · </b> : null}
+                      {row.title}
+                    </span>
+                    <span className="fl-dep-state">{row.stateLabel}</span>
+                    {!locked && (
+                      <button type="button" className="fl-dep-x" aria-label={`Tirar “${row.title}” de quem esta tarefa espera`} title="Tirar" onClick={() => toggle(row.ref, false)} data-testid={`task-panel-depends-remove-${row.ref}`}>
+                        ×
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {!locked && choices.length > 0 && (
+            <button type="button" className="ui-button ui-button--secondary ui-button--small fl-dep-edit" onClick={() => { toggled.current = true; setEditing(true); }} aria-expanded={false} data-testid="task-panel-depends-edit">
+              {task.dependsOn.length > 0 ? "Editar" : "Escolher tarefas"}
+            </button>
+          )}
+        </>
+      )}
+      {open && (
+        <>
+          {choices.length > 6 && (
+            <>
+              <label htmlFor={searchId} className="sr-only">
+                Buscar tarefa pelo nome
+              </label>
+              <input id={searchId} className="ui-input" type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Buscar tarefa pelo nome" data-testid="task-panel-depends-search" />
+            </>
+          )}
+          {shown.length === 0 && <small className="tp__hint">Nenhuma tarefa com esse nome.</small>}
+          {shown.map((choice) => (
+            <label key={choice.ref} className="fl-check">
+              <input type="checkbox" checked={choice.checked} onChange={(event) => toggle(choice.ref, event.currentTarget.checked)} data-testid={`task-panel-depends-${choice.ref}`} />
+              <AgentAvatar agent={agents.get(choice.ownerId)} size={18} />
+              <span>
+                {choice.ownerId ? <b>{name(choice.ownerId)} · </b> : null}{choice.title}
+              </span>
+            </label>
+          ))}
+          <button type="button" className="ui-button ui-button--secondary ui-button--small fl-dep-edit" onClick={() => { toggled.current = true; close(); }} aria-expanded={true} data-testid="task-panel-depends-done">
+            Recolher
+          </button>
+        </>
+      )}
       <small className="tp__hint">{locked ? "A tarefa já começou: de quem ela espera não muda." : "Ela só começa quando todas as marcadas terminarem, e recebe a entrega delas."}</small>
     </fieldset>
   );

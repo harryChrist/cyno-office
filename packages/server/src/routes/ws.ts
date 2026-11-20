@@ -1,6 +1,7 @@
 import {
   WS_CLOSE_WORKSPACE_NOT_FOUND,
   WS_EPOCH_PARAM,
+  WS_HEARTBEAT_WIRE,
   WS_PATH,
   WS_SINCE_PARAM,
   WS_WORKSPACE_PARAM,
@@ -48,6 +49,7 @@ function snapshotEvent(runtime: WorkspaceRuntime, manager: WorkspaceManager): Se
     forYouTypes: runtime.forYouTypes.list(),
     connectors: runtime.connectors.list(),
     browser: runtime.browser?.state() ?? BROWSER_OFF,
+    scripts: runtime.scripts.state(),
     epoch: runtime.hub.epoch,
     seq: runtime.hub.seq,
   };
@@ -123,7 +125,10 @@ function listOnly(socket: WebSocket, manager: WorkspaceManager, options: WsOptio
   });
 }
 
-/** Heartbeat (ping/pong) e limpeza ao fechar. */
+/**
+ * Heartbeat e limpeza ao fechar. A cada batida vão o ping de protocolo (quem não responde com pong até a próxima é
+ * derrubado) e o aviso de vida em texto, que é o que a página consegue ver para saber que a conexão não morreu.
+ */
 function watch(socket: WebSocket, options: WsOptions, app: FastifyInstance, cleanup: () => void): void {
   let alive = true;
   socket.on("pong", () => {
@@ -136,6 +141,7 @@ function watch(socket: WebSocket, options: WsOptions, app: FastifyInstance, clea
     }
     alive = false;
     socket.ping();
+    sendWire(socket, WS_HEARTBEAT_WIRE);
   }, options.heartbeatMs);
   heartbeat.unref();
 

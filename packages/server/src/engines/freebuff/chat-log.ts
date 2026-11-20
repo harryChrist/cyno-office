@@ -72,6 +72,33 @@ export function interpretLogEntry(entry: unknown): FreebuffLogEvent[] {
   return events;
 }
 
+/** O que um passo do agente gastou, como o `log.jsonl` deixa ver (ESTIMATIVA: o Freebuff não grava os tokens de saída). */
+export type FreebuffStepUsage = { inputTokens: number; outputTokens: number; credits: number };
+
+/** Caracteres por token usados para estimar a saída pelo tamanho do texto e das chamadas de ferramenta (regra comum para texto em inglês e código). */
+export const FREEBUFF_CHARS_PER_TOKEN = 4;
+
+/**
+ * O gasto de um passo. A linha "Start agent ... step N" traz `contextTokenCount` (tokens de entrada que o passo
+ * leu, cache incluído; MEDIDO pelo Freebuff) e a "End agent ... step N" traz `stepCreditsUsed` (créditos do passo, 0 no
+ * modo free) e o texto/chamadas da resposta, de onde sai a saída estimada. Vale para todo passo (o principal e os
+ * subagentes), porque todos gastam a cota. Linhas que não são de passo dão undefined.
+ */
+export function interpretStepUsage(entry: unknown): FreebuffStepUsage | undefined {
+  if (!isObject(entry) || typeof entry.msg !== "string" || !isObject(entry.data)) return undefined;
+  const data = entry.data;
+  if (entry.msg.startsWith("Start agent") && typeof data.contextTokenCount === "number" && Number.isFinite(data.contextTokenCount) && data.contextTokenCount >= 0) {
+    return { inputTokens: Math.round(data.contextTokenCount), outputTokens: 0, credits: 0 };
+  }
+  if (entry.msg.startsWith("End agent") && typeof data.shouldEndTurn === "boolean") {
+    const text = typeof data.fullResponse === "string" ? data.fullResponse.length : 0;
+    const calls = Array.isArray(data.toolCalls) ? JSON.stringify(data.toolCalls).length : 0;
+    const credits = typeof data.stepCreditsUsed === "number" && Number.isFinite(data.stepCreditsUsed) ? data.stepCreditsUsed : 0;
+    return { inputTokens: 0, outputTokens: Math.ceil((text + calls) / FREEBUFF_CHARS_PER_TOKEN), credits };
+  }
+  return undefined;
+}
+
 export type ChatLogTailOptions = {
   file: string;
   /** Começa do fim do arquivo (retomada: nada antigo vira evento novo). */

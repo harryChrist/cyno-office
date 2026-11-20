@@ -182,7 +182,7 @@ function FreebuffBlock({ view }: { view: UsageView }) {
             {fb.shortText}
           </span>
           <span className={`usagep__note${fb.old ? " usagep__note--old" : ""}`}>
-            {[fb.resetLabel, fb.wallet !== undefined && fb.wallet > 0 ? `${hoursLabel(fb.wallet)} na carteira` : "", fb.estimated ? `estimado: o Cyno abriu ${hoursLabel(fb.openedSince)} depois da leitura` : fb.total !== undefined ? "medido na tela do Freebuff" : ""]
+            {[fb.resetLabel, fb.usingWallet ? "cota do dia acabou: gastando a carteira" : "", fb.wallet !== undefined && fb.wallet > 0 ? `${hoursLabel(fb.wallet)} na carteira` : "", fb.estimated ? `estimado: o Cyno abriu ${hoursLabel(fb.openedSince)} depois da leitura` : fb.total !== undefined ? "medido na tela do Freebuff" : ""]
               .filter(Boolean)
               .join(" · ")}
           </span>

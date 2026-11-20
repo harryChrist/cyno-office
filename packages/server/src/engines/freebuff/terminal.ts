@@ -6,7 +6,7 @@ import { writeJsonAtomic } from "../../store/atomic-write";
 import { errorMessage } from "../../util/text";
 import { bracketedPaste, type PtyProcess, type PtySpawnFn } from "../terminals/pty-terminal";
 import type { SendOptions, SessionInfo, TerminalAgent, TerminalEvent, TerminalListener, TerminalSpec } from "../terminals/types";
-import { ChatLogTail, interpretLogEntry, type FreebuffLogEvent } from "./chat-log";
+import { ChatLogTail, interpretLogEntry, interpretStepUsage, type FreebuffLogEvent } from "./chat-log";
 import { findLiveSession, listChats, processTree, chatsDirOf } from "./files";
 import { chooseModel, type TuiDriver } from "./model-select";
 import { ScreenBuffer } from "./screen";
@@ -77,7 +77,7 @@ export type FreebuffTerminalOptions = {
 };
 
 type Message = { text: string; tag?: string; resent?: boolean };
-type Turn = { message: Message; startedAt: number; registered: boolean; presses: number; lastSignal: number; lastText: string; deliveryTimer?: NodeJS.Timeout };
+type Turn = { message: Message; startedAt: number; registered: boolean; presses: number; lastSignal: number; lastText: string; deliveryTimer?: NodeJS.Timeout; steps: { input: number; output: number; credits: number; count: number } };
 
 const defaultBackoff = (attempt: number) => Math.min(30_000, 1000 * 2 ** Math.max(0, attempt - 1));
 export const FREEBUFF_PTY_SIZE = { cols: 140, rows: 100 } as const;
@@ -429,7 +429,7 @@ export class FreebuffTerminal implements TerminalAgent {
       this.queue.unshift(message);
       return;
     }
-    const turn: Turn = { message, startedAt: Date.now(), registered: false, presses: 1, lastSignal: Date.now(), lastText: "" };
+    const turn: Turn = { message, startedAt: Date.now(), registered: false, presses: 1, lastSignal: Date.now(), lastText: "", steps: { input: 0, output: 0, credits: 0, count: 0 } };
     this.turn = turn;
     this.emit({ type: "turn_start", tag: message.tag });
     this.type(pty, message.text);
@@ -462,6 +462,14 @@ export class FreebuffTerminal implements TerminalAgent {
   // ---------- Registro do chat ----------
 
   private onLogEntry(entry: unknown): void {
+    const step = interpretStepUsage(entry);
+    if (step && this.turn) {
+      const { steps } = this.turn;
+      steps.input += step.inputTokens;
+      steps.output += step.outputTokens;
+      steps.credits += step.credits;
+      if (step.inputTokens > 0) steps.count += 1;
+    }
     for (const event of interpretLogEntry(entry)) this.onLogEvent(event);
   }
 
@@ -503,7 +511,10 @@ export class FreebuffTerminal implements TerminalAgent {
     this.failures = 0;
     if (!this.session?.started) this.saveSession({ started: true });
     if (result && result !== turn.lastText) this.emit({ type: "text", text: result });
-    this.emit({ type: "turn_end", tag: turn.message.tag, ok: true, result });
+    // Tokens do turno: entrada MEDIDA (o contexto de cada passo) e saída ESTIMADA pelo tamanho do texto; sem passo lido, sem número.
+    const { input, output, count } = turn.steps;
+    const usage = count > 0 ? { inputTokens: input, outputTokens: output, cacheReadTokens: 0, cacheCreationTokens: 0, durationMs: Date.now() - turn.startedAt, estimated: true } : undefined;
+    this.emit({ type: "turn_end", tag: turn.message.tag, ok: true, result, ...(usage ? { usage } : {}) });
     if (this.pty && this.status_ === "busy") this.setStatus("idle");
     if (this.closeAfterTurn) {
       void this.closeForHourEnd();

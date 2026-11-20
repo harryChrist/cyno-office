@@ -1314,8 +1314,8 @@ export class ProjectService {
   markEngineBlock(task: Task, block: { reason: string }, agentName: string): void {
     const found = this.locateAny(task);
     if (!found || hasLifecycle(found.plan) || this.stopped) return;
-    const quota = block.reason === "quota";
-    const note = `${agentName} indisponível (${quota ? "sem cota" : "motor fora do ar"}): espera voltar`;
+    const quota = block.reason === "quota" || block.reason === "paused";
+    const note = `${agentName} indisponível (${block.reason === "paused" ? "pausado no limite do plano" : quota ? "sem cota" : "motor fora do ar"}): espera voltar`;
     const { planTask, plan } = found;
     if (planTask.blocked?.note === note) return;
     const at = this.at();

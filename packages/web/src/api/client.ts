@@ -3,6 +3,9 @@ import type {
   RoutineRun,
   BrowserState,
   BrowserTab,
+  ScriptOutputResponse,
+  ScriptRun,
+  ScriptsState,
   AgentChatResponse,
   AgentTerminalInfo,
   Connector,
@@ -124,6 +127,9 @@ import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engine
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
 import { boardDataPath, boardExportPath, boardPagePath, boardPath, boardSharePath, boardShareRotatePath, boardsPath, type Board, type BoardShare, type SetBoardShareBody, type UpdateBoardBody } from "@cyno/shared";
+import { fileCountPath, fileCreatePath, fileDeletePath, fileListPath, fileRawPath, fileReadPath, fileRenamePath, fileRootsPath, fileSearchPath, fileUploadPath, fileWritePath } from "@cyno/shared";
+import type { FileCountResponse, FileCreateBody, FileCreateResponse, FileDeleteBody, FileDeleteResponse, FileListResponse, FileReadResponse, FileRenameBody, FileRenameResponse, FileRootsResponse, FileSearchResponse, FileWriteBody, FileWriteResponse } from "@cyno/shared";
+import { scriptDownloadPath, scriptOutputPath, scriptPath, scriptsPath, scriptStopPath } from "@cyno/shared";
 import { agentRulesPath, brainOrganizePath, brainRulesPath, type AgentRulesResponse, type BrainOrganizeResponse } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
 import { useNavStore } from "../store/navStore";
@@ -209,10 +215,14 @@ function queryString(query: object): string {
 }
 
 /** Prefixo das rotas do workspace atual (`/api/w/<id>`). */
-function ws(): string {
+function wsId(): string {
   const id = useNavStore.getState().workspaceId;
   if (!id) throw new ApiRequestError(0, "Nenhum workspace selecionado");
-  return `/api/w/${segment(id)}`;
+  return id;
+}
+
+function ws(): string {
+  return `/api/w/${segment(wsId())}`;
 }
 
 /**
@@ -590,6 +600,28 @@ export const api = {
   openBrowserTab: (url?: string) => requestJson<BrowserTab>(`${ws()}/browser/tabs`, { method: "POST", body: url ? { url } : {} }),
   closeBrowserTab: (tabId: string) => requestJson<void>(`${ws()}/browser/tabs/${segment(tabId)}`, { method: "DELETE" }),
 
+  /** Scripts dos agentes: a lista, um script, um pedaço da saída (bruta, por byte) e o botão Parar. */
+  listScripts: () => requestJson<ScriptsState>(scriptsPath(wsId())),
+  getScript: (id: string) => requestJson<ScriptRun>(scriptPath(wsId(), id)),
+  getScriptOutput: (id: string, from = 0) => requestJson<ScriptOutputResponse>(scriptOutputPath(wsId(), id, from)),
+  stopScript: (id: string) => requestJson<ScriptRun>(scriptStopPath(wsId(), id), { method: "POST" }),
+  /** O endereço do arquivo de texto com a saída inteira (sem cores), para o link "Baixar saída". */
+  scriptDownloadUrl: (id: string) => scriptDownloadPath(wsId(), id),
+
+  /** Arquivos do workspace (só leitura): raízes, uma página de uma pasta, um arquivo (com `known`, devolve `unchanged` se nada mudou), busca por nome e o endereço do arquivo em si. */
+  getFileRoots: () => requestJson<FileRootsResponse>(fileRootsPath(wsId())),
+  listFiles: (root: string, path: string, options: { offset?: number; limit?: number; filter?: string } = {}) => requestJson<FileListResponse>(fileListPath(wsId(), root, path, options)),
+  readFile: (root: string, path: string, known?: string, edit = false) => requestJson<FileReadResponse>(fileReadPath(wsId(), root, path, known, edit)),
+  searchFiles: (root: string, q: string) => requestJson<FileSearchResponse>(fileSearchPath(wsId(), root, q)),
+  fileRawUrl: (root: string, path: string, download = false) => fileRawPath(wsId(), root, path, download),
+  /** Alterações (só em pasta de trabalho com escrita): salvar, criar, renomear, apagar, contar o que há numa pasta e enviar. */
+  writeFile: (body: FileWriteBody) => requestJson<FileWriteResponse>(fileWritePath(wsId()), { method: "PUT", body }),
+  createFile: (body: FileCreateBody) => requestJson<FileCreateResponse>(fileCreatePath(wsId()), { method: "POST", body }),
+  renameFile: (body: FileRenameBody) => requestJson<FileRenameResponse>(fileRenamePath(wsId()), { method: "POST", body }),
+  deleteFile: (body: FileDeleteBody) => requestJson<FileDeleteResponse>(fileDeletePath(wsId()), { method: "POST", body }),
+  countFiles: (root: string, path: string) => requestJson<FileCountResponse>(fileCountPath(wsId(), root, path)),
+  uploadFile: (root: string, dir: string, file: File, options: { overwrite?: boolean; onProgress?: (fraction: number) => void; signal?: AbortSignal } = {}) => uploadFileToFolder(root, dir, file, options),
+
   /** Biblioteca de mídia do workspace (mais novas primeiro). */
   listMedia: () => requestJson<MediaItem[]>(`${ws()}/media`),
   updateMedia: (id: string, body: UpdateMediaBody) => requestJson<MediaItem>(`${ws()}/media/${segment(id)}`, { method: "PATCH", body }),
@@ -660,6 +692,50 @@ export function uploadMedia(file: File, options: { onProgress?: (fraction: numbe
         body = undefined;
       }
       if (request.status >= 200 && request.status < 300) resolve(body as MediaItem);
+      else {
+        if (request.status === 401) useAuthStore.getState().expire();
+        reject(new ApiRequestError(request.status, (body as ApiErrorBody | undefined)?.error ?? `Erro HTTP ${request.status}`));
+      }
+    };
+    request.send(file);
+  });
+}
+
+/**
+ * Envia um arquivo para uma pasta da página "Arquivos": o File vai cru no corpo. XMLHttpRequest só para ter o
+ * progresso; `signal` cancela o envio (rejeita com AbortError).
+ */
+function uploadFileToFolder(root: string, dir: string, file: File, options: { overwrite?: boolean; onProgress?: (fraction: number) => void; signal?: AbortSignal }): Promise<FileWriteResponse> {
+  return new Promise((resolve, reject) => {
+    let url: string;
+    try {
+      url = fileUploadPath(wsId(), root, dir, file.name, options.overwrite === true);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    if (options.signal?.aborted) {
+      reject(new DOMException("Envio cancelado", "AbortError"));
+      return;
+    }
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+    request.setRequestHeader("content-type", "application/octet-stream");
+    request.setRequestHeader("accept", "application/json");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) options.onProgress?.(event.loaded / event.total);
+    };
+    request.onerror = () => reject(new TypeError("Falha de rede"));
+    request.onabort = () => reject(new DOMException("Envio cancelado", "AbortError"));
+    options.signal?.addEventListener("abort", () => request.abort(), { once: true });
+    request.onload = () => {
+      let body: unknown;
+      try {
+        body = request.responseText ? JSON.parse(request.responseText) : undefined;
+      } catch {
+        body = undefined;
+      }
+      if (request.status >= 200 && request.status < 300) resolve(body as FileWriteResponse);
       else {
         if (request.status === 401) useAuthStore.getState().expire();
         reject(new ApiRequestError(request.status, (body as ApiErrorBody | undefined)?.error ?? `Erro HTTP ${request.status}`));

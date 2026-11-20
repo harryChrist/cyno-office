@@ -115,6 +115,15 @@ describe("FreebuffTerminal: turno de ponta a ponta", () => {
     expect(terminal.status()).toBe("idle");
   });
 
+  it("o fim do turno leva os tokens do Freebuff como estimativa (entrada lida do registro, saída pelo tamanho do texto)", async () => {
+    const { terminal, events } = await setup();
+    terminal.send("Crie o arquivo ola.txt [ferramenta]", "t1");
+    const end = await until(() => turnEnds(events)[0]);
+    expect(end.usage).toMatchObject({ estimated: true, cacheReadTokens: 0, cacheCreationTokens: 0 });
+    expect(end.usage!.inputTokens).toBeGreaterThanOrEqual(1100);
+    expect(end.usage!.outputTokens).toBeGreaterThan(0);
+  });
+
   it("a hora só abre na primeira mensagem (subir e ficar ocioso não gasta nada)", async () => {
     const { terminal, service } = await setup();
     await terminal.ensureRunning();

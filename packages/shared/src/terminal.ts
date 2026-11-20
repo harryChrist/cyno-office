@@ -312,7 +312,9 @@ export function terminalStateView(engine: AgentEngine, info: AgentTerminalInfo |
     const detail =
       block.reason === "quota"
         ? "As tarefas esperam na fila e seguem sozinhas quando a cota voltar"
-        : block.reason === "hour"
+        : block.reason === "paused"
+          ? "Pausado pelo limite de uso do plano que você configurou: a tarefa em curso termina o passo, nada novo começa e tudo volta sozinho quando a janela reiniciar"
+          : block.reason === "hour"
           ? "Outro agente do Freebuff está com a hora aberta (o teto é de horas abertas ao mesmo tempo): as tarefas esperam na fila e seguem quando a hora dele acabar"
           : "A CLI deste motor não está disponível no servidor";
     return view("sem_cota", label, detail);

@@ -14,6 +14,7 @@ const usageText = (usage: DiskUsage) => `${formatBytes(usage.bytes)} · ${countL
 function RetentionCard({
   title,
   hint,
+  more,
   usage,
   kind,
   value,
@@ -23,6 +24,7 @@ function RetentionCard({
 }: {
   title: string;
   hint: string;
+  more?: string;
   usage: DiskUsage;
   kind: "transcripts" | "logs";
   value: number;
@@ -49,6 +51,12 @@ function RetentionCard({
           {usageText(usage)}
         </span>
       </div>
+      {more && (
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>{more}</p>
+        </details>
+      )}
     </section>
   );
 }
@@ -61,7 +69,7 @@ function ApprovalsCard({ value, disabled, onChange }: { value: number; disabled:
     <section className="settings__card" data-testid={testId}>
       <OptionHead
         title="Aprovações decididas"
-        line="Depois desse prazo, a aprovação decidida sai da lista e vai para o arquivo, onde continua disponível em Mais antigos. Nada é apagado."
+        line="Depois do prazo, vai para o arquivo (em Mais antigos). Nada é apagado."
         seal="plataforma"
         state={<StateBadge tone="value">{value <= 0 ? "Nunca arquiva" : `Na lista por ${retentionLabel(value)}`}</StateBadge>}
       />
@@ -129,9 +137,13 @@ export function HistorySettings() {
   return (
     <div className="settings__groups" data-testid="settings-history">
       <div className="settings__toolbar">
-        <p className="settings__card-hint">
-          Vale para o servidor inteiro. A limpeza roda sozinha ao ligar o servidor e uma vez por dia; tarefas, resultados e o Cérebro nunca são apagados.
-        </p>
+        <div>
+          <p className="settings__card-hint">Vale para o servidor inteiro. A limpeza roda sozinha uma vez por dia.</p>
+          <details className="settings__more">
+            <summary>O que nunca é apagado</summary>
+            <p>Tarefas, resultados e o Cérebro nunca são apagados. A limpeza também roda ao ligar o servidor.</p>
+          </details>
+        </div>
         <button type="button" className="ui-button ui-button--secondary ui-button--small" onClick={() => setConfirming(true)} data-testid="settings-history-clean">
           Limpar agora
         </button>
@@ -139,11 +151,8 @@ export function HistorySettings() {
       <ErrorText testId="settings-history-error">{error}</ErrorText>
       <RetentionCard
         title="Conversas internas das CLIs"
-        hint={
-          data.transcriptsManaged
-            ? "O histórico que o Claude Code guarda de cada agente (só as pastas dos nossos agentes; a conversa em uso nunca sai). O Antigravity guarda as dele junto com as suas e não é mexido."
-            : "O servidor não sabe onde o Claude Code guarda as conversas: nada é apagado lá."
-        }
+        hint={data.transcriptsManaged ? "O histórico que o Claude Code guarda de cada agente. A conversa em uso nunca sai." : "O servidor não sabe onde o Claude Code guarda as conversas. Nada é apagado lá."}
+        more="Só as pastas dos nossos agentes são limpas. O Antigravity guarda as conversas dele junto com as suas e não é mexido."
         usage={data.usage.transcripts}
         kind="transcripts"
         value={data.settings.transcriptsDays}
@@ -153,7 +162,7 @@ export function HistorySettings() {
       />
       <RetentionCard
         title="Logs de trabalho das tarefas"
-        hint="O passo a passo de cada tarefa (o que o agente fez, ferramentas, subagentes). O resultado da tarefa continua guardado."
+        hint="O passo a passo de cada tarefa. O resultado continua guardado."
         usage={data.usage.logs}
         kind="logs"
         value={data.settings.logsDays}

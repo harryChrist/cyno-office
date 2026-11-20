@@ -186,6 +186,8 @@ export type PlatformPaths = {
   jointDir: string;
   /** `attention.json`: as preferências do dono e os alertas que não se refazem sozinhos (a cadeia de atenção). */
   attentionFile: string;
+  /** `usage-guard.json`: as regras de pausa por limite de uso do plano e as pausas em vigor. */
+  usageGuardFile: string;
   /** `owner.json`: a presença do dono e o "enquanto você estava fora" (uma só para todos os navegadores). */
   ownerFile: string;
   /** `push.json` (modo 0600): as chaves VAPID e os aparelhos inscritos no aviso com o site fechado. Nunca sai por rota (só a chave pública). */
@@ -221,6 +223,7 @@ export function platformPaths(dataRoot: string): PlatformPaths {
     availabilityFile: path.join(root, "agenda", "availability.json"),
     jointDir: path.join(root, "joint"),
     attentionFile: path.join(root, "attention.json"),
+    usageGuardFile: path.join(root, "usage-guard.json"),
     ownerFile: path.join(root, "owner.json"),
     pushFile: path.join(root, "push.json"),
     reportsDir: path.join(root, "reports"),

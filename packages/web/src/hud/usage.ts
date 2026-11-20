@@ -363,6 +363,7 @@ export function agentUsageRows(tallies: AgentUsageTally[], agents: Pick<Agent, "
               `saída ${formatTokens(tally.outputTokens)}`,
               `cache: ${formatTokens(tally.cacheCreationTokens)} gravados, ${formatTokens(tally.cacheReadTokens)} lidos`,
               turnsLabel,
+              ...(tally.estimatedTurns ? ["estimado: entrada lida do registro do chat, saída pelo tamanho do texto"] : []),
               ...(costLabel ? [`custo informado pelo programa ${costLabel}`] : []),
             ].join(" · ");
       return {
@@ -371,7 +372,7 @@ export function agentUsageRows(tallies: AgentUsageTally[], agents: Pick<Agent, "
         provider: tally.provider,
         providerLabel: usageProviderLabel(tally.provider),
         tokens,
-        tokensLabel: tokens === null ? "–" : formatTokens(tokens),
+        tokensLabel: tokens === null ? "–" : `${tally.estimatedTurns ? "~" : ""}${formatTokens(tokens)}`,
         turnsLabel,
         ...(costLabel ? { costLabel } : {}),
         share: tokens === null ? 0 : Math.round((tokens / max) * 100),

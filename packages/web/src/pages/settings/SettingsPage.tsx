@@ -20,38 +20,37 @@ import { GlobalModelsSettings, WorkspaceModelsSettings } from "./ModelsSettings"
 import { OfficeSettings } from "./OfficeSettings";
 import { ShortcutsSettings } from "./ShortcutsSettings";
 import { PasswordSettings } from "./PasswordSettings";
+import { UsageGuardSettings } from "./UsageGuardSettings";
 import { VersionSettings } from "./VersionSettings";
 import { OptionHead, Seal, StateBadge } from "./SettingsOption";
-import { SettingsMobileNav, useIsPhone } from "./SettingsSheet";
-import { SettingsSummary } from "./SettingsSummary";
-import { useSettingsLayout } from "./settingsLayout";
+import { SettingsWarnings } from "./SettingsWarnings";
+import { useIsPhone, useSettingsLayout } from "./settingsLayout";
 import "./settings.css";
 import "./settingsLayout.css";
 import {
   AREA_LABELS,
-  buildSummary,
+  DEFAULT_SETTINGS_SECTION,
+  navBadges,
   SEAL_LABELS,
   isRemoteHost,
   searchSettings,
   sectionsWithMatches,
   settingsHash,
+  settingsHashHasSection,
+  settingsPageOf,
+  settingsPageSeal,
+  settingsPagesOf,
   settingsSection,
   settingsSectionFromHash,
   settingsSectionsOf,
   settingsWarnings,
   type SettingsArea,
+  type SettingsPageInfo,
+  type SettingsSeal,
   type SettingsSectionId,
 } from "./settingsView";
 
 const sectionDomId = (id: SettingsSectionId) => `settings-sec-${id}`;
-
-/** Rola até a seção (o painel rola por dentro no desktop; no celular a própria página). */
-function scrollToSection(id: SettingsSectionId): void {
-  const element = document.getElementById(sectionDomId(id));
-  if (!element) return;
-  const calm = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  element.scrollIntoView?.({ block: "start", behavior: calm ? "auto" : "smooth" });
-}
 
 /** Esc (fora de campo, sem janela aberta e sem outro dono, como um popover da barra) volta ao escritório. */
 function useEscapeToOffice(): void {
@@ -83,16 +82,31 @@ function useAuthStatus(): AuthStatus | null {
   return status;
 }
 
-/** Uma seção: título, o que ela é, o selo e o conteúdo. `hidden`: a busca a escondeu (continua montada). */
-function SectionBlock({ id, hidden, children }: { id: SettingsSectionId; hidden: boolean; children: ReactNode }) {
+/** O selo com o nome do workspace (é o que diz onde a opção vale). */
+function sealText(seal: SettingsSeal, workspaceName: string | null): string | undefined {
+  return seal === "workspace" && workspaceName ? `Só em ${workspaceName}` : undefined;
+}
+
+type SectionMode = {
+  /** Não é da página aberta, ou a busca a escondeu. Escondida ela continua montada: nada digitado ou carregado se perde. */
+  hidden: boolean;
+  /** Única seção da página: o cabeçalho da página já diz o título, o dela some. */
+  solo: boolean;
+  /** Mostra o selo (na busca, com seções de páginas diferentes juntas). */
+  seal: boolean;
+  workspaceName: string | null;
+};
+
+/** Uma seção de uma página: título, o que ela é e o conteúdo. */
+function SectionBlock({ id, mode, children }: { id: SettingsSectionId; mode: SectionMode; children: ReactNode }) {
   const section = settingsSection(id);
   return (
-    <section id={sectionDomId(id)} className="settings__sec" hidden={hidden} aria-labelledby={`${sectionDomId(id)}-title`} data-testid={`settings-section-${id}`}>
+    <section id={sectionDomId(id)} className={`settings__sec${mode.solo ? " settings__sec--solo" : ""}`} hidden={mode.hidden} aria-labelledby={`${sectionDomId(id)}-title`} data-testid={`settings-section-${id}`}>
       <header className="settings__sec-head">
         <h3 id={`${sectionDomId(id)}-title`} className="settings__section-title">
           {section.label}
         </h3>
-        <Seal kind={section.seal} />
+        {mode.seal && <Seal kind={section.seal} label={sealText(section.seal, mode.workspaceName)} />}
         <p className="settings__sec-hint">{section.hint}</p>
       </header>
       {children}
@@ -134,9 +148,11 @@ function ConnectorsSection() {
 }
 
 /**
- * Página "Configurações": duas áreas na mesma página, "Da plataforma" (vale para tudo) e "Do
- * workspace" (vale só para o workspace do seletor), com um resumo no topo, um índice lateral (abas
- * no celular), busca por nome da opção e endereço direto para cada seção.
+ * Página "Configurações": um índice de páginas à esquerda e UMA página aberta por vez à direita. O índice separa
+ * o que é "Da plataforma" (vale para tudo) do que é "Do workspace" (vale só para o workspace do seletor) e mostra
+ * o estado do que mais se confere (senha, motores, modelo padrão, conectores). No celular o índice é a tela de
+ * entrada e cada página abre por cima dele, com um "voltar". Cada seção tem endereço próprio; a busca por nome da
+ * opção mostra juntas as seções que casam.
  */
 export function SettingsPage() {
   const workspaceId = useNavStore((state) => state.workspaceId);
@@ -147,9 +163,14 @@ export function SettingsPage() {
   const auth = useAuthStatus();
   const [engines, setEngines] = useState<EngineInfo[] | null>(null);
   const [defaults, setDefaults] = useState<ModelDefaults | null>(null);
+  const [pauses, setPauses] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<SettingsSectionId>(() => settingsSectionFromHash(window.location.hash));
+  // Celular: há uma página aberta (o endereço diz qual)? Sem isso, a tela é o menu.
+  const [inPage, setInPage] = useState(() => settingsHashHasSection(window.location.hash));
+  const pushedRef = useRef(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const layout = useSettingsLayout();
   const phone = useIsPhone();
   useEscapeToOffice();
@@ -164,237 +185,259 @@ export function SettingsPage() {
     titleRef.current?.focus({ preventScroll: true });
   }, []);
 
-  // Link direto: abre rolando até a seção do endereço (as seções carregam dados e mexem na altura, então tenta de novo).
+  // Link direto e voltar/avançar do navegador: a seção do endereço é a que abre (no celular, sem seção = menu).
   useEffect(() => {
-    const jumpToHash = () => {
-      const section = settingsSectionFromHash(window.location.hash);
-      setActive(section);
-      if (/\/configuracoes\/[^/?]+/.test(window.location.hash)) {
-        window.setTimeout(() => scrollToSection(section), 120);
-        window.setTimeout(() => scrollToSection(section), 700);
-      }
+    const openFromHash = () => {
+      setQuery("");
+      setActive(settingsSectionFromHash(window.location.hash));
+      setInPage(settingsHashHasSection(window.location.hash));
+      pushedRef.current = false;
     };
-    jumpToHash();
-    window.addEventListener("hashchange", jumpToHash);
-    return () => window.removeEventListener("hashchange", jumpToHash);
+    window.addEventListener("hashchange", openFromHash);
+    return () => window.removeEventListener("hashchange", openFromHash);
   }, []);
 
-  // A seção que está à vista fica marcada no índice.
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const visible = new Map<string, boolean>();
-    const order = [...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id);
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) visible.set(entry.target.id, entry.isIntersecting);
-        const first = order.find((id) => visible.get(sectionDomId(id)));
-        if (first) setActive(first);
-      },
-      { rootMargin: "0px 0px -65% 0px" },
-    );
-    for (const id of order) {
-      const element = document.getElementById(sectionDomId(id));
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
-  }, [workspace?.id]);
+  const searching = query.trim() !== "";
+  const page = settingsPageOf(active);
+  const pageFirst = page.sections[0];
+  const showMenu = phone && !inPage;
 
+  // Trocou de página (ou começou a buscar): a leitura volta ao topo; uma seção do meio da página rola até ela.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const scroller = panel.closest(".pages");
+    panel.scrollTop = 0;
+    if (scroller) scroller.scrollTop = 0;
+    if (searching || active === pageFirst) return;
+    // As seções de cima carregam dados e mudam de altura: tenta de novo um pouco depois.
+    const reach = () => document.getElementById(sectionDomId(active))?.scrollIntoView?.({ block: "start" });
+    reach();
+    const timers = [window.setTimeout(reach, 150), window.setTimeout(reach, 700)];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [active, pageFirst, searching, showMenu]);
+
+  /** Abre a página de uma seção. No celular entra na página por cima do menu (o "voltar" do aparelho devolve o menu). */
   const jump = (id: SettingsSectionId) => {
     setQuery("");
     setActive(id);
-    const hash = settingsHash(workspaceId, id);
-    if (window.location.hash !== hash) window.history.replaceState(null, "", hash);
-    // Depois de limpar a busca, as seções escondidas voltam; espera o quadro seguinte para rolar.
-    window.requestAnimationFrame(() => scrollToSection(id));
+    const hash = settingsHash(workspaceId, id, phone);
+    if (window.location.hash !== hash) {
+      if (phone && !inPage) {
+        window.history.pushState(null, "", hash);
+        pushedRef.current = true;
+      } else window.history.replaceState(null, "", hash);
+    }
+    if (phone) setInPage(true);
+  };
+
+  /** Celular: volta da página para o menu. */
+  const backToMenu = () => {
+    if (pushedRef.current) {
+      window.history.back();
+      return;
+    }
+    window.history.replaceState(null, "", settingsHash(workspaceId, DEFAULT_SETTINGS_SECTION));
+    setInPage(false);
   };
 
   const chooseWorkspace = (id: string) => {
     setWorkspace(id);
-    const hash = settingsHash(id, active);
+    const hash = settingsHash(id, active, phone && inPage);
     if (window.location.hash !== hash) window.history.replaceState(null, "", hash);
   };
 
   const matches = useMemo(() => searchSettings(query), [query]);
   const shown = useMemo(() => sectionsWithMatches(matches), [matches]);
-  const searching = query.trim() !== "";
-  const hide = (id: SettingsSectionId) => searching && !shown.has(id);
-  const areaHidden = (area: SettingsArea) => searching && !settingsSectionsOf(area).some((section) => shown.has(section.id));
+  // Uma página por vez; buscando, aparecem juntas as seções que têm opção com aquele nome.
+  const inOpenPage = (id: SettingsSectionId) => (page.sections as readonly SettingsSectionId[]).includes(id);
+  const mode = (id: SettingsSectionId): SectionMode => ({
+    hidden: searching ? !shown.has(id) : !inOpenPage(id),
+    solo: !searching && page.sections.length === 1,
+    seal: searching,
+    workspaceName: workspace?.name ?? null,
+  });
+  const areaHidden = (area: SettingsArea) => (searching ? !settingsSectionsOf(area).some((section) => shown.has(section.id)) : page.area !== area);
 
   const access = workspace ? workspaceAccess(workspace.access) : null;
-  const summary = buildSummary({ auth, engines, defaults, connectorCount: connectors === null ? null : connectors.length });
+  const badges = navBadges({ auth, engines, defaults, connectorCount: connectors === null ? null : connectors.length, pauses });
   const warnings = settingsWarnings({ auth, remote: isRemoteHost(window.location.hostname), workspaceName: workspace?.name ?? null, access });
   const wsColor = workspaceColor(workspace?.name ?? workspaceId ?? "");
   const noWorkspace = workspaces !== null && workspaces.length === 0;
+  const pageSeal = settingsPageSeal(page);
 
-  const navButton = (id: SettingsSectionId, onPick: () => void = () => undefined) => {
-    const section = settingsSection(id);
+  const navButton = (item: SettingsPageInfo) => {
+    const first = item.sections[0];
+    const badge = item.sections.map((id) => badges[id]).find((found) => found !== undefined);
     return (
       <button
-        key={id}
+        key={first}
         type="button"
         className="settings__nav-item"
-        aria-current={id === active ? "true" : undefined}
-        onClick={() => {
-          jump(id);
-          onPick();
-        }}
-        data-testid={`settings-nav-${id}`}
+        title={item.hint}
+        aria-current={item === page && !showMenu ? "true" : undefined}
+        onClick={() => jump(first)}
+        data-testid={`settings-nav-${first}`}
       >
-        <span className="settings__nav-label">{section.label}</span>
-        <span className="settings__nav-hint">{section.hint}</span>
+        <span className="settings__nav-label">{item.label}</span>
+        <span className="settings__nav-hint">{item.hint}</span>
+        {badge && (
+          <span className={`settings__nav-badge settings__nav-badge--${badge.tone}`} data-testid={`settings-nav-badge-${first}`}>
+            {badge.text}
+          </span>
+        )}
+        <svg className="settings__nav-chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+          <path d="M8 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
     );
   };
 
-  /** Busca e seções por área: o índice lateral do computador e o corpo da folha do celular. */
-  const navBody = (onPick: () => void) => (
-    <>
-      <div className="settings__search">
-        <input
-          type="search"
-          className="ui-input"
-          value={query}
-          placeholder="Buscar uma opção…"
-          aria-label="Buscar uma opção das configurações"
-          maxLength={80}
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && query) {
-              event.preventDefault();
-              event.stopPropagation();
-              setQuery("");
-            }
-          }}
-          data-testid="settings-search"
-        />
-      </div>
-      {searching ? (
-        <div className="settings__results" role="group" aria-label="Opções encontradas" data-testid="settings-results">
-          {matches.length === 0 ? (
-            <p className="settings__nav-empty" role="status" data-testid="settings-search-empty">
-              Nenhuma opção com esse nome.
-            </p>
-          ) : (
-            <>
-              <p className="settings__nav-empty" role="status">
-                {matches.length === 1 ? "1 opção encontrada" : `${matches.length} opções encontradas`}
-              </p>
-              {matches.map((option) => (
-                <button key={option.id} type="button" className="settings__nav-item" onClick={() => { jump(option.section); onPick(); }} data-testid={`settings-result-${option.id}`}>
-                  <span className="settings__nav-label">{option.title}</span>
-                  <span className="settings__nav-hint">
-                    {settingsSection(option.section).label} · {SEAL_LABELS[option.seal]}
-                  </span>
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      ) : (
-        (["plataforma", "workspace"] as const).map((area) => (
-          <div key={area} className="settings__nav-group" role="group" aria-label={AREA_LABELS[area]}>
-            <p className="settings__nav-group-title">
-              {area === "workspace" && <span className="settings__ws-dot" aria-hidden="true" style={{ ["--ws-color" as string]: wsColor }} />}
-              <span className="settings__nav-group-label">{AREA_LABELS[area]}</span>
-              {area === "workspace" && workspace && <span className="settings__nav-group-name">{workspace.name}</span>}
-            </p>
-            {settingsSectionsOf(area).map((section) => navButton(section.id, onPick))}
-          </div>
-        ))
-      )}
-    </>
-  );
-
   return (
-    <section className="page page--settings page--fill" aria-labelledby="page-title-configuracoes" data-testid="page-configuracoes">
+    <section className={`page page--settings page--fill${phone && inPage ? " page--settings-open" : ""}`} aria-labelledby="page-title-configuracoes" data-testid="page-configuracoes">
       <header className="page__header page__header--row">
         <div className="page__heading">
           <h2 id="page-title-configuracoes" ref={titleRef} tabIndex={-1} className="page__title">
             Configurações
           </h2>
-          <p className="page__subtitle">O que vale para a plataforma inteira e o que vale só para um workspace, cada coisa com o seu selo e o seu estado.</p>
+          <p className="page__subtitle">O que vale para a plataforma inteira e o que vale só para um workspace.</p>
         </div>
       </header>
-      <div className="settings" data-cols={layout.columns} data-split={layout.split} style={{ ["--settings-max" as string]: `${layout.maxWidth}px` }} data-testid="settings-layout">
-        {phone ? (
-          <SettingsMobileNav current={settingsSection(active).label} onClosed={() => setQuery("")}>
-            {({ close }) => <div className="settings-sheet__body">{navBody(close)}</div>}
-          </SettingsMobileNav>
-        ) : (
-          <nav className="settings__nav" aria-label="Seções das configurações">
-            {navBody(() => undefined)}
-          </nav>
-        )}
-        <div id="settings-panel" className="settings__panel">
-          <SettingsSummary items={summary} warnings={warnings} onJump={jump} />
-          {searching && matches.length > 0 && (
-            <p className="settings__card-hint" role="status">
-              Mostrando só o que casa com “{query.trim()}”.
-            </p>
+      <div className="settings" data-cols={layout.columns} data-split={layout.split} data-view={phone ? (inPage ? "page" : "menu") : "split"} style={{ ["--settings-max" as string]: `${layout.maxWidth}px` }} data-testid="settings-layout">
+        <nav className="settings__nav" aria-label="Páginas das configurações" hidden={phone && inPage} data-testid="settings-nav">
+          {showMenu && <SettingsWarnings warnings={warnings} open={[]} onJump={jump} />}
+          <div className="settings__search">
+            <input
+              type="search"
+              className="ui-input"
+              value={query}
+              placeholder="Buscar uma opção…"
+              aria-label="Buscar uma opção das configurações"
+              maxLength={80}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && query) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setQuery("");
+                }
+              }}
+              data-testid="settings-search"
+            />
+          </div>
+          {searching ? (
+            <div className="settings__results" role="group" aria-label="Opções encontradas" data-testid="settings-results">
+              {matches.length === 0 ? (
+                <p className="settings__nav-empty" role="status" data-testid="settings-search-empty">
+                  Nenhuma opção com esse nome.
+                </p>
+              ) : (
+                <>
+                  <p className="settings__nav-empty" role="status">
+                    {matches.length === 1 ? "1 opção encontrada" : `${matches.length} opções encontradas`}
+                  </p>
+                  {matches.map((option) => (
+                    <button key={option.id} type="button" className="settings__nav-item settings__nav-item--result" onClick={() => jump(option.section)} data-testid={`settings-result-${option.id}`}>
+                      <span className="settings__nav-label">{option.title}</span>
+                      <span className="settings__nav-hint">
+                        {settingsPageOf(option.section).label} · {SEAL_LABELS[option.seal]}
+                      </span>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          ) : (
+            (["plataforma", "workspace"] as const).map((area) => (
+              <div key={area} className="settings__nav-group" role="group" aria-label={AREA_LABELS[area]}>
+                <div className="settings__nav-group-title">
+                  {area === "workspace" && <span className="settings__ws-dot" aria-hidden="true" style={{ ["--ws-color" as string]: wsColor }} />}
+                  <span className="settings__nav-group-label">{AREA_LABELS[area]}</span>
+                  {area === "workspace" && workspaces && workspaces.length > 0 && (
+                    <label className="settings__ws-picker">
+                      <span className="sr-only">Workspace das páginas abaixo</span>
+                      <select className="ui-input ui-input--compact" value={workspace?.id ?? ""} onChange={(event) => chooseWorkspace(event.currentTarget.value)} title="Trocar aqui troca o workspace aberto no app" data-testid="settings-workspace-select">
+                        {workspaces.map((ws) => (
+                          <option key={ws.id} value={ws.id}>
+                            {ws.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {settingsPagesOf(area).map(navButton)}
+              </div>
+            ))
+          )}
+        </nav>
+        <div id="settings-panel" ref={panelRef} className="settings__panel" hidden={showMenu} data-page-seal={searching ? undefined : (pageSeal ?? undefined)}>
+          {!phone && <SettingsWarnings warnings={warnings} open={searching ? [] : page.sections} onJump={jump} />}
+          {searching ? (
+            matches.length > 0 && (
+              <p className="settings__card-hint" role="status">
+                Mostrando só o que casa com “{query.trim()}”.
+              </p>
+            )
+          ) : (
+            <header className="settings__page-head" data-testid="settings-page-head">
+              {phone && (
+                <button type="button" className="settings__back" onClick={backToMenu} data-testid="settings-back">
+                  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" focusable="false">
+                    <path d="M12 5l-5 5 5 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Configurações
+                </button>
+              )}
+              <div className="settings__page-title-row">
+                <h3 className="settings__page-title">{page.label}</h3>
+                {pageSeal && pageSeal !== "plataforma" && <Seal kind={pageSeal} label={sealText(pageSeal, workspace?.name ?? null)} />}
+              </div>
+              <p className="settings__page-hint">{page.hint}</p>
+            </header>
           )}
 
           <div className="settings__area" hidden={areaHidden("plataforma")} data-testid="settings-area-plataforma">
-            <header className="settings__area-head">
-              <h3 className="settings__area-title">{AREA_LABELS.plataforma}</h3>
-              <Seal kind="plataforma" />
-              <p className="settings__area-hint">Vale para tudo: todos os workspaces, o Cyno e este servidor.</p>
-            </header>
-            <SectionBlock id="senha" hidden={hide("senha")}>
+            <SectionBlock id="senha" mode={mode("senha")}>
               <PasswordSettings />
             </SectionBlock>
-            <SectionBlock id="motores" hidden={hide("motores")}>
+            <SectionBlock id="motores" mode={mode("motores")}>
               <EnginesPanel onLoaded={setEngines} onOpenModels={() => jump("modelos-padrao")} />
             </SectionBlock>
-            <SectionBlock id="modelos-padrao" hidden={hide("modelos-padrao")}>
+            <SectionBlock id="limites" mode={mode("limites")}>
+              <div className="settings__groups">
+                <div className="settings__card settings__card--wide">
+                  <UsageGuardSettings onPauses={setPauses} />
+                </div>
+              </div>
+            </SectionBlock>
+            <SectionBlock id="modelos-padrao" mode={mode("modelos-padrao")}>
               <GlobalModelsSettings onLoaded={setDefaults} onOpenWorkspaceModels={workspace ? () => jump("modelos") : undefined} />
             </SectionBlock>
-            <SectionBlock id="cyno-ajustes" hidden={hide("cyno-ajustes")}>
+            <SectionBlock id="cyno-ajustes" mode={mode("cyno-ajustes")}>
               <CynoSettings />
             </SectionBlock>
-            <SectionBlock id="avisos" hidden={hide("avisos")}>
+            <SectionBlock id="avisos" mode={mode("avisos")}>
               <AttentionSettings />
             </SectionBlock>
-            <SectionBlock id="conectores-locais" hidden={hide("conectores-locais")}>
-              <LocalConnectorsSettings />
-            </SectionBlock>
-            <SectionBlock id="historico" hidden={hide("historico")}>
-              <HistorySettings />
-            </SectionBlock>
-            <SectionBlock id="versao" hidden={hide("versao")}>
+            <SectionBlock id="versao" mode={mode("versao")}>
               <VersionSettings />
             </SectionBlock>
-            <SectionBlock id="escritorio" hidden={hide("escritorio")}>
+            <SectionBlock id="historico" mode={mode("historico")}>
+              <HistorySettings />
+            </SectionBlock>
+            <SectionBlock id="conectores-locais" mode={mode("conectores-locais")}>
+              <LocalConnectorsSettings />
+            </SectionBlock>
+            <SectionBlock id="escritorio" mode={mode("escritorio")}>
               <OfficeSettings />
             </SectionBlock>
-            <SectionBlock id="atalhos" hidden={hide("atalhos")}>
+            <SectionBlock id="atalhos" mode={mode("atalhos")}>
               <ShortcutsSettings />
             </SectionBlock>
           </div>
 
           <div className="settings__area settings__area--workspace" hidden={areaHidden("workspace")} data-testid="settings-area-workspace">
-            <header className="settings__area-head">
-              <h3 className="settings__area-title">
-                <span className="settings__ws-dot" aria-hidden="true" style={{ ["--ws-color" as string]: wsColor }} />
-                {AREA_LABELS.workspace}
-                {workspace ? <span className="settings__area-ws">: {workspace.name}</span> : null}
-              </h3>
-              <Seal kind="workspace" />
-              {workspaces && workspaces.length > 0 && (
-                <label className="settings__ws-picker">
-                  <span>Workspace</span>
-                  <select className="ui-input ui-input--compact" value={workspace?.id ?? ""} onChange={(event) => chooseWorkspace(event.currentTarget.value)} data-testid="settings-workspace-select">
-                    {workspaces.map((ws) => (
-                      <option key={ws.id} value={ws.id}>
-                        {ws.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <p className="settings__area-hint">
-                Vale só para {workspace ? <strong>{workspace.name}</strong> : "o workspace escolhido"}; os outros não mudam. Trocar o workspace aqui troca o workspace aberto no app.
-              </p>
-            </header>
             {noWorkspace ? (
               <p className="page__empty" data-testid="settings-no-workspace">
                 Ainda não há workspace. Crie um para ver as opções que valem só para ele.
@@ -405,32 +448,32 @@ export function SettingsPage() {
               </p>
             ) : (
               <>
-                <SectionBlock id="modelos" hidden={hide("modelos")}>
+                <SectionBlock id="modelos" mode={mode("modelos")}>
                   <WorkspaceModelsSettings key={workspace.id} workspace={workspace} onOpenGlobalModels={() => jump("modelos-padrao")} />
                 </SectionBlock>
-                <SectionBlock id="acesso" hidden={hide("acesso")}>
-                  <AccessSettings key={workspace.id} workspace={workspace} />
-                </SectionBlock>
-                <SectionBlock id="pastas" hidden={hide("pastas")}>
-                  <FoldersSettings key={workspace.id} workspace={workspace} />
-                </SectionBlock>
-                <SectionBlock id="seguranca" hidden={hide("seguranca")}>
-                  <SecuritySettings key={workspace.id} workspace={workspace} />
-                </SectionBlock>
-                <SectionBlock id="distribuicao" hidden={hide("distribuicao")}>
+                <SectionBlock id="distribuicao" mode={mode("distribuicao")}>
                   <div className="settings__groups">
                     <DispatchSettings key={workspace.id} workspace={workspace} />
                   </div>
                 </SectionBlock>
-                <SectionBlock id="relatorios" hidden={hide("relatorios")}>
+                <SectionBlock id="acesso" mode={mode("acesso")}>
+                  <AccessSettings key={workspace.id} workspace={workspace} />
+                </SectionBlock>
+                <SectionBlock id="seguranca" mode={mode("seguranca")}>
+                  <SecuritySettings key={workspace.id} workspace={workspace} />
+                </SectionBlock>
+                <SectionBlock id="pastas" mode={mode("pastas")}>
+                  <FoldersSettings key={workspace.id} workspace={workspace} />
+                </SectionBlock>
+                <SectionBlock id="relatorios" mode={mode("relatorios")}>
                   <div className="settings__groups">
                     <GestaoSettings key={workspace.id} workspace={workspace} />
                   </div>
                 </SectionBlock>
-                <SectionBlock id="aprovacoes" hidden={hide("aprovacoes")}>
+                <SectionBlock id="aprovacoes" mode={mode("aprovacoes")}>
                   <ApprovalTypesSettings />
                 </SectionBlock>
-                <SectionBlock id="conectores" hidden={hide("conectores")}>
+                <SectionBlock id="conectores" mode={mode("conectores")}>
                   <ConnectorsSection />
                 </SectionBlock>
               </>

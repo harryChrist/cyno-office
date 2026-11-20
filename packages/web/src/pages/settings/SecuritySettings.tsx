@@ -71,7 +71,7 @@ function EnableTwoFactor({ onEnabled, onDone }: { onEnabled: () => void; onDone:
     return (
       <div className="sec__stack" data-testid="settings-2fa-recovery">
         <p className="settings__password-ok" role="status">
-          Verificação em duas etapas ligada. Guarde estes códigos de recuperação: cada um vale uma vez e eles não aparecem de novo.
+          Ligada. Guarde estes códigos de recuperação: cada um vale uma vez e não aparecem de novo.
         </p>
         <ul className="sec__codes" aria-label="Códigos de recuperação">
           {recovery.map((item) => (
@@ -112,7 +112,11 @@ function EnableTwoFactor({ onEnabled, onDone }: { onEnabled: () => void; onDone:
 
   return (
     <form className="sec__stack" onSubmit={(event) => void confirm(event)} data-testid="settings-2fa-setup">
-      <p className="settings__card-hint">Leia o QR com um app autenticador (Google Authenticator, Authy, 1Password…) ou digite o segredo. Depois digite o código de 6 dígitos que o app mostrar.</p>
+      <p className="settings__card-hint">Leia o QR com um app autenticador e digite o código de 6 dígitos que ele mostrar.</p>
+      <details className="settings__more">
+        <summary>Quais apps servem</summary>
+        <p>Google Authenticator, Authy, 1Password ou qualquer app de códigos. Sem câmera, digite o segredo abaixo no app.</p>
+      </details>
       <div className="sec__qr-row">
         {qr ? <img className="sec__qr" src={qr} alt="QR code da verificação em duas etapas" width={192} height={192} data-testid="settings-2fa-qr" /> : <div className="sec__qr sec__qr--empty" aria-hidden />}
         <div className="sec__stack">
@@ -205,8 +209,12 @@ function BlockedIps({ state, reload }: { state: SecurityState; reload: () => voi
         title="IPs bloqueados"
         seal="plataforma"
         state={<StateBadge tone={active.length > 0 ? "warn" : "off"}>{active.length > 0 ? `${active.length} bloqueado${active.length > 1 ? "s" : ""}` : "Nenhum agora"}</StateBadge>}
-        line="Cinco senhas ou códigos errados bloqueiam o IP por 15 minutos; cada novo bloqueio em 24 horas dobra o tempo. Reiniciar o servidor não libera."
+        line="Cinco senhas ou códigos errados bloqueiam o IP por 15 minutos."
       />
+      <details className="settings__more">
+        <summary>Saiba mais</summary>
+        <p>Cada novo bloqueio em 24 horas dobra o tempo. Reiniciar o servidor não libera.</p>
+      </details>
       {active.length > 0 && (
         <ul className="sec__list">
           {active.map((block) => (
@@ -237,7 +245,7 @@ function BlockedIps({ state, reload }: { state: SecurityState; reload: () => voi
           ))}
         </ul>
       )}
-      <p className="settings__card-hint">Seu IP, como o servidor o enxerga: {state.yourIp}</p>
+      <p className="settings__card-hint">Seu IP: {state.yourIp}</p>
     </section>
   );
 }
@@ -279,13 +287,19 @@ export function SecuritySettings() {
           title="Verificação em duas etapas"
           seal="plataforma"
           state={<StateBadge tone={state.twoFactor ? "on" : "off"}>{state.twoFactor ? "Ligada" : "Desligada"}</StateBadge>}
-          line="Depois da senha, o login pede um código de 6 dígitos de um app autenticador. Opcional, e a melhor proteção se o app ficar exposto na internet."
+          line="Depois da senha, o login pede um código do app autenticador. Recomendada se o app está na internet."
         />
         {state.twoFactor && !enabling ? (
           <>
             <p className="settings__card-hint" data-testid="settings-2fa-remaining">
-              {state.recoveryRemaining} {state.recoveryRemaining === 1 ? "código de recuperação restante" : "códigos de recuperação restantes"}. Perdeu o celular e os códigos? No servidor: <code>npm run auth:reset-2fa -w @cyno/server</code>
+              {state.recoveryRemaining} {state.recoveryRemaining === 1 ? "código de recuperação restante" : "códigos de recuperação restantes"}.
             </p>
+            <details className="settings__more">
+              <summary>Perdeu o celular e os códigos?</summary>
+              <p>
+                No servidor, rode: <code>npm run auth:reset-2fa -w @cyno/server</code>
+              </p>
+            </details>
             <DisableTwoFactor onDone={reload} />
           </>
         ) : (

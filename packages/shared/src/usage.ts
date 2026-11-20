@@ -246,6 +246,8 @@ export type TurnUsage = {
    * zero quase sempre quer dizer chave de API paga (a assinatura não tem custo por turno): vira alerta na tela Motores.
    */
   reportedCostUsd?: number;
+  /** Os números são estimativa (Freebuff: entrada lida do registro do chat, saída pelo tamanho do texto), não contagem da CLI. */
+  estimated?: boolean;
 };
 
 /** Soma do que um agente relatou numa janela de tempo (estimativa do uso por agente). */
@@ -262,6 +264,8 @@ export type AgentUsageTally = {
   cacheCreationTokens: number;
   /** Soma do custo em dinheiro que o programa relatou (só OpenClaw e Hermes, e só quando houve). */
   reportedCostUsd?: number;
+  /** Turnos (dos medidos) cujos tokens são estimativa (Freebuff); ausente = nenhum. */
+  estimatedTurns?: number;
   /** Último turno terminado (ISO). */
   lastAt: string;
 };

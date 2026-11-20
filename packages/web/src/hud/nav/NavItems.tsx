@@ -1,4 +1,6 @@
-import { useState, type FocusEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FocusEvent, type ReactElement } from "react";
+import { stepAttention } from "../../attention/useAttentionKeys";
+import { useBrowserStore } from "../../store/browserStore";
 import { useNavGroupsStore } from "../../store/navGroupsStore";
 import { useNavLayoutStore, type NavPanel } from "../../store/navLayoutStore";
 import { useNoticesStore } from "../../store/notices";
@@ -7,11 +9,14 @@ import { useOfficeStore } from "../../store/officeStore";
 import { useWorkspaceView } from "../../store/workspaceStore";
 import { countLabel } from "../../ui/format";
 import { useAgentsSummary } from "../AgentsPopover";
+import { useAttentionCounter } from "../AttentionCounter";
 import { NavIcon } from "../navIcons";
 import { useNotificationsSummary } from "../NotificationsBell";
 import { useRunningCount } from "../hoje/TodayPanel";
+import { useScriptsStore } from "../../store/scriptsStore";
+import { runningCount } from "../../pages/scripts/scriptsView";
 import { useNavBadges } from "./navHooks";
-import { activeChild, APP_WIDE_SECTIONS, childSub, HOJE_HINT, NAV_SECTIONS, nonEmptySections, NOTIFICATIONS_HINT, PAGE_HINTS, railGroupSub, visibleChildren, visibleShortcuts, type Badge, type NavChildDef, type NavItemDef } from "./navItems";
+import { activeChild, childSub, counterParts, isGroupOpen, PAGE_HINTS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections, type Badge, type NavChildDef, type NavCounterKind, type NavItemDef, type ParaVoceButtonDef, type ParaVoceId } from "./navItems";
 
 /** Selo de contagem: pílula ao lado do nome (aberta) ou bolinha no canto do ícone (recolhida). */
 function CountBadge({ badge }: { badge: Badge | undefined }) {
@@ -62,8 +67,23 @@ export function PageItem({ item, badge, onNavigate }: { item: NavItemDef; badge?
         <NavIcon name={item.icon} />
         <ItemText label={label} hint={item.hint} />
         <CountBadge badge={badge} />
+        {item.counter && <RowCounter kind={item.counter} testId={`${item.testId}-count`} />}
       </button>
     </li>
+  );
+}
+
+/** Contagem à direita da linha (abas abertas do navegador, scripts rodando); nada quando é zero. Recolhida, só o número. */
+function RowCounter({ kind, testId }: { kind: NavCounterKind; testId: string }) {
+  const tabs = useBrowserStore((state) => state.browser?.tabs.length ?? 0);
+  const running = useScriptsStore((state) => runningCount(state.runs ?? []));
+  const parts = counterParts(kind, kind === "tabs" ? tabs : running);
+  if (!parts) return null;
+  return (
+    <span className={kind === "running" ? "navitem__badge navitem__badge--running" : "navitem__muted"} data-testid={testId}>
+      {parts.number}
+      <span className="navitem__counter-word"> {parts.word}</span>
+    </span>
   );
 }
 
@@ -90,8 +110,9 @@ function ChildLink({ child, active, onPick, item }: { child: NavChildDef; active
 
 /**
  * Item com destinos (Gestão, Biblioteca): o item da página e, logo abaixo e recuados, links diretos para as
- * abas; um botão recolhe o grupo (lembrado por navegador). Com a barra recolhida, passar o mouse (ou o foco)
- * no ícone abre um menu flutuante com os mesmos destinos. Na gaveta do celular o grupo vem sempre aberto.
+ * abas. No computador começa fechado (no menu do celular, aberto); abre quando a página atual é dele, ao clicar no item ou no botão da seta (que só abre e
+ * fecha, sem navegar); a escolha fica lembrada por navegador. Com a barra recolhida, passar o mouse (ou o foco)
+ * no ícone abre um menu flutuante com os mesmos destinos.
  */
 function NavGroup({ item, badge, onNavigate, drawer }: { item: NavItemDef; badge?: Badge; onNavigate?: () => void; drawer: boolean }) {
   const empty = useWorkspaceView() === "empty";
@@ -99,13 +120,19 @@ function NavGroup({ item, badge, onNavigate, drawer }: { item: NavItemDef; badge
   const sub = useNavStore((state) => state.sub);
   const go = useNavStore((state) => state.go);
   const collapsedBar = useNavLayoutStore((state) => state.collapsed);
-  const open = useNavGroupsStore((state) => !state.collapsed.includes(item.testId));
-  const toggle = useNavGroupsStore((state) => state.toggle);
+  const choice = useNavGroupsStore((state) => state.choices[item.testId]);
+  const open = isGroupOpen(item, page, choice, drawer);
+  const inside = page === item.page;
   const [fly, setFly] = useState<number | null>(null);
   const rail = collapsedBar && !drawer;
   const children = visibleChildren(item, empty);
   const current = activeChild(item, page, sub);
   const label = item.label ?? pageLabel(item.page);
+  // Entrar na página do grupo (por onde for) o abre: a escolha de fechar vale só enquanto o dono está em outra página.
+  useEffect(() => {
+    const groups = useNavGroupsStore.getState();
+    if (inside && groups.choices[item.testId] === false) groups.clear(item.testId);
+  }, [inside, item.testId]);
   const openFly = (group: HTMLElement) => {
     const rect = (group.querySelector(".navitem") ?? group).getBoundingClientRect();
     const bar = group.closest(".sidenav")?.getBoundingClientRect();
@@ -135,6 +162,7 @@ function NavGroup({ item, badge, onNavigate, drawer }: { item: NavItemDef; badge
           onClick={() => {
             // Recolhida: o ícone leva à primeira página do grupo (os destinos aparecem no balão ao lado).
             go(item.page, rail ? railGroupSub(item, empty, useNavStore.getState().workspaceId) : item.sub);
+            if (!rail) useNavGroupsStore.getState().choose(item.testId, true);
             pick();
           }}
           title={item.hint}
@@ -146,20 +174,20 @@ function NavGroup({ item, badge, onNavigate, drawer }: { item: NavItemDef; badge
           <ItemText label={label} hint={item.hint} />
           <CountBadge badge={badge} />
         </button>
-        {!drawer && !rail && (
+        {!rail && (
           <button
             type="button"
             className="navgroup__toggle"
-            aria-label={open ? `Recolher ${label}` : `Mostrar os itens de ${label}`}
+            aria-label={open ? `Recolher ${label}` : `Abrir ${label}`}
             aria-expanded={open}
-            onClick={() => toggle(item.testId)}
+            onClick={() => useNavGroupsStore.getState().choose(item.testId, !open)}
             data-testid={`${item.testId}-toggle`}
           >
             <NavIcon name="chevron" className="navgroup__chevron" />
           </button>
         )}
       </div>
-      {(drawer || open) && !rail && (
+      {open && !rail && (
         <ul className="navsub" aria-label={`Itens de ${label}`}>
           {children.map((child) => (
             <ChildLink key={child.testId} child={child} item={item} active={current?.testId === child.testId} onPick={pick} />
@@ -219,17 +247,19 @@ export function CynoItem({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-/** As seções de páginas (a mesma lista na barra lateral e na gaveta do celular). */
+/** As seções do menu (a mesma lista na barra lateral e na gaveta do celular): "Para você" em cima e, depois, as páginas. */
 export function NavSections({ onNavigate, drawer = false }: { onNavigate?: () => void; drawer?: boolean }) {
   const empty = useWorkspaceView() === "empty";
   const badges = useNavBadges();
-  const sections = nonEmptySections(empty ? APP_WIDE_SECTIONS : NAV_SECTIONS);
+  const sections = visibleSections(empty);
   return (
     <nav className="navsections" aria-label="Páginas">
+      <ParaVoceRow drawer={drawer} onNavigate={onNavigate} />
       {sections.map((section, index) => {
         const titleId = section.title ? `navsection-${section.title}` : undefined;
         return (
-          <div key={section.title ?? index} className="navsection" role="group" aria-labelledby={titleId}>
+          <div key={section.title ?? index} className={`navsection${section.separated ? " navsection--separated" : ""}`} role="group" aria-labelledby={titleId}>
+            {section.separated && <div className="navsection__sep" role="separator" />}
             {section.title && (
               <h2 id={titleId} className="navsection__title">
                 {section.title}
@@ -251,41 +281,171 @@ export function NavSections({ onNavigate, drawer = false }: { onNavigate?: () =>
   );
 }
 
-/**
- * Atalhos (a Sua agenda e o navegador do workspace): dois botões lado a lado no rodapé da barra
- * (só ícones na barra recolhida). No celular, a gaveta os mostra numa seção "Atalhos".
- */
-export function ShortcutsRow({ onNavigate, titled = false }: { onNavigate?: () => void; titled?: boolean }) {
-  const empty = useWorkspaceView() === "empty";
-  const page = useNavStore((state) => state.page);
-  const go = useNavStore((state) => state.go);
-  const shortcuts = visibleShortcuts(empty);
-  if (shortcuts.length === 0) return null;
+/** Um botão de "Para você": ícone com o nome curto embaixo e, se houver, a contagem no canto de cima. Painel aberto ou página atual = aceso. */
+function ParaVoceTile({
+  def,
+  label,
+  hint,
+  count = 0,
+  tone,
+  hot = false,
+  active = false,
+  panel,
+  countTestId,
+  testId,
+  onClick,
+}: {
+  def: ParaVoceButtonDef;
+  label: string;
+  hint: string;
+  count?: number;
+  tone?: "danger" | "info" | "live";
+  hot?: boolean;
+  active?: boolean;
+  /** O painel que o botão abre (marca `aria-expanded`); sem isso, é página ou ação. */
+  panel?: { open: boolean; id: NavPanel };
+  countTestId?: string;
+  testId: string;
+  onClick: (event: { shiftKey: boolean }) => void;
+}) {
   return (
-    <div className="navshortcuts" role="group" aria-label="Atalhos">
-      {titled && <h2 className="navsection__title">Atalhos</h2>}
-      <ul className="navshortcuts__list">
-        {shortcuts.map(({ item, tip, short }) => (
-          <li key={item.page}>
-            <button
-              type="button"
-              className="navitem navitem--shortcut"
-              aria-current={page === item.page ? "page" : undefined}
-              aria-label={tip}
-              title={item.hint ? `${tip}: ${item.hint}` : tip}
-              data-tip={tip}
-              data-tip-hint={item.hint}
-              data-testid={item.testId}
-              onClick={() => {
-                go(item.page);
-                onNavigate?.();
-              }}
-            >
-              <NavIcon name={item.icon} />
-              <ItemText label={titled ? (item.label ?? tip) : short} hint={titled ? item.hint : undefined} />
-            </button>
-          </li>
-        ))}
+    <li>
+      <button
+        type="button"
+        className={`navtile${hot ? " navtile--hot" : ""}`}
+        aria-label={label}
+        aria-current={active ? "page" : undefined}
+        aria-expanded={panel ? panel.open : undefined}
+        aria-haspopup={panel ? "dialog" : undefined}
+        onClick={onClick}
+        title={hint}
+        data-tip={def.label}
+        data-tip-hint={hint}
+        data-panel-trigger={panel?.id}
+        data-testid={testId}
+      >
+        <NavIcon name={def.icon} />
+        <span className="navtile__name" aria-hidden="true">
+          {def.short}
+        </span>
+        {count > 0 && (
+          <span className={`navtile__badge navtile__badge--${tone ?? "info"}`} aria-hidden="true" data-testid={countTestId}>
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </button>
+    </li>
+  );
+}
+
+/** Ids de teste de cada botão: a gaveta do celular tem os próprios (a barra de cima já usa "bell" e "attention-counter"). */
+const TILE_IDS: Record<"bar" | "drawer", Record<ParaVoceId, { button: string; count?: string }>> = {
+  bar: { hoje: { button: "nav-hoje" }, espera: { button: "attention-counter", count: "attention-count" }, avisos: { button: "bell", count: "bell-dot" }, agenda: { button: "nav-agenda" } },
+  drawer: { hoje: { button: "nav-hoje-drawer" }, espera: { button: "nav-espera-drawer", count: "nav-espera-drawer-count" }, avisos: { button: "nav-notificacoes", count: "nav-notificacoes-count" }, agenda: { button: "nav-agenda" } },
+};
+
+function HojeTile({ def, ids, onNavigate }: TileProps) {
+  const open = useNavLayoutStore((state) => state.panel === "hoje");
+  const running = useRunningCount();
+  return (
+    <ParaVoceTile
+      def={def}
+      label={running > 0 ? `Hoje, ${running} fazendo` : def.label}
+      hint={running > 0 ? `${def.hint} (${running} fazendo agora)` : def.hint}
+      count={running}
+      tone="live"
+      countTestId="nav-running"
+      active={open}
+      panel={{ open, id: "hoje" }}
+      testId={ids.button}
+      onClick={() => {
+        onNavigate?.();
+        openPanel("hoje");
+      }}
+    />
+  );
+}
+
+/** "Esperando você": não abre painel; cada clique vai ao próximo alerta que espera o dono (Shift volta). Parado em zero. */
+function EsperaTile({ def, ids }: TileProps) {
+  const { count, hint } = useAttentionCounter();
+  return (
+    <ParaVoceTile
+      def={def}
+      label={count > 0 ? hint : def.label}
+      hint={hint}
+      count={count}
+      tone="danger"
+      hot={count > 0}
+      countTestId={ids.count}
+      testId={ids.button}
+      onClick={(event) => {
+        if (count > 0) stepAttention(event.shiftKey ? -1 : 1);
+      }}
+    />
+  );
+}
+
+function AvisosTile({ def, ids, onNavigate }: TileProps) {
+  const { unread, label } = useNotificationsSummary();
+  const open = useNavLayoutStore((state) => state.panel === "notificacoes");
+  return (
+    <ParaVoceTile
+      def={def}
+      label={label}
+      hint={def.hint}
+      count={unread}
+      tone="info"
+      active={open}
+      panel={{ open, id: "notificacoes" }}
+      countTestId={ids.count}
+      testId={ids.button}
+      onClick={() => {
+        onNavigate?.();
+        openPanel("notificacoes");
+      }}
+    />
+  );
+}
+
+function AgendaTile({ def, ids, onNavigate }: TileProps) {
+  const active = useNavStore((state) => state.page === "agenda");
+  const go = useNavStore((state) => state.go);
+  return (
+    <ParaVoceTile
+      def={def}
+      label={def.label}
+      hint={def.hint}
+      active={active}
+      testId={ids.button}
+      onClick={() => {
+        go("agenda");
+        onNavigate?.();
+      }}
+    />
+  );
+}
+
+type TileProps = { def: ParaVoceButtonDef; ids: { button: string; count?: string }; onNavigate?: () => void };
+
+const TILES: Record<ParaVoceId, (props: TileProps) => ReactElement> = { hoje: HojeTile, espera: EsperaTile, avisos: AvisosTile, agenda: AgendaTile };
+
+/** "Para você": quatro botões iguais numa linha (Hoje, Espera, Avisos, Agenda); recolhida, quatro ícones empilhados. */
+function ParaVoceRow({ drawer, onNavigate }: { drawer: boolean; onNavigate?: () => void }) {
+  const empty = useWorkspaceView() === "empty";
+  const buttons = visibleParaVoce(empty);
+  if (buttons.length === 0) return null;
+  const ids = TILE_IDS[drawer ? "drawer" : "bar"];
+  return (
+    <div className="navsection navsection--para-voce" role="group" aria-labelledby="navsection-para-voce">
+      <h2 id="navsection-para-voce" className="navsection__title">
+        Para você
+      </h2>
+      <ul className="navtiles" style={{ "--tiles": buttons.length } as CSSProperties}>
+        {buttons.map((def) => {
+          const Tile = TILES[def.id];
+          return <Tile key={def.id} def={def} ids={ids[def.id]} onNavigate={onNavigate} />;
+        })}
       </ul>
     </div>
   );
@@ -296,73 +456,6 @@ export function openPanel(panel: NavPanel): void {
   const store = useNavLayoutStore.getState();
   if (panel === "notificacoes" && store.panel !== panel) useNoticesStore.getState().markRead();
   store.togglePanel(panel);
-}
-
-/** "Notificações" na barra: abre o painel ao lado com os avisos e as últimas atividades. */
-export function NotificationsItem({ testId = "bell", onBeforeOpen }: { testId?: string; onBeforeOpen?: () => void }) {
-  // Só o ponto de aviso novo: os pendentes já aparecem no contador de Aprovações.
-  const { unread, label } = useNotificationsSummary();
-  const open = useNavLayoutStore((state) => state.panel === "notificacoes");
-  return (
-    <button
-      type="button"
-      className="navitem navitem--panel"
-      aria-label={label}
-      aria-expanded={open}
-      aria-haspopup="dialog"
-      onClick={() => {
-        onBeforeOpen?.();
-        openPanel("notificacoes");
-      }}
-      title={NOTIFICATIONS_HINT}
-      data-tip="Notificações"
-      data-tip-hint={NOTIFICATIONS_HINT}
-      data-panel-trigger="notificacoes"
-      data-testid={testId}
-    >
-      <span className="navitem__icon-wrap">
-        <NavIcon name="bell" />
-        {unread > 0 && <span className="navitem__dot" aria-hidden="true" data-testid="bell-dot" />}
-      </span>
-      <ItemText label="Notificações" hint={NOTIFICATIONS_HINT} />
-    </button>
-  );
-}
-
-/** "Hoje" na barra: quantas tarefas rodam agora (ponto pulsando) e abre o painel do dia ao lado. */
-export function TodayItem({ testId = "nav-hoje", onBeforeOpen }: { testId?: string; onBeforeOpen?: () => void }) {
-  const open = useNavLayoutStore((state) => state.panel === "hoje");
-  const running = useRunningCount();
-  return (
-    <button
-      type="button"
-      className="navitem navitem--panel"
-      aria-label={running > 0 ? `Hoje, ${running} fazendo` : "Hoje"}
-      aria-expanded={open}
-      aria-haspopup="dialog"
-      onClick={() => {
-        onBeforeOpen?.();
-        openPanel("hoje");
-      }}
-      title={HOJE_HINT}
-      data-tip={running > 0 ? `Hoje · ${running} fazendo` : "Hoje"}
-      data-tip-hint={HOJE_HINT}
-      data-panel-trigger="hoje"
-      data-testid={testId}
-    >
-      <span className="navitem__icon-wrap">
-        <NavIcon name="hoje" />
-      </span>
-      <ItemText label="Hoje" hint={HOJE_HINT} />
-      {running > 0 && (
-        <span className="navitem__badge navitem__badge--live" data-testid="nav-running">
-          <span className="navitem__live-dot" aria-hidden="true" />
-          {running}
-          <span className="navitem__live-text"> fazendo</span>
-        </span>
-      )}
-    </button>
-  );
 }
 
 /** "Agentes" no rodapé: quantos e quantos trabalhando; abre a lista de agentes ao lado. */

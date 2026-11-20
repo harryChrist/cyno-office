@@ -50,7 +50,7 @@ export function MobileBar() {
           {workspace && <p className="mbar__ws">{workspace}</p>}
         </div>
         <SocketIndicator />
-        {!empty && <AttentionCounter variant="pill" />}
+        {!empty && <AttentionCounter />}
         {!empty && (
           <button
             type="button"

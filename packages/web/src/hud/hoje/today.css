@@ -14,8 +14,7 @@
   color: var(--ui-text-3);
 }
 
-.actp__live,
-.navitem__live-dot {
+.actp__live {
   flex: none;
   width: 7px;
   height: 7px;
@@ -47,27 +46,6 @@
   color: var(--ui-text);
   background: var(--ui-hover);
 }
-
-.navitem .navitem__badge--live {
-  white-space: nowrap;
-  display: inline-flex;
-  gap: 5px;
-  align-items: center;
-  color: var(--ui-info);
-  background: var(--ui-info-bg);
-}
-
-.sidenav--rail .navitem .navitem__badge--live {
-  display: inline-grid;
-  color: #06202e;
-  background: var(--ui-info);
-}
-
-.navitem__live-text,
-.sidenav--rail .navitem__live-dot {
-  display: none;
-}
-
 
 .hoje {
   display: flex;

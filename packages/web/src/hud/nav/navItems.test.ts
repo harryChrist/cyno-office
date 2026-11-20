@@ -1,46 +1,119 @@
 import { describe, expect, it } from "vitest";
-import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, railGroupSub, SHORTCUTS, visibleChildren, visibleShortcuts } from "./navItems";
+import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, counterLabel, counterParts, isGroupOpen, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, PARA_VOCE_BUTTONS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections } from "./navItems";
 
 describe("menu de páginas", () => {
-  it("Office, Trabalho, Para você, Quadro (antes da Gestão), Gestão e Biblioteca (mais o Cyno no topo)", () => {
-    expect(menuPages()).toEqual(["office", "trabalho", "para-voce", "quadro", "gestao", "biblioteca"]);
+  it("grupos na ordem: Trabalho, Agentes ao vivo e, depois do traço, Gestão e Biblioteca", () => {
+    expect(NAV_SECTIONS.map((section) => [section.title, section.items.map((item) => item.page)])).toEqual([
+      ["Trabalho", ["office", "trabalho", "para-voce", "quadro", "arquivos"]],
+      ["Agentes ao vivo", ["navegador", "scripts"]],
+      [null, ["gestao", "biblioteca"]],
+    ]);
+    expect(NAV_SECTIONS.map((section) => Boolean(section.separated))).toEqual([false, false, true]);
+    expect(menuPages()).toEqual(["office", "trabalho", "para-voce", "quadro", "arquivos", "navegador", "scripts", "gestao", "biblioteca"]);
   });
 
-  it("o Quadro vem logo antes da Gestão, com ícone próprio e dica curta", () => {
+  it("Aprovações continua sendo a página para-voce, com os mesmos ids de teste", () => {
     const items = NAV_SECTIONS.flatMap((section) => section.items);
-    const quadro = items.findIndex((item) => item.page === "quadro");
-    expect(items[quadro + 1]?.page).toBe("gestao");
-    expect(items[quadro]).toMatchObject({ icon: "quadro", testId: "nav-quadro", hint: "Os dados que os agentes montam para você" });
+    expect(items.find((item) => item.page === "para-voce")).toMatchObject({ icon: "para-voce", testId: "nav-para-voce" });
+    expect(items.map((item) => item.testId)).toEqual(["nav-office", "nav-trabalho", "nav-para-voce", "nav-quadro", "nav-arquivos", "nav-navegador", "nav-scripts", "nav-gestao", "nav-biblioteca"]);
   });
 
-  it("Mídia, Cérebro, Gastos, Atividade, Calendário e Navegador não são itens de menu", () => {
+  it("o Quadro vem logo depois de Aprovações, com ícone próprio e dica curta", () => {
+    const items = NAV_SECTIONS.flatMap((section) => section.items);
+    const quadro = items.find((item) => item.page === "quadro");
+    expect(quadro).toMatchObject({ icon: "quadro", testId: "nav-quadro", hint: "Os dados que os agentes montam para você" });
+  });
+
+  it("Arquivos vem depois do Quadro, com ícone de pasta, só com workspace", () => {
+    const items = NAV_SECTIONS[0]!.items;
+    expect(items.map((item) => item.page).indexOf("arquivos")).toBe(items.map((item) => item.page).indexOf("quadro") + 1);
+    expect(items.find((item) => item.page === "arquivos")).toMatchObject({ icon: "pasta", testId: "nav-arquivos", hint: PAGE_HINTS.arquivos, needsWorkspace: true });
+  });
+
+  it("Mídia, Cérebro, Gastos, Atividade, Calendário não são linhas do menu; Navegador e Scripts são, com contagem", () => {
     const pages: string[] = menuPages();
-    for (const gone of ["midia", "cerebro", "gastos", "atividade", "calendario", "navegador"]) expect(pages).not.toContain(gone);
+    for (const gone of ["midia", "cerebro", "gastos", "atividade", "calendario", "agenda"]) expect(pages).not.toContain(gone);
+    const live = NAV_SECTIONS[1]!.items;
+    expect(live.map((item) => [item.label, item.counter, item.needsWorkspace])).toEqual([
+      ["Navegador", "tabs", true],
+      ["Scripts", "running", true],
+    ]);
   });
 
   it("seção vazia some (e o título dela junto)", () => {
     const sections = [...NAV_SECTIONS, { title: "Conhecimento", items: [] }];
     expect(nonEmptySections(sections)).toHaveLength(NAV_SECTIONS.length);
-    expect(NAV_SECTIONS.every((section) => section.title === null)).toBe(true);
   });
 
-  it("sem workspace: a Biblioteca e a Atividade do sistema", () => {
+  it("com workspace, as seções são as do menu; sem workspace, só o que vale para o app inteiro", () => {
+    expect(visibleSections(false)).toEqual(NAV_SECTIONS);
+    expect(visibleSections(true)).toEqual(APP_WIDE_SECTIONS);
     expect(APP_WIDE_SECTIONS[0]!.items.map((item) => [item.page, item.sub ?? ""])).toEqual([
       ["biblioteca", ""],
       ["gestao", "atividade"],
     ]);
+    // Uma linha de workspace num grupo solto não deixa título vazio para trás.
+    const mixed = [{ title: "Agentes ao vivo", items: NAV_SECTIONS[1]!.items }];
+    expect(nonEmptySections(mixed.map((section) => ({ ...section, items: section.items.filter((item) => !item.needsWorkspace) })))).toEqual([]);
+  });
+});
+
+describe("Para você: quatro botões", () => {
+  it("Hoje, Espera, Avisos e Agenda, com o nome inteiro para leitor de tela e dica", () => {
+    expect(PARA_VOCE_BUTTONS.map((button) => [button.id, button.short, button.label])).toEqual([
+      ["hoje", "Hoje", "Hoje"],
+      ["espera", "Espera", "Esperando você"],
+      ["avisos", "Avisos", "Notificações"],
+      ["agenda", "Agenda", "Sua agenda"],
+    ]);
+    for (const button of PARA_VOCE_BUTTONS) expect(button.hint, button.id).toBeTruthy();
   });
 
-  it("atalhos: agenda e navegador; sem workspace, só a agenda", () => {
-    expect(SHORTCUTS.map((shortcut) => shortcut.item.page)).toEqual(["agenda", "navegador"]);
-    expect(visibleShortcuts(false)).toHaveLength(2);
-    expect(visibleShortcuts(true).map((shortcut) => shortcut.item.page)).toEqual(["agenda"]);
+  it("sem workspace, só a Agenda", () => {
+    expect(visibleParaVoce(false)).toHaveLength(4);
+    expect(visibleParaVoce(true).map((button) => button.id)).toEqual(["agenda"]);
+  });
+});
+
+describe("contagem à direita das linhas", () => {
+  it("abas: 1 aba, N abas, nada quando é zero", () => {
+    expect(counterLabel("tabs", 0)).toBeNull();
+    expect(counterLabel("tabs", 1)).toBe("1 aba");
+    expect(counterLabel("tabs", 3)).toBe("3 abas");
+  });
+
+  it("scripts: N rodando (o número e a palavra separados, para a barra recolhida mostrar só o número)", () => {
+    expect(counterLabel("running", 0)).toBeNull();
+    expect(counterLabel("running", 1)).toBe("1 rodando");
+    expect(counterLabel("running", 2)).toBe("2 rodando");
+    expect(counterParts("running", 2)).toEqual({ number: "2", word: "rodando", label: "2 rodando" });
+  });
+});
+
+describe("grupos que abrem e fecham", () => {
+  const gestao = NAV_SECTIONS[2]!.items[0]!;
+
+  it("fechado por padrão; aberto quando a página atual é do grupo", () => {
+    expect(isGroupOpen(gestao, "office", undefined)).toBe(false);
+    expect(isGroupOpen(gestao, "gestao", undefined)).toBe(true);
+  });
+
+  it("no menu do celular o grupo já vem aberto; quem fechou de propósito continua vendo fechado", () => {
+    expect(isGroupOpen(gestao, "office", undefined, true)).toBe(true);
+    expect(isGroupOpen(gestao, "office", false, true)).toBe(false);
+    expect(isGroupOpen(gestao, "office", undefined, false)).toBe(false);
+  });
+
+  it("a escolha lembrada vale: abriu = aberto em qualquer página; fechou = fechado, mesmo dentro dele", () => {
+    expect(isGroupOpen(gestao, "office", true)).toBe(true);
+    expect(isGroupOpen(gestao, "gestao", false)).toBe(false);
+    expect(isGroupOpen(gestao, "biblioteca", false)).toBe(false);
   });
 });
 
 describe("nomes claros e destinos visíveis", () => {
-  const gestao = NAV_SECTIONS[0]!.items.find((item) => item.page === "gestao")!;
-  const biblioteca = NAV_SECTIONS[1]!.items[0]!;
+  const gestao = NAV_SECTIONS[2]!.items.find((item) => item.page === "gestao")!;
+  const biblioteca = NAV_SECTIONS[2]!.items.find((item) => item.page === "biblioteca")!;
 
   it("cada página do menu tem uma descrição curta", () => {
     for (const item of NAV_SECTIONS.flatMap((section) => section.items)) expect(item.hint, item.page).toBeTruthy();
@@ -78,14 +151,17 @@ describe("nomes claros e destinos visíveis", () => {
     expect(visibleChildren(biblioteca, false)).toHaveLength(5);
   });
 
-  it("atalhos com os nomes novos", () => {
-    expect(SHORTCUTS.map((shortcut) => shortcut.tip)).toEqual(["Sua agenda", "Navegador dos agentes"]);
+  it("Navegador e Scripts têm nome curto na linha e o nome inteiro na dica da página", () => {
+    const [navegador, scripts] = NAV_SECTIONS[1]!.items;
+    expect([navegador!.label, scripts!.label]).toEqual(["Navegador", "Scripts"]);
+    expect(navegador!.hint).toBe(PAGE_HINTS.navegador);
+    expect(scripts!.hint).toBe(PAGE_HINTS.scripts);
   });
 });
 
 describe("barra recolhida: itens com sublinks", () => {
-  const gestao = NAV_SECTIONS[0]!.items.find((item) => item.page === "gestao")!;
-  const biblioteca = NAV_SECTIONS[1]!.items.find((item) => item.page === "biblioteca")!;
+  const gestao = NAV_SECTIONS[2]!.items.find((item) => item.page === "gestao")!;
+  const biblioteca = NAV_SECTIONS[2]!.items.find((item) => item.page === "biblioteca")!;
 
   it("o clique no ícone leva à primeira página do grupo (Painel; Cérebro), não à última aberta", () => {
     expect(railGroupSub(gestao, false, "demo")).toBe("");

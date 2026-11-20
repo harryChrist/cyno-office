@@ -38,7 +38,7 @@ function ChangePasswordForm() {
 
   return (
     <form className="settings__card settings__password-form" onSubmit={(event) => void submit(event)} data-testid="settings-password-form">
-      <OptionHead title="Trocar a senha" seal="plataforma" line="Trocar a senha desconecta todos os outros aparelhos. Este continua aberto." />
+      <OptionHead title="Trocar a senha" seal="plataforma" line="Desconecta os outros aparelhos. Este continua aberto." />
       <label className="settings__password-field">
         <span>Senha atual</span>
         <input className="ui-input" type="password" autoComplete="current-password" value={current} onChange={(event) => setCurrent(event.currentTarget.value)} data-testid="settings-password-current" />
@@ -105,13 +105,17 @@ export function PasswordSettings() {
           <OptionHead
             title="Senha do app"
             seal="plataforma"
-            state={<StateBadge tone="warn">Desligada · o app está aberto</StateBadge>}
-            line="Este servidor roda com CYNO_AUTH=off (só para desenvolvimento e testes): qualquer pessoa com o link consegue abrir o app e mexer em tudo. Defina uma senha no servidor:"
+            state={<StateBadge tone="warn">Desligada · app aberto</StateBadge>}
+            line="Qualquer pessoa com o link abre o app e mexe em tudo. Defina uma senha no servidor:"
           />
           <code className="settings__command" data-testid="settings-password-command">
             {AUTH_SET_PASSWORD_COMMAND}
           </code>
-          <p className="settings__card-hint">Rode no terminal do servidor. Vale na hora, sem reiniciar. Sem CYNO_AUTH=off, o app nunca fica aberto: na primeira vez ele pede o código de configuração que aparece no log do servidor.</p>
+          <p className="settings__card-hint">Rode no terminal do servidor. Vale na hora, sem reiniciar.</p>
+          <details className="settings__more">
+            <summary>Por que está aberto</summary>
+            <p>Este servidor roda com CYNO_AUTH=off, só para desenvolvimento e testes. Sem essa opção o app nunca fica aberto: na primeira vez ele pede o código de configuração que aparece no log do servidor.</p>
+          </details>
         </section>
       </div>
     );
@@ -124,7 +128,7 @@ export function PasswordSettings() {
           title="Senha do app"
           seal="plataforma"
           state={<StateBadge tone="on">Ligada · protegido</StateBadge>}
-          line="O app pede a senha em cada aparelho novo e lembra dele por 30 dias de uso. Desligada, qualquer pessoa com o link entra."
+          line="Pedida em cada aparelho novo, que fica lembrado por 30 dias de uso."
         />
         <div className="settings__password-actions">
           <button type="button" className="ui-button ui-button--secondary" disabled={leave.pending} onClick={() => signOut(false)} data-testid="settings-password-logout">

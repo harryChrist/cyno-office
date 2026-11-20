@@ -171,10 +171,12 @@ type ConfirmDialogProps = {
   pendingLabel?: string;
   /** Cor do botão de confirmar (padrão: "danger"). */
   tone?: "danger" | "success";
+  /** Id de teste do botão de confirmar (padrão: `<testId>-confirm`). */
+  confirmTestId?: string;
 };
 
 /** Confirmação de ação destrutiva (ou arriscada); fecha sozinha quando a ação dá certo. */
-export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose, testId, pendingLabel = "Excluindo…", tone = "danger" }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose, testId, pendingLabel = "Excluindo…", tone = "danger", confirmTestId }: ConfirmDialogProps) {
   const { pending, error, run } = useAsyncAction();
   const confirm = async () => {
     const ok = await run(async () => {
@@ -191,7 +193,7 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
         <button type="button" className="ui-button ui-button--secondary" onClick={onClose} autoFocus>
           Cancelar
         </button>
-        <button type="button" className={`ui-button ui-button--${tone}`} onClick={() => void confirm()} disabled={pending} data-testid={testId ? `${testId}-confirm` : undefined}>
+        <button type="button" className={`ui-button ui-button--${tone}`} onClick={() => void confirm()} disabled={pending} data-testid={confirmTestId ?? (testId ? `${testId}-confirm` : undefined)}>
           {pending ? pendingLabel : confirmLabel}
         </button>
       </div>

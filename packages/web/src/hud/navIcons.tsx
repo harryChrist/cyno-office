@@ -14,6 +14,8 @@ const NAV_ICON_PATHS = {
   gestao: ["M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20Z", "M12 6a6 6 0 1 0 0 12a6 6 0 1 0 0-12Z", "M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4Z"],
   calendario: ["M8 2v4", "M16 2v4", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z", "M3 10h18", "M8 14h.01", "M12 14h.01", "M16 14h.01", "M8 18h.01", "M12 18h.01"],
   navegador: ["M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20Z", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20"],
+  // Scripts: o prompt de um terminal (seta e traço).
+  scripts: ["M4 17l6-6-6-6", "M12 19h8"],
   cerebro: BRAIN_ICON_PATHS,
   // A Biblioteca: três livros em pé.
   biblioteca: ["m16 6 4 14", "M12 6v14", "M8 8v12", "M4 4v16"],

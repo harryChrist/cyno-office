@@ -19,8 +19,12 @@ export function OfficeSettings() {
           title="Sons do escritório"
           seal="navegador"
           state={<StateBadge tone={som.ligado ? "on" : "off"}>{som.ligado ? "Ligado" : "Desligado"}</StateBadge>}
-          line="Teclado de quem trabalha à vista, elevador, ping-pong e fliperama, só quando o Escritório está aberto. Vem desligado; o navegador só libera o áudio depois de um clique seu."
+          line="Teclado, elevador, ping-pong e fliperama, só com o Escritório aberto."
         />
+        <details className="settings__more">
+          <summary>Por que vem desligado</summary>
+          <p>O navegador só libera o áudio depois de um clique seu.</p>
+        </details>
         <div className="settings__switches">
           <Switch label="Tocar os sons do escritório" checked={som.ligado} testId="settings-som-ligado" onChange={(ligado) => definirOpcoesDeSom({ ligado })} />
           <label className="ui-field">
@@ -34,7 +38,7 @@ export function OfficeSettings() {
           title="Bichos do escritório"
           seal="navegador"
           state={<StateBadge tone="value">{EGG_PREFS.filter((pref) => prefs[pref.id]).length} de {EGG_PREFS.length} ligados</StateBadge>}
-          line="Só enfeite: os bichos não mexem em tarefas nem nos agentes. Cada navegador guarda a sua escolha; desligado, o bicho some na hora."
+          line="Só enfeite: não mexem em tarefas nem nos agentes. Desligado, o bicho some na hora."
         />
         <div className="settings__switches">
           {EGG_PREFS.map((pref) => (

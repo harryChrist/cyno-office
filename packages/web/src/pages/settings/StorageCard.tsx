@@ -19,7 +19,7 @@ export function StorageCard({ workspace, data, failed, onRefresh }: { workspace:
       <header className="storage__head">
         <div className="storage__head-text">
           <h4 className="settings__card-title">Espaço em disco</h4>
-          <p className="settings__card-hint">Quanto este workspace ocupa no computador. Só leitura: nada daqui apaga arquivos.</p>
+          <p className="settings__card-hint">Quanto este workspace ocupa no computador. Nada daqui apaga arquivos.</p>
         </div>
         <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onRefresh} disabled={!info || info.state === "computing"} data-testid="settings-storage-refresh">
           Recalcular

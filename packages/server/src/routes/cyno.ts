@@ -1,4 +1,4 @@
-import { CYNO_SETTINGS_PATH, updateCynoSettingsBodySchema, type CynoSettingsResponse, JOINT_PATH, jointCancelBodySchema, type JointsResponse, type JointView, CONFIRMATIONS_PATH, PROPOSALS_PATH, type ConfirmationsResponse, type ProposalsResponse, SENT_REQUESTS_PATH, type SentRequestsResponse, CARDS_PATH, PLATFORM_REPORTS_PATH, type PlatformReport, CYNO_PATH, WAITING_PATH, updateCardSummaryBodySchema, type Card, type CardsResponse, type WaitingResponse, CYNO_WS_PATH, cynoMessageBodySchema, cynoModelBodySchema, type CynoMessageResponse, type CynoServerEvent, type CynoSnapshot, type CynoState } from "@cyno/shared";
+import { CYNO_SETTINGS_PATH, updateCynoSettingsBodySchema, type CynoSettingsResponse, JOINT_PATH, jointCancelBodySchema, type JointsResponse, type JointView, CONFIRMATIONS_PATH, PROPOSALS_PATH, type ConfirmationsResponse, type ProposalsResponse, SENT_REQUESTS_PATH, type SentRequestsResponse, CARDS_PATH, PLATFORM_REPORTS_PATH, type PlatformReport, CYNO_PATH, WAITING_PATH, updateCardSummaryBodySchema, type Card, type CardsResponse, type WaitingResponse, CYNO_WS_PATH, WS_HEARTBEAT_WIRE, cynoMessageBodySchema, cynoModelBodySchema, type CynoMessageResponse, type CynoServerEvent, type CynoSnapshot, type CynoState } from "@cyno/shared";
 import type { WebSocket } from "@fastify/websocket";
 import type { FastifyInstance } from "fastify";
 import { HttpError } from "../platform/http/errors";
@@ -151,6 +151,8 @@ export function registerCynoRoutes(app: FastifyInstance, cyno: CynoService, opti
       }
       alive = false;
       socket.ping();
+      // O aviso de vida em texto: é o que a página consegue ver (o ping de protocolo fica escondido dela).
+      if (socket.readyState === socket.OPEN) socket.send(WS_HEARTBEAT_WIRE);
     }, options.heartbeatMs);
     heartbeat.unref();
     socket.on("close", () => {

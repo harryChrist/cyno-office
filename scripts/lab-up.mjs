@@ -3,6 +3,7 @@
 // Nunca toca em data/, nas portas 3068/3067 nem no pm2. Ctrl+C derruba tudo e apaga o DATA_DIR
 // (LAB_KEEP=1 mantém a pasta). Variáveis: LAB_SERVER_PORT (3101), LAB_WEB_PORT (5273), LAB_DATA_DIR,
 // LAB_BROWSER=1 (liga o navegador dos agentes; o perfil do Chromium nasce novo dentro do DATA_DIR de teste),
+// LAB_USAGE=1 (liga a consulta do uso do plano, que vem desligada),
 // LAB_CONNECTORS_STDIO=1 (libera conectores stdio), LAB_SCENE_LIVE=1 (liga a cena ao vivo: o servidor simula o Escritório; desligada por padrão), LAB_UPDATE_CHECK=1 (liga a verificação automática de atualização no GitHub; desligada por padrão), LAB_UPDATE_APPLY=1 (liga o botão que baixa a atualização; desligado por padrão), ROUTINE_TICK_MS (intervalo do vigia das rotinas, só teste) e
 // LAB_HISTORY_DAYS=21 (depois do lab:setup, para o server, semeia N dias de histórico fabricado — `source:"seed"` — e sobe de novo;
 // só vale no DATA_DIR temporário `cyno-…` do laboratório: em qualquer outro a semente se recusa e o app sobe sem ela).
@@ -39,8 +40,8 @@ const env = {
   WEB_PORT: String(webPort),
   WEB_HOST: process.env.WEB_HOST ?? "127.0.0.1",
   // O app de teste não consulta cotas, não abre Chromium (salvo LAB_BROWSER=1) nem liga o Remote Control por conta própria.
-  CLAUDE_USAGE_POLL_MS: "0",
-  ANTIGRAVITY_USAGE_POLL_MS: "0",
+  // A consulta do uso do plano vem desligada; `LAB_USAGE=1` liga (para testar a pausa por limite com o uso de verdade).
+  ...(process.env.LAB_USAGE === "1" ? {} : { CLAUDE_USAGE_POLL_MS: "0", ANTIGRAVITY_USAGE_POLL_MS: "0" }),
   RETENTION_AUTO: "0",
   BROWSER: process.env.LAB_BROWSER === "1" ? "1" : "0",
   CONNECTORS_STDIO: process.env.LAB_CONNECTORS_STDIO === "1" ? "1" : "0",

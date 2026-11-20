@@ -1,0 +1,364 @@
+/* ---------- Página Scripts dos agentes ---------- */
+.scripts-header .page__subtitle {
+  max-width: 680px;
+}
+
+/* Lista à esquerda, saída à direita; as duas colunas rolam por dentro. */
+.scripts-layout {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+}
+
+.scripts-side {
+  min-height: 0;
+  overflow: auto;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  backdrop-filter: blur(var(--ui-blur));
+}
+
+.scripts-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.scripts-list {
+  display: grid;
+  gap: 14px;
+  padding: 12px;
+}
+
+.scripts-list__title {
+  margin: 0 0 6px;
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.scripts-list__count {
+  margin-left: 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-2);
+}
+
+.scripts-list__hint {
+  margin: -2px 0 6px;
+  padding: 0 4px;
+  font-size: 11.5px;
+  color: var(--ui-text-3);
+}
+
+.scripts-list__rows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scripts-row {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 10px;
+  font: inherit;
+  text-align: left;
+  color: var(--ui-text);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius);
+}
+
+.scripts-row:hover {
+  background: var(--ui-hover);
+}
+
+.scripts-row--selected,
+.scripts-row--selected:hover {
+  background: rgba(139, 124, 255, 0.14);
+  border-color: rgba(139, 124, 255, 0.4);
+}
+
+.scripts-row__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scripts-row__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scripts-row__time {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-2);
+}
+
+.scripts-row__meta {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--ui-text-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scripts-row__last {
+  overflow: hidden;
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scripts-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.scripts-dot--live {
+  background: var(--ui-info);
+  box-shadow: 0 0 8px var(--ui-info);
+  animation: scripts-pulse 1.4s ease-in-out infinite;
+}
+
+.scripts-dot--ok {
+  background: var(--ui-ok);
+}
+
+.scripts-dot--danger {
+  background: var(--ui-danger);
+}
+
+.scripts-dot--warn {
+  background: var(--ui-warn);
+}
+
+@keyframes scripts-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scripts-dot--live {
+    animation: none;
+  }
+}
+
+/* ---------- Visualizador ---------- */
+.scripts-viewer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-panel);
+  backdrop-filter: blur(var(--ui-blur));
+}
+
+.scripts-viewer__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 16px;
+}
+
+.scripts-viewer__heading {
+  flex: 1;
+  min-width: 220px;
+}
+
+.scripts-viewer__title {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.scripts-viewer__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.scripts-viewer__cwd {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+  overflow-wrap: anywhere;
+}
+
+.scripts-viewer__cwd code,
+.scripts-command__code {
+  font-family: var(--ui-font-mono, ui-monospace, monospace);
+}
+
+.scripts-viewer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* O "Voltar" só existe no celular (o seletor leva a página junto para vencer o `display` do .ui-button). */
+.page--scripts .scripts-back {
+  display: none;
+}
+
+/* "Baixar saída" é um link com cara de botão: sem o sublinhado de link. */
+.page--scripts a.ui-button {
+  text-decoration: none;
+}
+
+.scripts-notice {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--ui-warn);
+  background: var(--ui-warn-bg);
+  border-radius: var(--ui-radius);
+}
+
+.scripts-command {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.scripts-command summary {
+  width: fit-content;
+  cursor: pointer;
+}
+
+.scripts-command__body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.scripts-command__code {
+  flex: 1;
+  min-width: 0;
+  max-height: 160px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  font-size: 12px;
+  color: var(--ui-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+/* O terminal: rola para o lado em vez de quebrar a linha (o script usa 120 colunas). */
+.scripts-term {
+  flex: 1;
+  min-height: 240px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: var(--ui-bg, #0b0d1a);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.scripts-term__mount {
+  width: 100%;
+  height: 100%;
+  padding: 6px 0 6px 8px;
+}
+
+.scripts-placeholder {
+  display: grid;
+  flex: 1;
+  place-content: center;
+  gap: 10px;
+  margin: 0;
+  padding: 24px;
+  text-align: center;
+  color: var(--ui-text-2);
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-panel);
+}
+
+.page--scripts .scripts-placeholder .scripts-back {
+  display: inline-flex;
+  justify-self: center;
+}
+
+/* ---------- Celular: a lista ocupa a tela; o toque abre o script em tela cheia, com Voltar ---------- */
+@media (max-width: 760px) {
+  .scripts-layout {
+    display: block;
+  }
+
+  .scripts-side {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .scripts-main {
+    display: block;
+  }
+
+  .page--scripts[data-view="viewer"] .scripts-side,
+  .page--scripts[data-view="viewer"] .scripts-header,
+  .page--scripts[data-view="list"] .scripts-main {
+    display: none;
+  }
+
+  .page--scripts .scripts-back {
+    display: inline-flex;
+  }
+
+  .scripts-viewer {
+    padding: 10px;
+  }
+
+  .scripts-viewer__head {
+    flex-direction: column;
+  }
+
+  .scripts-viewer__heading {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .scripts-term {
+    flex: none;
+    height: calc(100dvh - 330px);
+    min-height: 260px;
+  }
+}

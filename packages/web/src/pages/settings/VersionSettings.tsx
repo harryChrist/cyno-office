@@ -160,7 +160,7 @@ function UpdateAction({ branch }: { branch: string }) {
       )}
       {view.kind === "docker" && (
         <p className="settings__notice" data-testid="settings-version-docker-note">
-          Nesta instalação a atualização é feita no computador hospedeiro. Os comandos estão em Como atualizar, logo abaixo.
+          Aqui a atualização é feita no computador hospedeiro. Veja os comandos em Como atualizar.
         </p>
       )}
       {failure && view.kind !== "running" && (
@@ -225,7 +225,7 @@ export function VersionSettings() {
       <section className="settings__card" data-testid="settings-version-installed">
         <OptionHead
           title="Versão instalada"
-          line="O que roda neste servidor agora."
+          line="O que roda agora neste servidor."
           seal="plataforma"
           state={<StateBadge tone="value">{version.label.split(" · ").slice(0, 2).join(" · ")}</StateBadge>}
         />
@@ -248,7 +248,7 @@ export function VersionSettings() {
       <section className="settings__card" data-testid="settings-version-check">
         <OptionHead
           title="Atualizações no GitHub"
-          line={`Compara esta instalação com o ramo ${state.branch} do repositório de origem. Verificar não baixa nada.`}
+          line={`Compara com o ramo ${state.branch} do GitHub. Verificar não baixa nada.`}
           seal="plataforma"
           state={
             <StateBadge tone={TONE_TO_BADGE[status.tone]} testId="settings-version-state">
@@ -267,7 +267,7 @@ export function VersionSettings() {
           </button>
           <span className="version__when" role="status" data-testid="settings-version-when">
             {lastCheckedText(state)}
-            {!state.auto ? " · verificação automática desligada" : ""}
+            {!state.auto ? " · automática desligada" : ""}
           </span>
         </div>
         <ErrorText testId="settings-version-error">{error}</ErrorText>
@@ -289,9 +289,15 @@ export function VersionSettings() {
                 })}
               </ul>
             ) : (
-              <p className="settings__card-hint" data-testid="settings-version-no-list">
-                A lista de novidades não está disponível (ela só aparece com repositório público ou quando os commits já estão nesta máquina).
-              </p>
+              <>
+                <p className="settings__card-hint" data-testid="settings-version-no-list">
+                  A lista de novidades não está disponível.
+                </p>
+                <details className="settings__more">
+                  <summary>Por quê</summary>
+                  <p>Ela só aparece com repositório público ou quando os commits já estão nesta máquina.</p>
+                </details>
+              </>
             )}
             {hidden > 0 && (
               <p className="settings__card-hint">

@@ -55,11 +55,18 @@ export function LocalConnectorsSettings() {
         <OptionHead
           title="Conectores locais (comando na máquina)"
           seal="plataforma"
-          line={`Conectores do tipo comando e apps instalados pela Biblioteca rodam programas nesta máquina, com as permissões do usuário do servidor. Ligue só numa rede em que você confia. ${data.source === "env" ? `Agora vale o padrão do servidor (${data.envDefault ? "ligado" : "desligado"} pelo .env).` : `Você escolheu; o padrão do servidor (.env) é ${data.envDefault ? "ligado" : "desligado"}.`}`}
+          line="Rodam programas nesta máquina. Ligue só numa rede em que você confia."
         />
+        <details className="settings__more">
+          <summary>Como funciona</summary>
+          <p>
+            Conectores do tipo comando e apps instalados pela Biblioteca rodam com as permissões do usuário do servidor.{" "}
+            {data.source === "env" ? `Agora vale o padrão do servidor (${data.envDefault ? "ligado" : "desligado"} pelo .env).` : `Você escolheu; o padrão do servidor (.env) é ${data.envDefault ? "ligado" : "desligado"}.`}
+          </p>
+        </details>
         <SettingSwitch
           title="Permitir conectores locais"
-          line="Ligado: dá para cadastrar conectores de comando e instalar apps. Desligado: nada local roda (os conectores por endereço, HTTP, seguem funcionando)."
+          line="Desligado, nada local roda. Os conectores por endereço (HTTP) seguem funcionando."
           seal="plataforma"
           checked={data.enabled}
           inherited={data.source === "env"}

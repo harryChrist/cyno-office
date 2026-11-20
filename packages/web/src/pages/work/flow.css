@@ -244,3 +244,108 @@
   gap: 12px;
   min-width: min(420px, 100%);
 }
+
+/* "Depois de" resumido: só o que a tarefa espera */
+.fl-dep-none,
+.fl-dep-sum {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.fl-dep-sum--wait {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+
+.fl-dep-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fl-dep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 4px 2px 8px;
+  font-size: 13px;
+  background: var(--ui-bg);
+  border-radius: 8px;
+}
+
+.fl-dep-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fl-dep-state {
+  flex: none;
+  font-size: 11px;
+  color: var(--ui-text-2);
+}
+
+.fl-dep-row--done {
+  color: var(--ui-text-3);
+}
+
+.fl-dep-row--done .fl-dep-name {
+  text-decoration: line-through;
+}
+
+.fl-dep-x {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ui-text-3);
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.fl-dep-x:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fl-dep-x:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.fl-dep-edit {
+  justify-self: start;
+}
+
+/* O rótulo escondido da busca é de posição absoluta: fica preso ao campo, sem esticar o painel. */
+.fl-depends {
+  position: relative;
+}
+
+/* Celular: alvos de toque maiores. */
+@media (max-width: 760px) {
+  .fl-dep-row {
+    min-height: 44px;
+  }
+
+  .fl-dep-x {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ui-button.fl-dep-edit {
+    min-height: 40px;
+    padding-inline: 14px;
+  }
+
+  .fl-depends .fl-check {
+    min-height: 40px;
+  }
+}

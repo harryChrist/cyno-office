@@ -1,4 +1,4 @@
-import { parseServerMessage, workspaceSocketPath, WS_PATH, type EventCursor, type ServerEvent } from "@cyno/shared";
+import { createWsLiveness, parseServerMessage, workspaceSocketPath, WS_PATH, WS_SILENCE_CHECK_MS, WS_SILENCE_LIMIT_MS, WS_WAKE_SILENCE_MS, type EventCursor, type ServerEvent } from "@cyno/shared";
 import { checkSessionAfterDrop } from "../auth/authStore";
 import { healthPollDelay, retryDelay, uiDownPollDelay } from "./backoff";
 
@@ -103,6 +103,8 @@ export function connectOfficeSocket({ workspaceId, onEvent, onStatus }: OfficeSo
   let probing = false;
   /** Até onde já recebemos os eventos deste workspace (null = ainda sem snapshot: conexão nova). */
   let cursor: EventCursor | null = null;
+  /** Há quanto tempo o servidor não fala nesta conexão (para perceber a conexão que morreu em silêncio). */
+  const liveness = createWsLiveness();
 
   /** Guarda o cursor e diz se o evento é novo (false = repetido, já aplicado). */
   const advance = (event: ServerEvent, seq: number | undefined): boolean => {
@@ -164,13 +166,16 @@ export function connectOfficeSocket({ workspaceId, onEvent, onStatus }: OfficeSo
   const open = () => {
     const current = new WebSocket(socketUrl(workspaceId, cursor));
     socket = current;
+    liveness.reset();
     current.onopen = () => {
       if (stopped) return;
       attempt = 0;
+      liveness.reset();
       onStatus?.("open");
     };
     current.onmessage = (message: MessageEvent<unknown>) => {
       if (stopped || typeof message.data !== "string") return;
+      liveness.seen(message.data);
       const parsed = parseServerMessage(message.data);
       if (parsed && advance(parsed.event, parsed.seq)) onEvent(parsed.event);
     };
@@ -188,11 +193,42 @@ export function connectOfficeSocket({ workspaceId, onEvent, onStatus }: OfficeSo
   };
 
   /**
+   * A conexão está "aberta" mas o servidor não fala há tempo demais: morreu em silêncio. Larga este socket (o close
+   * dele é ignorado) e abre outro já; com o cursor, o servidor reenvia só o que faltou.
+   */
+  const replaceSilent = () => {
+    const dead = socket;
+    socket = null;
+    if (dead) {
+      dead.onmessage = null;
+      try {
+        dead.close();
+      } catch {
+        // socket em estado estranho: seguimos sem ele
+      }
+    }
+    window.clearTimeout(retryTimer);
+    attempt = 0;
+    probes = 0;
+    onStatus?.("reconnecting");
+    connect();
+  };
+  const isSilent = (limitMs: number) => socket?.readyState === WebSocket.OPEN && liveness.silentFor() > limitMs;
+  const silenceCheck = window.setInterval(() => {
+    if (!stopped && !probing && !cancelWait && isSilent(WS_SILENCE_LIMIT_MS)) replaceSilent();
+  }, WS_SILENCE_CHECK_MS);
+
+  /**
    * A aba voltou para a frente (celular desbloqueado, aba trocada) ou a rede voltou: com o socket
-   * caído e esperando o backoff, tenta já. Aberto, abrindo ou consultando o health: nada a fazer.
+   * caído e esperando o backoff, tenta já. Aberto mas calado há mais de uma batida, troca de conexão
+   * na hora. Aberto e falando, abrindo ou consultando o health: nada a fazer.
    */
   const wake = () => {
     if (stopped || document.visibilityState === "hidden" || probing || cancelWait) return;
+    if (isSilent(WS_WAKE_SILENCE_MS)) {
+      replaceSilent();
+      return;
+    }
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
     // Ainda fechando (o close dele vai ser ignorado): o status muda aqui.
     if (socket?.readyState === WebSocket.CLOSING) onStatus?.("reconnecting");
@@ -213,6 +249,7 @@ export function connectOfficeSocket({ workspaceId, onEvent, onStatus }: OfficeSo
     document.removeEventListener("visibilitychange", wake);
     window.removeEventListener("online", wake);
     window.clearTimeout(retryTimer);
+    window.clearInterval(silenceCheck);
     cancelWait?.();
     const current = socket;
     if (!current) return;

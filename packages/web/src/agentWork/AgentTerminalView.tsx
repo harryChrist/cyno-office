@@ -7,6 +7,7 @@ import { copyText } from "../ui/clipboard";
 import { formatTime } from "../ui/format";
 import { Markdown } from "../ui/markdown/Markdown";
 import { entriesToTerminalLines, type TerminalLine } from "./agentTerminal";
+import { scriptLaunchedBy } from "./scriptTool";
 import { TerminalFooter } from "./TerminalFooter";
 import { TerminalToolbar } from "./TerminalToolbar";
 import {
@@ -139,11 +140,14 @@ type LineProps = {
   openText: boolean;
   openDetail: boolean;
   onToggle: (key: string) => void;
+  /** Abre a página Scripts no script que esta linha lançou (só nas linhas de `start_script`). */
+  onOpenScript?: ((scriptId: string) => void) | undefined;
 };
 
-const Line = memo(function Line({ line, showTime, folded, currentHit, openText, openDetail, onToggle }: LineProps) {
+const Line = memo(function Line({ line, showTime, folded, currentHit, openText, openDetail, onToggle, onOpenScript }: LineProps) {
   const connectors = useConnectorsStore((state) => state.list);
   const via = line.tool && !folded ? connectorForTool(connectors, line.tool) : null;
+  const scriptId = line.tool && onOpenScript ? scriptLaunchedBy(line.tool, line.detail) : undefined;
   if (line.tone === "section") {
     return (
       <div className="aterm__section" data-testid="agent-terminal-section">
@@ -193,6 +197,11 @@ const Line = memo(function Line({ line, showTime, folded, currentHit, openText, 
           />
         )}
         {line.meta && <span className="aterm__meta">{line.meta}</span>}
+        {scriptId && (
+          <button type="button" className="aterm__open" onClick={() => onOpenScript?.(scriptId)} title="Abrir a saída deste script na página Scripts" data-testid="agent-terminal-script-open">
+            ver saída
+          </button>
+        )}
         <CopyButton text={copyTextOf(line)} label={line.kind === "tool" ? "Copiar o comando" : "Copiar"} />
         {line.detail && (
           <Field
@@ -223,6 +232,8 @@ type Props = {
   live: boolean;
   empty: ReactNode;
   testId?: string;
+  /** "ver saída" nas linhas que lançaram um script: leva à página Scripts. Sem isto, o atalho não aparece. */
+  onOpenScript?: (scriptId: string) => void;
 };
 
 /**
@@ -232,7 +243,13 @@ type Props = {
  * rodapé de estado e "novas mensagens" quando o dono rolou para cima. Desenha só as últimas linhas (a
  * busca e os filtros olham a conversa toda). Não aceita comando nenhum: falar com o agente é pela caixa.
  */
-export function AgentTerminalView({ entries, agentName, agentId, taskTitle, live, empty, testId = "agent-terminal" }: Props) {
+export function AgentTerminalView({ entries, agentName, agentId, taskTitle, live, empty, testId = "agent-terminal", onOpenScript }: Props) {
+  // As linhas são memorizadas: recebem sempre a mesma função, que chama a mais nova de quem montou o terminal.
+  const openScriptRef = useRef(onOpenScript);
+  useEffect(() => {
+    openScriptRef.current = onOpenScript;
+  }, [onOpenScript]);
+  const openScript = useCallback((scriptId: string) => openScriptRef.current?.(scriptId), []);
   const root = useRef<HTMLDivElement>(null);
   const screen = useRef<HTMLDivElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -469,6 +486,7 @@ export function AgentTerminalView({ entries, agentName, agentId, taskTitle, live
                 openText={open.has(`${line.id}:text`)}
                 openDetail={open.has(`${line.id}:detail`)}
                 onToggle={toggle}
+                onOpenScript={onOpenScript ? openScript : undefined}
               />
             ))}
             {hiddenDown > 0 && (

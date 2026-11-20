@@ -158,7 +158,9 @@ export type EngineBlock =
   | { reason: "quota"; resetsAt?: string }
   | { reason: "unavailable"; detail?: string }
   /** Freebuff: outro agente tem a hora aberta e o teto de horas abertas foi atingido (`holder` = o nome dele; `resetsAt` = quando a hora dele acaba). */
-  | { reason: "hour"; holder: string; resetsAt?: string };
+  | { reason: "hour"; holder: string; resetsAt?: string }
+  /** Pausa por limite de uso do plano que o dono configurou (`label` = a janela, `percent` = onde pausa; volta em `resetsAt`). */
+  | { reason: "paused"; label: string; percent: number; resetsAt?: string };
 
 /** "Tentar agora" com um motor sem cota: POST com `{ engine }` (as filas paradas andam; se ainda faltar cota, voltam a esperar). */
 export const ENGINE_RETRY_PATH = "/api/engines/retry";
@@ -255,6 +257,7 @@ export function resumeTimeLabel(iso: string, now: number, timeZone?: string): st
 /** "sem cota · volta às 14:30", "sem cota" ou "motor indisponível". */
 export function engineBlockLabel(block: EngineBlock, now: number, timeZone?: string): string {
   if (block.reason === "unavailable") return "motor indisponível";
+  if (block.reason === "paused") return `pausado no limite do plano (${block.label} a ${block.percent}%)${block.resetsAt ? ` · volta às ${resumeTimeLabel(block.resetsAt, now, timeZone)}` : ""}`;
   if (block.reason === "hour") return `esperando a hora do Freebuff de ${block.holder} acabar${block.resetsAt ? ` (às ${resumeTimeLabel(block.resetsAt, now, timeZone)})` : ""}`;
   return block.resetsAt ? `sem cota · volta às ${resumeTimeLabel(block.resetsAt, now, timeZone)}` : "sem cota";
 }

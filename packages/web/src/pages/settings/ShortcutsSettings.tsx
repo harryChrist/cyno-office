@@ -58,7 +58,7 @@ export function ShortcutsSettings() {
           title="Abrir o chat do Maestro"
           seal="navegador"
           state={<StateBadge tone="value">{bindingText(maestro, IS_MAC)}</StateBadge>}
-          line="De qualquer tela, o atalho abre o chat do Maestro e já deixa o cursor no campo de mensagem. Cada navegador guarda a sua combinação."
+          line="De qualquer tela, abre o chat do Maestro com o cursor no campo de mensagem."
         />
         <div className="shortcut-row">
           <Keys binding={maestro} />
@@ -83,7 +83,7 @@ export function ShortcutsSettings() {
           </div>
         </div>
         <p className="settings__fine" role="status" data-testid="settings-atalho-ajuda">
-          {capturing ? "Segure Ctrl (ou ⌘) ou Alt e aperte uma tecla. Vale também uma tecla de função, como F2." : "Dentro do terminal do Maestro o atalho não vale: lá as teclas são do próprio terminal."}
+          {capturing ? "Segure Ctrl (ou ⌘) ou Alt e aperte uma tecla. Vale também uma tecla de função, como F2." : "Dentro do terminal do Maestro o atalho não vale."}
         </p>
         <ErrorText testId="settings-atalho-erro">{error}</ErrorText>
       </section>

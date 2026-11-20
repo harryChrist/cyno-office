@@ -1,6 +1,6 @@
 import { projectDefaults, type Project, type ProjectTask } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { dependsChoices, dependsSummary, flowItems, flowOrder } from "./flowView";
+import { dependsChoices, dependsOverview, dependsSummary, filterDependsChoices, flowItems, flowOrder } from "./flowView";
 
 const AT = "2026-11-10T12:00:00.000Z";
 const NAMES: Record<string, string> = { sonia: "Sônia", davi: "Davi", hugo: "Hugo", ana: "Ana" };
@@ -68,5 +68,27 @@ describe("lista \"Depois de\"", () => {
     const p = flow();
     expect(dependsSummary(p, p.tasks.find((t) => t.ref === "d")!, agentName)).toBe("Depois de Davi e Hugo");
     expect(dependsSummary(p, p.tasks.find((t) => t.ref === "a")!, agentName)).toBe("");
+  });
+});
+
+describe("\"Depois de\" resumido", () => {
+  const dep = (ref: string, status: ProjectTask["status"]) => task(ref, { parent: "P", status });
+  it("o que falta vem primeiro e o resumo conta quantas travam", () => {
+    const p = project([mother("P"), dep("a", "concluida"), dep("b", "em_andamento"), task("c", { parent: "P", dependsOn: ["a", "b"] })]);
+    const o = dependsOverview(p, p.tasks.find((t) => t.ref === "c")!);
+    expect(o.rows.map((r) => [r.ref, r.done, r.stateLabel])).toEqual([["b", false, "fazendo"], ["a", true, "feita"]]);
+    expect(o.summary).toBe("Esperando 1 de 2");
+  });
+  it("tudo feito: nada travando", () => {
+    const p = project([mother("P"), dep("a", "concluida"), task("c", { parent: "P", dependsOn: ["a"], status: "a_fazer" })]);
+    expect(dependsOverview(p, p.tasks.find((t) => t.ref === "c")!).summary).toBe("Nada travando: pode começar");
+  });
+  it("sem dependência: sem resumo", () => {
+    const p = project([mother("P"), task("c", { parent: "P" })]);
+    expect(dependsOverview(p, p.tasks.find((t) => t.ref === "c")!)).toMatchObject({ rows: [], summary: "" });
+  });
+  it("busca sem acento nem caixa", () => {
+    const list = [{ ref: "a", title: "Pesquisar ação", ownerId: "", checked: false }, { ref: "b", title: "Outra", ownerId: "", checked: false }];
+    expect(filterDependsChoices(list, "ACAO", (id) => id).map((c) => c.ref)).toEqual(["a"]);
   });
 });

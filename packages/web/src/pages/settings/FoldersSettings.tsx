@@ -54,9 +54,9 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
         <header className="folders__head">
           <div className="folders__head-text">
             {!panel && <h4 className="settings__card-title">Pastas que os agentes usam</h4>}
-            <p className="settings__card-hint">Pastas do seu computador onde os agentes (o Maestro também) leem e trabalham. Tirar uma pasta daqui não apaga nada do disco.</p>
-            <details className="folders__more">
-              <summary>Mais detalhes</summary>
+            <p className="settings__card-hint">Pastas do seu computador onde os agentes e o Maestro leem e trabalham. Tirar uma daqui não apaga nada.</p>
+            <details className="folders__more settings__more">
+              <summary>Saiba mais</summary>
               <p className="settings__card-hint">A pasta própria de cada agente continua sendo só rascunho. Trocar uma pasta reinicia o terminal de cada agente quando ele estiver livre.</p>
             </details>
           </div>
@@ -65,7 +65,7 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
         {folders.length === 0 ? (
           <div className="folders__empty" data-testid="settings-folders-empty">
             <p className="folders__empty-title">Nenhuma pasta cadastrada</p>
-            <p className="folders__empty-hint">Cadastre a pasta de um projeto ou de um vault de notas para os agentes lerem (ou editarem) os arquivos reais.</p>
+            <p className="folders__empty-hint">Cadastre a pasta de um projeto ou de notas para os agentes lerem ou editarem.</p>
             {!adding && addButton}
           </div>
         ) : (
@@ -77,7 +77,7 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
         )}
         {folders.some((folder) => folder.mode === "write") && (
           <p className="settings__access-warn" role="note" data-testid="settings-folders-write-warn">
-            Em pastas de leitura e escrita os agentes podem criar, alterar e apagar arquivos de verdade. Se for um projeto, vale ter o Git ou uma cópia antes.
+            Com leitura e escrita, os agentes podem criar, alterar e apagar arquivos de verdade. Tenha o Git ou uma cópia antes.
           </p>
         )}
         {full && <p className="settings__card-hint">O limite é de {WORK_FOLDER_LIMITS.max} pastas por workspace. Tire alguma para cadastrar outra.</p>}

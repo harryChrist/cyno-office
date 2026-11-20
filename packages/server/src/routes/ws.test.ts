@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { parseServerMessage, workspaceSocketPath, type ServerEvent, type ServerMessage } from "@cyno/shared";
+import { parseServerMessage, workspaceSocketPath, WS_HEARTBEAT_WIRE, type ServerEvent, type ServerMessage } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { useTestApp, type TestApp } from "../dev/test-app";
@@ -139,6 +139,21 @@ describe("WebSocket /ws (server real na porta 0)", () => {
     const client = await connect(await listen(testApp));
     const pinged = new Promise<void>((resolve) => client.socket.once("ping", () => resolve()));
     await pinged;
+    client.socket.close();
+    await client.closed;
+  });
+
+  it("heartbeat: junto com o ping vai o aviso de vida em texto, que a página consegue ver", async () => {
+    const testApp = await setupApp({ wsHeartbeatMs: 20 });
+    const client = await connect(await listen(testApp));
+    const beat = await new Promise<string>((resolve) => {
+      client.socket.on("message", (data) => {
+        if (String(data) === WS_HEARTBEAT_WIRE) resolve(String(data));
+      });
+    });
+    expect(beat).toBe('{"type":"heartbeat"}');
+    // Não é um evento: não entra na lista de eventos do cliente.
+    expect(client.events.some((event) => (event as { type: string }).type === "heartbeat")).toBe(false);
     client.socket.close();
     await client.closed;
   });

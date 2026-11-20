@@ -16,9 +16,7 @@
 }
 
 /* Largura máxima de leitura: o texto e os formulários nunca esticam com a janela. */
-.settings__panel > *,
-.settings__panel > .settings__top,
-.settings__panel > .settings__area {
+.settings__panel > * {
   max-width: var(--settings-max);
 }
 
@@ -47,14 +45,12 @@
 /* ---------- Hierarquia: seção > cartão > controle ---------- */
 .settings__sec {
   gap: 14px;
-  padding-top: 28px;
-  border-top: 1px solid var(--ui-border);
 }
 
-.settings__area > .settings__sec:first-of-type,
-.settings__area-head + .settings__sec {
-  padding-top: 4px;
-  border-top: 0;
+/* Seções da mesma página: um traço entre elas (as escondidas não contam). */
+.settings__sec:not([hidden]) ~ .settings__sec:not([hidden]) {
+  padding-top: 26px;
+  border-top: 1px solid var(--ui-border);
 }
 
 .settings__sec-head {
@@ -64,15 +60,15 @@
 
 .settings__section-title {
   margin: 0;
-  font-size: 21px;
-  font-weight: 750;
-  letter-spacing: -0.015em;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   color: var(--ui-text);
 }
 
 .settings__sec-hint {
-  font-size: 13.5px;
-  color: var(--ui-text-2);
+  font-size: 13px;
+  color: var(--ui-text-3);
 }
 
 .settings__card {
@@ -87,7 +83,7 @@
 /* Textos de ajuda: legíveis, sem linha comprida, abaixo do controle e sem competir com ele. */
 .settings__card-hint,
 .settings__sec-hint,
-.settings__area-hint,
+.settings__page-hint,
 .opt-head__line {
   max-width: 74ch;
 }
@@ -101,45 +97,16 @@
   display: none;
 }
 
-.opt-seal {
-  font-weight: 600;
-  opacity: 0.9;
-}
-
-/* ---------- Plataforma x workspace: a área do workspace é uma região à parte, com a cor dele ---------- */
-.settings__area--workspace {
-  margin-top: 48px;
-  padding: 18px;
-  background: color-mix(in srgb, var(--ui-ok) 4%, transparent);
-  border: 1px solid color-mix(in srgb, var(--ui-ok) 28%, var(--ui-border));
-  border-radius: calc(var(--ui-radius-panel) + 4px);
-}
-
-.settings__area--workspace .settings__area-head {
-  border-left-color: var(--ui-ok);
-  background: color-mix(in srgb, var(--ui-ok) 8%, var(--ui-surface));
-}
-
-.settings__area--workspace .settings__sec {
-  border-top-color: color-mix(in srgb, var(--ui-ok) 18%, var(--ui-border));
-}
-
-/* No menu lateral: o grupo do workspace também ganha a marca. */
-.settings__nav-group:last-of-type .settings__nav-group-title {
-  color: var(--ui-ok);
-}
-
-/* ---------- Menu lateral fixo, com a seção atual marcada ---------- */
+/* ---------- Índice: a página aberta fica marcada ---------- */
 .settings__nav-item {
-  min-height: 44px;
+  min-height: 38px;
 }
 
 .settings__nav-item[aria-current="true"] {
   box-shadow: inset 3px 0 0 var(--ui-accent);
 }
 
-.settings__nav-item:focus-visible,
-.settings__nav-item:focus {
+.settings__nav-item:focus-visible {
   outline: 2px solid var(--ui-accent);
   outline-offset: -2px;
 }
@@ -166,56 +133,84 @@
   }
 }
 
-/* ---------- Celular: o índice vira duas faixas que rolam de lado; alvos de toque de 44 px ---------- */
+/* ---------- Celular: o menu é a tela de entrada e cada página abre por cima dele; a página rola inteira ---------- */
 @media (max-width: 767px) {
+  .settings {
+    display: block;
+  }
+
+  /* A barra de cima do celular já diz "Configurações": o cabeçalho da página só repetiria. */
+  .page--settings > .page__header {
+    display: none;
+  }
+
+  /* Sem caixa dentro de caixa: no celular o menu e a página ocupam a largura toda. */
+  .settings__nav,
+  .settings__panel {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
   .settings__nav {
-    padding: 8px;
+    overflow-y: visible;
+    gap: 10px;
+    padding: 0;
   }
 
-  .settings__nav-group {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    gap: 8px;
-    padding-bottom: 4px;
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
-  }
-
-  .settings__nav-group-title {
-    flex: none;
-    padding: 0 4px 0 2px;
+  .settings__nav[hidden],
+  .settings__panel[hidden] {
+    display: none;
   }
 
   .settings__nav-item {
-    flex: none;
-    min-height: 44px;
-    scroll-snap-align: start;
-    white-space: nowrap;
+    min-height: 56px;
+    padding: 9px 8px 9px 12px;
   }
 
-  .settings__nav-group + .settings__nav-group {
-    margin-top: 0;
-    padding-top: 0;
-    border-top: 0;
+  .settings__nav-label {
+    font-size: 15px;
+    white-space: normal;
+  }
+
+  .settings__nav-hint {
+    display: block;
+  }
+
+  .settings__nav-chev {
+    display: block;
+  }
+
+  .settings__nav-item + .settings__nav-item {
+    border-top-color: var(--ui-border);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .settings__warnings {
+    margin-bottom: 0;
   }
 
   .settings__panel {
-    padding: 14px 12px 28px;
+    padding: 0 0 28px;
+    overflow-y: visible;
   }
 
-  .settings__area--workspace {
-    padding: 12px 10px;
-    margin-top: 36px;
+  .settings__page-head {
+    margin-bottom: 16px;
+  }
+
+  .settings__page-title {
+    font-size: 20px;
   }
 
   .settings__sec {
     padding-top: 22px;
+    scroll-margin-top: 72px;
   }
 
   .settings__section-title {
-    font-size: 19px;
+    font-size: 17px;
   }
 
   .settings__card {

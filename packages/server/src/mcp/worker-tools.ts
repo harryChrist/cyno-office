@@ -6,6 +6,7 @@ import { approvalLimitError, describeForYouTypes } from "./approval-type-tool";
 import { forYouTools } from "./for-you-tools";
 import { defineTool, type McpTool } from "./protocol";
 import { workerRoutineTools } from "./routine-tools";
+import { scriptToolsFor } from "./script-tools";
 import type { OfficeToolsDeps } from "./office-tools";
 import { approvalFields, approvalItemField, questionsField, requestApprovalDescription, text, withinLimit } from "./tool-fields";
 
@@ -34,7 +35,7 @@ export const HELP_WAIT_MS = 10 * 60_000;
 
 /** Ferramentas dos agentes de time (get_task, ask_user, request_help, submit_result, request_approval & cia). */
 
-export function workerTools(agentId: string, { runner, forYouTypes, forYou, plans, state, routines, media }: OfficeToolsDeps): McpTool[] {
+export function workerTools(agentId: string, { runner, forYouTypes, forYou, plans, state, routines, media, scripts }: OfficeToolsDeps): McpTool[] {
   const currentTask = () => {
     const taskId = runner.currentTaskId(agentId);
     const task = state.read().tasks.find((candidate) => candidate.id === taskId);
@@ -60,6 +61,8 @@ export function workerTools(agentId: string, { runner, forYouTypes, forYou, plan
     }),
     ...(forYou ? forYouTools({ actor: "agente", agentId, currentTaskId: () => currentTask().id }, { state, forYou, types: forYouTypes, ...(media ? { media: media.media } : {}) }) : []),
     ...(routines ? workerRoutineTools(agentId, { state, runner, ...routines }) : []),
+    // Scripts demorados rodados pelo servidor: só para quem tem o terminal ligado (workspace E agente).
+    ...scriptToolsFor(agentId, state.read().agents.find((candidate) => candidate.id === agentId) ?? {}, scripts),
     defineTool({
       name: "request_help",
       description:

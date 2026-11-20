@@ -56,12 +56,16 @@ export function GestaoSettings({ workspace }: { workspace: Workspace }) {
             {saved.dailyAt ? `dia ${saved.dailyAt}` : "dia só na mão"} · semana {saved.weekly}
           </StateBadge>
         }
-        line="O servidor monta sozinho o resumo do dia e a revisão da semana, só com os números já calculados (sem IA, sem gastar cota) e guarda cada um congelado em Gestão > Relatórios. Um horário perdido com o servidor desligado gera só o último, na volta."
+        line="O servidor monta o resumo do dia e a revisão da semana, sem IA e sem gastar cota. Ficam em Gestão > Relatórios."
       />
+      <details className="settings__more">
+        <summary>Como funciona</summary>
+        <p>Os relatórios usam só números já calculados e cada um fica congelado. Se um horário passar com o servidor desligado, só o último é gerado na volta.</p>
+      </details>
       <ResetDefaultButton workspaceId={workspace.id} fields={["gestao.dailyAt", "gestao.weekly", "gestao.ai"]} own={own} testId="settings-gestao-reset" />
       <SettingSwitch
         title="Gerar o resumo do dia sozinho"
-        line="Desligado: o resumo do dia só sai quando você pede em Gestão > Relatórios."
+        line="Desligado: o resumo só sai quando você pede."
         checked={saved.dailyAt !== null}
         onToggle={(next) => patch({ dailyAt: next ? dailyAt : null })}
         seal="workspace"
@@ -100,16 +104,20 @@ export function GestaoSettings({ workspace }: { workspace: Workspace }) {
         </button>
       </div>
       <SettingSwitch
-        title={`Parágrafo do Maestro no resumo do dia (cerca de ${GESTAO_AI_COST.daily} equivalente por resumo)`}
-        line="O Maestro escreve até 3 frases por cima dos números, sem refazer a conta. Acorda o Maestro e gasta um pouco da cota do motor dele; desligado, nada é pedido a ninguém."
+        title="Parágrafo do Maestro no resumo do dia"
+        line={`Até 3 frases por cima dos números. Cerca de ${GESTAO_AI_COST.daily} de cota por resumo.`}
         checked={saved.ai.daily}
         onToggle={(next) => patch({ ai: { daily: next } })}
         seal="workspace"
         testId="settings-gestao-ai-daily"
       />
+      <details className="settings__more">
+        <summary>Sobre o parágrafo do Maestro</summary>
+        <p>O Maestro escreve por cima dos números, sem refazer a conta. Isso acorda o Maestro e gasta um pouco da cota do motor dele (valores equivalentes à API). Desligado, nada é pedido a ninguém.</p>
+      </details>
       <SettingSwitch
-        title={`Parágrafo do Maestro na revisão da semana (cerca de ${GESTAO_AI_COST.weekly} equivalente por revisão)`}
-        line={"Um parágrafo de “o que mudou” na revisão da semana fechada. Também gasta cota do motor do Maestro; vem desligado."}
+        title="Parágrafo do Maestro na revisão da semana"
+        line={`Um parágrafo de “o que mudou” na semana fechada. Cerca de ${GESTAO_AI_COST.weekly} de cota por revisão.`}
         checked={saved.ai.weekly}
         onToggle={(next) => patch({ ai: { weekly: next } })}
         seal="workspace"

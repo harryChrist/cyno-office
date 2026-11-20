@@ -16,48 +16,18 @@ export function useAttentionCounter() {
 }
 
 /**
- * "Esperando você · N": sempre visível. Cada clique vai ao próximo alerta que espera o dono, do mais
- * antigo ao mais novo, e dá a volta no fim; `Shift`+clique volta. Parado em zero. `nav` é a linha da
- * barra lateral; `pill` é a pílula curta do celular e da barra de cima.
+ * "Esperando você · N": pílula curta do celular e da barra de cima (a barra lateral tem o botão "Espera" em "Para você").
+ * Cada clique vai ao próximo alerta que espera o dono, do mais antigo ao mais novo, e dá a volta no fim; `Shift`+clique
+ * volta. Só aparece quando há alguém esperando (a barra é estreita).
  */
-export function AttentionCounter({ variant = "nav" }: { variant?: "nav" | "pill" }) {
+export function AttentionCounter() {
   const { count, hint } = useAttentionCounter();
-  const active = count > 0;
-  const onClick = (event: { shiftKey: boolean }) => {
-    if (active) stepAttention(event.shiftKey ? -1 : 1);
-  };
-  if (variant === "pill") {
-    // No celular só aparece quando há alguém esperando (a barra é estreita).
-    if (!active) return null;
-    return (
-      <button type="button" className="attn-pill" onClick={onClick} aria-label={hint} title={hint} data-testid="attention-counter">
-        <NavIcon name="mao" className="nav-icon attn-pill__icon" />
-        <span className="attn-pill__label">Esperando você</span>
-        <span className="attn-pill__count" data-testid="attention-count">
-          {count > 99 ? "99+" : count}
-        </span>
-      </button>
-    );
-  }
+  if (count <= 0) return null;
   return (
-    <button
-      type="button"
-      className={`navitem navitem--attention${active ? " navitem--attention-on" : ""}`}
-      aria-disabled={!active}
-      aria-label={hint}
-      title={hint}
-      data-tip={active ? `Esperando você · ${count}` : "Esperando você"}
-      data-tip-hint={hint}
-      onClick={onClick}
-      data-testid="attention-counter"
-    >
-      <span className="navitem__icon-wrap">
-        <NavIcon name="mao" />
-      </span>
-      <span className="navitem__text">
-        <span className="navitem__label">Esperando você</span>
-      </span>
-      <span className={`navitem__badge${active ? " navitem__badge--attn" : ""}`} data-testid="attention-count">
+    <button type="button" className="attn-pill" onClick={(event) => stepAttention(event.shiftKey ? -1 : 1)} aria-label={hint} title={hint} data-testid="attention-counter">
+      <NavIcon name="mao" className="nav-icon attn-pill__icon" />
+      <span className="attn-pill__label">Esperando você</span>
+      <span className="attn-pill__count" data-testid="attention-count">
         {count > 99 ? "99+" : count}
       </span>
     </button>

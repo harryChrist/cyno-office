@@ -104,6 +104,14 @@ describe("ferramentas do escritório", () => {
     expect(describeWork("mcp__office__agenda_book", {}).icon).toBe("📅");
     expect(describeWork("mcp__office__media_render_html", {}).icon).toBe("🖼️");
     expect(describeWork("mcp__office__routine_pause", {}).text).toBe("Pausando uma rotina");
+    expect(describeWork("mcp__office__start_script", { title: "Baixar capítulos", command: "bash baixar.sh" })).toMatchObject({ icon: "⚙️", text: "Lançando um script: Baixar capítulos", detail: "bash baixar.sh" });
+    expect(describeWork("mcp__office__start_script", { title: "x".repeat(100), command: "c" }).text.length).toBeLessThanOrEqual(46);
+    expect(describeWork("mcp__office__start_script", {}).text).toBe("Lançando um script");
+    expect(describeWork("mcp__office__check_script", { id: "s1" }).text).toBe("Acompanhando um script");
+    expect(describeWork("mcp__office__stop_script", { id: "s1" }).text).toBe("Parando um script");
+    expect(describeWork("mcp__office__list_scripts", {}).text).toBe("Conferindo os scripts");
+    expect(officeToolDoneWith("start_script", { title: "Baixar capítulos" })).toBe("Lançou um script: Baixar capítulos");
+    expect(officeToolDone("stop_script")).toBe("Parou um script");
   });
 
   it("nome antigo (pt-BR) acha a mesma frase; desconhecida cai numa frase genérica com o nome", () => {

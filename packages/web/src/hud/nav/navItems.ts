@@ -29,7 +29,17 @@ export type NavItemDef = {
   hint?: string;
   /** Destinos mostrados logo abaixo, recuados (a Gestão e a Biblioteca). */
   children?: NavChildDef[];
+  /** Contagem discreta à direita do nome (as abas do navegador, os scripts rodando). */
+  counter?: NavCounterKind;
+  /** Página de um workspace só: some quando não há workspace. */
+  needsWorkspace?: boolean;
 };
+
+/** O que a contagem à direita de uma linha conta. */
+export type NavCounterKind = "tabs" | "running";
+
+/** Um grupo do menu: título pequeno (ou nenhum), as linhas e, se `separated`, um traço antes dele. */
+export type NavSectionDef = { title: string | null; items: NavItemDef[]; separated?: boolean };
 
 /** Texto de cada página (a linha discreta embaixo do nome e a dica), em português simples. */
 export const PAGE_HINTS: Partial<Record<PageId, string>> = {
@@ -42,6 +52,8 @@ export const PAGE_HINTS: Partial<Record<PageId, string>> = {
   biblioteca: "Notas, mídia, apps, conectores e skills",
   agenda: "Seus compromissos e os do time",
   navegador: "O navegador que os agentes usam",
+  scripts: "Os comandos demorados dos agentes, ao vivo",
+  arquivos: "As pastas do workspace, para ler e baixar",
 };
 export const HOJE_HINT = "O trabalho do dia, ao vivo";
 export const NOTIFICATIONS_HINT = "Avisos e o que aconteceu por último";
@@ -65,26 +77,41 @@ export const BIBLIOTECA_CHILDREN: NavChildDef[] = [
   { sub: "skills", label: "Skills", testId: "nav-biblioteca-skills" },
 ];
 
-/** O menu: as páginas do workspace, e a Biblioteca (da plataforma) logo abaixo. Configurações fica no rodapé. */
-export const NAV_SECTIONS: { title: string | null; items: NavItemDef[] }[] = [
+/**
+ * O menu, de cima para baixo (abaixo do logo, do workspace e da pasta de trabalho): "Para você" (os quatro botões, em
+ * `PARA_VOCE_BUTTONS`), Trabalho, Agentes ao vivo e, depois de um traço, Gestão e Biblioteca (grupos que abrem e fecham).
+ * Configurações fica no rodapé.
+ */
+export const NAV_SECTIONS: NavSectionDef[] = [
   {
-    title: null,
+    title: "Trabalho",
     items: [
       { page: "office", icon: "office", testId: "nav-office", hint: PAGE_HINTS.office },
       { page: "trabalho", icon: "tarefas", testId: "nav-trabalho", hint: PAGE_HINTS.trabalho },
       { page: "para-voce", icon: "para-voce", testId: "nav-para-voce", hint: PAGE_HINTS["para-voce"] },
       { page: "quadro", icon: "quadro", testId: "nav-quadro", hint: PAGE_HINTS.quadro },
-      { page: "gestao", icon: "gestao", testId: "nav-gestao", hint: PAGE_HINTS.gestao, children: GESTAO_CHILDREN },
+      { page: "arquivos", icon: "pasta", testId: "nav-arquivos", hint: PAGE_HINTS.arquivos, needsWorkspace: true },
+    ],
+  },
+  {
+    title: "Agentes ao vivo",
+    items: [
+      { page: "navegador", icon: "navegador", testId: "nav-navegador", label: "Navegador", hint: PAGE_HINTS.navegador, counter: "tabs", needsWorkspace: true },
+      { page: "scripts", icon: "scripts", testId: "nav-scripts", label: "Scripts", hint: PAGE_HINTS.scripts, counter: "running", needsWorkspace: true },
     ],
   },
   {
     title: null,
-    items: [{ page: "biblioteca", icon: "biblioteca", testId: "nav-biblioteca", hint: PAGE_HINTS.biblioteca, children: BIBLIOTECA_CHILDREN }],
+    separated: true,
+    items: [
+      { page: "gestao", icon: "gestao", testId: "nav-gestao", hint: PAGE_HINTS.gestao, children: GESTAO_CHILDREN },
+      { page: "biblioteca", icon: "biblioteca", testId: "nav-biblioteca", hint: PAGE_HINTS.biblioteca, children: BIBLIOTECA_CHILDREN },
+    ],
   },
 ];
 
 /** Sem workspace nenhum, só as páginas do app inteiro abrem (a Biblioteca e a Atividade do sistema). */
-export const APP_WIDE_SECTIONS: typeof NAV_SECTIONS = [
+export const APP_WIDE_SECTIONS: NavSectionDef[] = [
   {
     title: null,
     items: [
@@ -94,24 +121,64 @@ export const APP_WIDE_SECTIONS: typeof NAV_SECTIONS = [
   },
 ];
 
-/** Atalhos (sem item de menu): a Sua agenda e o navegador dos agentes. */
-export const SHORTCUTS: { item: NavItemDef; tip: string; short: string; needsWorkspace: boolean }[] = [
-  { item: { page: "agenda", icon: "calendario", testId: "nav-agenda", label: "Sua agenda", hint: PAGE_HINTS.agenda }, tip: "Sua agenda", short: "Agenda", needsWorkspace: false },
-  { item: { page: "navegador", icon: "navegador", testId: "nav-navegador", label: "Navegador dos agentes", hint: PAGE_HINTS.navegador }, tip: "Navegador dos agentes", short: "Navegador", needsWorkspace: true },
+/** Os quatro botões de "Para você": três abrem painéis (ou vão ao próximo alerta) e a Agenda vai à página "Sua agenda". */
+export type ParaVoceId = "hoje" | "espera" | "avisos" | "agenda";
+export type ParaVoceButtonDef = {
+  id: ParaVoceId;
+  /** Nome curto embaixo do ícone. */
+  short: string;
+  /** Nome inteiro (aria-label, dica). */
+  label: string;
+  icon: NavIconName;
+  hint: string;
+  needsWorkspace: boolean;
+};
+
+export const PARA_VOCE_BUTTONS: ParaVoceButtonDef[] = [
+  { id: "hoje", short: "Hoje", label: "Hoje", icon: "hoje", hint: HOJE_HINT, needsWorkspace: true },
+  { id: "espera", short: "Espera", label: "Esperando você", icon: "mao", hint: "O que espera a sua resposta", needsWorkspace: true },
+  { id: "avisos", short: "Avisos", label: "Notificações", icon: "bell", hint: NOTIFICATIONS_HINT, needsWorkspace: true },
+  { id: "agenda", short: "Agenda", label: "Sua agenda", icon: "calendario", hint: PAGE_HINTS.agenda ?? "", needsWorkspace: false },
 ];
 
-/** Os atalhos que valem agora (o navegador é do workspace: sem workspace, só a agenda). */
-export function visibleShortcuts(empty: boolean): typeof SHORTCUTS {
-  return SHORTCUTS.filter((shortcut) => !(empty && shortcut.needsWorkspace));
+/** Os botões de "Para você" que valem agora (sem workspace, só a Agenda). */
+export function visibleParaVoce(empty: boolean): ParaVoceButtonDef[] {
+  return PARA_VOCE_BUTTONS.filter((button) => !(empty && button.needsWorkspace));
+}
+
+/** As seções que valem agora: sem workspace, só as do app inteiro; sem linhas, a seção some (e o título dela). */
+export function visibleSections(empty: boolean): NavSectionDef[] {
+  const sections = empty ? APP_WIDE_SECTIONS : NAV_SECTIONS;
+  return nonEmptySections(sections.map((section) => ({ ...section, items: section.items.filter((item) => !(empty && item.needsWorkspace)) })));
+}
+
+/** O texto da contagem à direita de uma linha; nada quando é zero. `number` e `word` separados: recolhida, só o número. */
+export function counterParts(kind: NavCounterKind, count: number): { number: string; word: string; label: string } | null {
+  if (count <= 0) return null;
+  const word = kind === "running" ? "rodando" : count === 1 ? "aba" : "abas";
+  return { number: String(count), word, label: `${count} ${word}` };
+}
+
+export function counterLabel(kind: NavCounterKind, count: number): string | null {
+  return counterParts(kind, count)?.label ?? null;
+}
+
+/**
+ * Um grupo (Gestão, Biblioteca) está aberto quando o dono o abriu, ou quando a página atual é dele (a não ser que o dono
+ * o tenha fechado de propósito). `choice` é a escolha lembrada: `undefined` = nunca mexeu. No menu do celular (`drawer`)
+ * quem nunca mexeu vê o grupo já aberto; no computador ele nasce fechado.
+ */
+export function isGroupOpen(item: NavItemDef, page: PageId, choice: boolean | undefined, drawer = false): boolean {
+  return choice ?? (drawer || page === item.page);
 }
 
 /** Tira as seções que ficaram sem item (e, com isso, o título delas). */
-export function nonEmptySections(sections: typeof NAV_SECTIONS): typeof NAV_SECTIONS {
+export function nonEmptySections(sections: NavSectionDef[]): NavSectionDef[] {
   return sections.filter((section) => section.items.length > 0);
 }
 
-/** As páginas que o menu mostra (com o Cyno no topo, são as seis do menu). */
-export function menuPages(sections: typeof NAV_SECTIONS = NAV_SECTIONS): PageId[] {
+/** As páginas que o menu mostra em linhas (fora os quatro botões de "Para você" e o Cyno no topo). */
+export function menuPages(sections: NavSectionDef[] = NAV_SECTIONS): PageId[] {
   return sections.flatMap((section) => section.items.map((item) => item.page));
 }
 
@@ -143,7 +210,7 @@ export function railGroupSub(item: NavItemDef, empty: boolean, workspaceId: stri
 
 export const SETTINGS_ITEM: NavItemDef = { page: "configuracoes", icon: "configuracoes", testId: "settings-button" };
 
-export type Badge = { count: number; singular: string; plural: string; testId: string; tone?: "danger" };
+export type Badge = { count: number; singular: string; plural: string; testId: string; tone?: "danger" | "ok" };
 
 /** O que o indicador de pastas de trabalho da barra mostra (função pura, para testar). */
 export type FoldersSummary = {

@@ -61,6 +61,8 @@ import { AgentLogService } from "./agent-log/service";
 import { Brain } from "./brain/brain";
 import { BrowserService, type BrowserLauncher } from "./browser/service";
 import { UrlPolicy } from "./browser/url-policy";
+import { FilesService } from "./files/service";
+import { ScriptsService } from "./scripts/service";
 import { BrainAccess } from "./brain/access";
 import { AgentRules } from "./brain/agent-rules";
 import { AgentDiary } from "./brain/diary";
@@ -293,6 +295,10 @@ export class WorkspaceRuntime {
   private readonly workspaceLabel: () => string;
   /** Navegador compartilhado (undefined = desligado no server). */
   readonly browser: BrowserService | undefined;
+  /** Scripts dos agentes: comandos demorados que o servidor roda a pedido deles, com a saída gravada e ao vivo (`scripts/`). */
+  readonly scripts: ScriptsService;
+  /** Arquivos do workspace (página "Arquivos"): navegar, ler e baixar, só leitura. */
+  readonly files: FilesService;
   /** Política de acesso dos agentes (com os padrões aplicados; lida a cada uso). */
   readonly access: () => WorkspaceAccess;
   /** Pastas de trabalho do workspace (os agentes leem delas os arquivos de dados dos Quadros). */
@@ -465,6 +471,14 @@ export class WorkspaceRuntime {
             log,
             ...(options.browser?.launch ? { launch: options.browser.launch } : {}),
           });
+    this.scripts = new ScriptsService({
+      dir: path.join(store.paths.root, "scripts"),
+      publish: (event) => this.state.publish(event),
+      agent: (agentId) => this.terminals.scriptContext(agentId),
+      log,
+      now: options.now,
+    });
+    this.files = new FilesService({ dataDir: store.paths.root, folders: () => options.workspaceFolders?.(id) ?? [] });
     this.agentChat = new AgentChat({ state: this.state, terminals: this.terminals, runner: this.cliRunner, agentLog: this.agentLog, log, now: options.now, simulated: options.runner !== undefined, publish: (event) => this.hub.publish(event) });
     // Nota que chegou depois da entrega: vira conversa com o agente (não se perde nem entra na próxima tarefa).
     this.cliRunner.onLateNotes = (agentId, taskId, notes) => void this.agentChat.lateNotes(agentId, taskId, notes);
@@ -688,6 +702,7 @@ export class WorkspaceRuntime {
       if (event.type === "agent:deleted") {
         void this.disposeTerminal(event.id);
         void this.browser?.closeOwner(event.id);
+        void this.scripts.stopForAgent(event.id);
       }
       else if (event.type === "agent:upserted") {
         this.terminals.sync(event.agent);
@@ -700,6 +715,8 @@ export class WorkspaceRuntime {
         }
       }
       else if (event.type === "task:upserted") this.routines.onTaskUpdate(event.task);
+      // Um script não sobrevive à tarefa que o lançou: terminou, falhou ou foi cancelada, os dela são parados.
+      if (event.type === "task:upserted" && !isActiveTaskStatus(event.task.status)) void this.scripts.stopForTask(event.task.id);
       // Diária: o relógio de estados relê o estado das tarefas quando algo que o muda acontece (um ouvinte só, por causa do hub).
       if (event.type === "task:upserted" || event.type === "project:upserted" || event.type === "project:deleted" || event.type === "agent:terminal" || event.type === "agent:deleted") this.stateClock.observe();
       // "Rever o dia": o gravador marca que mudou e guarda o que só o log sabe (o mesmo ouvinte, sem outra assinatura).
@@ -1311,6 +1328,11 @@ export class WorkspaceRuntime {
         ...(this.usageInfo.availability ? { availability: (engine) => this.usageInfo.availability!.block(engine) } : {}),
         now: this.usageInfo.now,
       },
+      scripts: {
+        scripts: this.scripts,
+        access: this.access,
+        currentTaskId: (agentId) => this.runningTask(agentId)?.id,
+      },
       ...(this.browser ? { browser: { browser: this.browser, access: () => this.access(), approve: (agentId, question, onApproved, onDropped) => this.approveBrowserAction(agentId, question, onApproved, onDropped), media: { library: this.media, currentTask: (id) => this.runningTask(id) } } } : {}),
     });
   }
@@ -1414,6 +1436,7 @@ export class WorkspaceRuntime {
     this.unsubscribeTerminals();
     this.agentChat.close();
     this.unsubscribeAvailability();
+    await this.scripts.stopAll();
     await this.terminals.closeAll();
     await this.connectors.close();
     this.detachLibrary();

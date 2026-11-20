@@ -227,3 +227,4 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `LAB_UPDATE_CHECK` | 0 | só do `lab:up`: `1` liga a verificação automática de atualização (desligada no laboratório, como as outras consultas externas) |
 | `LAB_UPDATE_APPLY` | 0 | só do `lab:up`: `1` liga o botão **Baixar atualização** (desligado: o laboratório roda a partir do repositório real, e o botão mexeria nele) |
 | `LAB_BROWSER` / `LAB_CONNECTORS_STDIO` | 0 / 0 | só do `lab:up`: `1` liga o navegador dos agentes / libera conectores stdio no app de teste |
+| `LAB_USAGE` | 0 | só do `lab:up`: `1` liga a consulta do uso do plano (Claude e Antigravity) no app de teste, para testar a pausa por limite com o uso de verdade |

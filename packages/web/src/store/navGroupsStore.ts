@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-/** Grupos recolhidos da barra (Gestão, Biblioteca): lembrados por navegador. */
-const GROUPS_KEY = "cyno:nav-groups-collapsed";
+/** O que o dono escolheu para os grupos da barra (Gestão, Biblioteca): aberto ou fechado, lembrado por navegador. */
+const GROUPS_KEY = "cyno:nav-groups";
 
 function read(key: string): string | null {
   try {
@@ -19,29 +19,37 @@ function write(key: string, value: string): void {
   }
 }
 
-/** Os grupos que o dono recolheu (todos abertos por padrão; valor estragado = todos abertos). */
-export function savedCollapsedGroups(): string[] {
+/** As escolhas salvas, por grupo (valor estragado = nenhuma escolha: cada grupo segue a página atual). */
+export function savedGroupChoices(): Record<string, boolean> {
   try {
-    const parsed: unknown = JSON.parse(read(GROUPS_KEY) ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+    const parsed: unknown = JSON.parse(read(GROUPS_KEY) ?? "{}");
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"));
   } catch {
-    return [];
+    return {};
   }
 }
 
 type NavGroupsState = {
-  collapsed: string[];
-  isOpen: (group: string) => boolean;
-  toggle: (group: string) => void;
+  choices: Record<string, boolean>;
+  /** Lembra que o dono abriu (true) ou fechou (false) o grupo. */
+  choose: (group: string, open: boolean) => void;
+  /** Esquece a escolha (o grupo volta a seguir a página atual). */
+  clear: (group: string) => void;
 };
 
 export const useNavGroupsStore = create<NavGroupsState>()((set, get) => ({
-  collapsed: savedCollapsedGroups(),
-  isOpen: (group) => !get().collapsed.includes(group),
-  toggle: (group) => {
-    const current = get().collapsed;
-    const collapsed = current.includes(group) ? current.filter((id) => id !== group) : [...current, group];
-    write(GROUPS_KEY, JSON.stringify(collapsed));
-    set({ collapsed });
+  choices: savedGroupChoices(),
+  choose: (group, open) => {
+    if (get().choices[group] === open) return;
+    const choices = { ...get().choices, [group]: open };
+    write(GROUPS_KEY, JSON.stringify(choices));
+    set({ choices });
+  },
+  clear: (group) => {
+    if (!(group in get().choices)) return;
+    const { [group]: _gone, ...choices } = get().choices;
+    write(GROUPS_KEY, JSON.stringify(choices));
+    set({ choices });
   },
 }));

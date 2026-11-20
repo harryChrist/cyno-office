@@ -1,0 +1,137 @@
+/* Pausa por limite de uso do plano: uma linha por motor e janela. Escuro e calmo; a cor só reforça o texto do estado. */
+.ugs {
+  container: ugs / inline-size;
+  display: grid;
+  gap: 12px;
+}
+
+.ugs__group {
+  display: grid;
+  gap: 6px;
+}
+
+.ugs__engine {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-3);
+}
+
+.ugs__rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-2);
+}
+
+.ugs__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(110px, auto) 76px;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 12px;
+}
+
+.ugs__row + .ugs__row {
+  border-top: 1px solid var(--ui-border);
+}
+
+.ugs__switch {
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.ugs__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ugs__percent {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+.ugs__percent input {
+  width: 48px;
+  padding: 4px 6px;
+  font: inherit;
+  text-align: right;
+  color: var(--ui-text);
+  background: var(--ui-field);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 6px;
+}
+
+.ugs__percent input:disabled {
+  opacity: 0.5;
+}
+
+.ugs__percent--fixed {
+  justify-content: flex-end;
+  min-width: 48px;
+  color: var(--ui-text-3);
+}
+
+.ugs__state {
+  font-size: 12.5px;
+  color: var(--ui-text-2);
+}
+
+.ugs__state--paused {
+  font-weight: 600;
+  color: var(--ui-warn);
+}
+
+.ugs__state--warn {
+  color: var(--ui-warn);
+}
+
+.ugs__state--idle {
+  color: var(--ui-text-3);
+}
+
+.ugs__release {
+  min-height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ui-text);
+  background: var(--ui-surface-3);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ugs__release:hover:not(:disabled) {
+  background: var(--ui-hover);
+}
+
+.ugs__hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+@container ugs (max-width: 460px) {
+  .ugs__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .ugs__state {
+    grid-column: 1 / -1;
+  }
+
+  .ugs__release {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}

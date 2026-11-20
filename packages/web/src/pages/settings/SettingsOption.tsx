@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import { AsyncSwitch } from "../../ui/widgets";
 import { SEAL_LABELS, type SettingsSeal } from "./settingsView";
 
-/** Selo do que a opção vale: "Toda a plataforma", "Só este workspace" ou "Só neste navegador". */
-export function Seal({ kind }: { kind: SettingsSeal }) {
+/** Selo do que a opção vale: "Toda a plataforma", "Só este workspace" ou "Só neste navegador" (`label` troca o texto, ex.: o nome do workspace). */
+export function Seal({ kind, label }: { kind: SettingsSeal; label?: string }) {
   return (
     <span className={`opt-seal opt-seal--${kind}`} data-testid="settings-seal" data-seal={kind}>
-      {SEAL_LABELS[kind]}
+      {label ?? SEAL_LABELS[kind]}
     </span>
   );
 }
@@ -48,8 +48,8 @@ export function OptionHead({ title, line, seal, state, inherited, level = 4 }: {
 }
 
 /**
- * Chave de uma opção (salva na hora): título, selo e estado "Ligado/Desligado" na linha do rótulo e a
- * frase do que ela faz logo abaixo. `inherited`: o campo nunca foi mexido neste workspace.
+ * Chave de uma opção (salva na hora): título e selo na linha do rótulo e a frase do que ela faz logo abaixo. A
+ * própria chave diz se está ligada; só um estado que diz algo a mais (`stateText`) aparece escrito. `inherited`: o campo nunca foi mexido neste workspace.
  */
 export function SettingSwitch({
   title,
@@ -70,7 +70,7 @@ export function SettingSwitch({
   seal: SettingsSeal;
   inherited?: boolean;
   testId: string;
-  /** Troca o "Ligado/Desligado" (ex.: "Desligado · precisa da internet"). */
+  /** Estado que a chave sozinha não diz (ex.: "Desligado · precisa da internet"). */
   stateText?: string;
 }) {
   return (
@@ -80,7 +80,7 @@ export function SettingSwitch({
           <span className="opt-label__title">{title}</span>
           <Seal kind={seal} />
           {inherited && <DefaultTag />}
-          <StateBadge tone={checked ? "on" : "off"}>{stateText ?? (checked ? "Ligado" : "Desligado")}</StateBadge>
+          {stateText && <StateBadge tone={checked ? "on" : "off"}>{stateText}</StateBadge>}
         </span>
       }
       description={line}

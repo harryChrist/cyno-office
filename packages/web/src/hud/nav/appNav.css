@@ -191,12 +191,6 @@ html .taskbox {
   list-style: none;
 }
 
-.navsection--top {
-  margin-bottom: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--ui-border);
-}
-
 .navsection__title {
   margin: 12px 0 4px;
   padding: 0 10px;
@@ -947,47 +941,6 @@ html .taskbox {
   gap: 10px;
 }
 
-/* Atalhos (Sua agenda, Navegador): dois botões lado a lado no rodapé; na gaveta do celular, uma seção com título. */
-.navshortcuts__list {
-  display: flex;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.navshortcuts__list > li {
-  flex: 1;
-  min-width: 0;
-}
-
-.navitem--shortcut {
-  justify-content: center;
-}
-
-.mdrawer .navshortcuts {
-  padding: 8px 10px 0;
-}
-
-.mdrawer .navshortcuts__list {
-  flex-direction: column;
-}
-
-.mdrawer .navitem--shortcut {
-  justify-content: flex-start;
-}
-
-.sidenav--rail .navshortcuts__list {
-  flex-direction: column;
-  align-items: center;
-}
-
-.navitem--shortcut {
-  gap: 6px;
-  padding-inline: 8px;
-  font-size: 13px;
-}
-
 /* ---------- Nomes claros: nome + linha de descrição, grupos com destinos, menu flutuante ---------- */
 .navitem__text {
   display: grid;
@@ -1163,11 +1116,6 @@ html .taskbox {
   border-left: 0;
 }
 
-/* Atalhos do rodapé: lado a lado (rótulo curto); na gaveta, um embaixo do outro. */
-.sidenav--rail .navitem--shortcut {
-  justify-content: center;
-}
-
 /* Itens mais compactos (a barra mostra mais coisas agora) e menu flutuante legível na barra recolhida. */
 .navitem:has(.navitem__hint) {
   min-height: 42px;
@@ -1176,10 +1124,6 @@ html .taskbox {
 
 .navitem__hint {
   font-size: 11px;
-}
-
-.navitem--shortcut:has(.navitem__hint) {
-  min-height: 38px;
 }
 
 .sidenav--rail .navfly .navitem {
@@ -1234,15 +1178,6 @@ html .taskbox {
   margin: 8px 0 3px;
 }
 
-.sidenav .navsection--top {
-  margin-bottom: 4px;
-  padding-bottom: 6px;
-}
-
-.sidenav .navitem--shortcut:has(.navitem__hint) {
-  min-height: 36px;
-}
-
 .sidenav__head {
   gap: 8px;
   padding: 10px 10px 8px;
@@ -1257,29 +1192,14 @@ html .taskbox {
   min-height: 40px;
 }
 
-.sidenav .navitem--shortcut {
-  justify-content: center;
-  gap: 6px;
-}
-
-.mdrawer .navitem--shortcut {
-  justify-content: flex-start;
-}
-
-.mdrawer .navitem__hint {
-  display: block;
-}
-
-.sidenav--rail .navitem:has(.navitem__hint),
-.sidenav--rail .navitem--shortcut:has(.navitem__hint) {
+.sidenav--rail .navitem:has(.navitem__hint) {
   min-height: 40px;
 }
 
 /* Telas baixas (notebook 1366x768): mais compacto ainda, para os dois grupos abertos caberem. */
 @media (max-height: 820px) {
   .sidenav:not(.sidenav--rail) .navitem:has(.navitem__hint),
-  .sidenav:not(.sidenav--rail) .navitem--group:has(.navitem__hint),
-  .sidenav:not(.sidenav--rail) .navitem--shortcut:has(.navitem__hint) {
+  .sidenav:not(.sidenav--rail) .navitem--group:has(.navitem__hint) {
     min-height: 32px;
   }
 
@@ -1583,4 +1503,322 @@ html .taskbox {
 
 .folders-panel__ws strong {
   color: var(--ui-text);
+}
+
+/* ---------- Menu em grupos: "Para você" (quatro botões), Trabalho, Agentes ao vivo, Gestão e Biblioteca ---------- */
+.navsection__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+/* O traço fino à direita do título. */
+.navsection__title::after {
+  flex: 1;
+  height: 1px;
+  content: "";
+  background: var(--ui-border);
+}
+
+.sidenav .navsection__title {
+  margin: 11px 0 3px;
+}
+
+.sidenav .navsection--para-voce .navsection__title {
+  margin-top: 6px;
+}
+
+.sidenav--rail .navsection__title::after {
+  display: none;
+}
+
+/* Recolhida, todo divisor é o mesmo traço curto e centralizado (título de grupo ou separador). */
+.sidenav.sidenav--rail .navsection__title,
+.sidenav.sidenav--rail .navsection--para-voce .navsection__title,
+.sidenav.sidenav--rail .navsection__sep {
+  width: 24px;
+  height: 1px;
+  margin: 8px auto;
+  background: var(--ui-border-strong);
+}
+
+/* Traço entre as páginas e os grupos que abrem e fecham. */
+.navsection__sep {
+  height: 1px;
+  margin: 8px 10px 6px;
+  background: var(--ui-border);
+}
+
+/* Linhas de 34 px (32 em tela baixa): o menu inteiro cabe em 900 px junto com o rodapé. */
+.sidenav .navitem:has(.navitem__hint),
+.sidenav .navitem--group:has(.navitem__hint) {
+  min-height: 34px;
+}
+
+.sidenav .navsub .navitem--sub {
+  min-height: 30px;
+}
+
+/* Quatro botões iguais: ícone com o nome curto embaixo e a contagem no canto de cima. */
+.navtiles {
+  display: grid;
+  grid-template-columns: repeat(var(--tiles, 4), minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 2px 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.navtile {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 50px;
+  padding: 7px 0 6px;
+  font: inherit;
+  color: var(--ui-text-2);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  transition:
+    background-color var(--ui-fast),
+    color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.navtile:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+  border-color: var(--ui-border-strong);
+}
+
+.navtile:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.navtile__name {
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-text-3);
+}
+
+/* Painel aberto ou página atual: o mesmo realce violeta das linhas. */
+.navtile[aria-current="page"],
+.navtile[aria-expanded="true"] {
+  color: var(--ui-text);
+  background: linear-gradient(180deg, rgba(139, 124, 255, 0.2), rgba(139, 124, 255, 0.08));
+  border-color: rgba(139, 124, 255, 0.28);
+}
+
+.navtile[aria-current="page"] .nav-icon,
+.navtile[aria-expanded="true"] .nav-icon {
+  color: var(--ui-accent);
+}
+
+.navtile[aria-current="page"] .navtile__name,
+.navtile[aria-expanded="true"] .navtile__name {
+  color: var(--ui-text-2);
+}
+
+/* Tem gente esperando: avermelhado (borda e fundo). */
+.navtile--hot,
+.navtile--hot:hover {
+  color: var(--ui-danger);
+  background: var(--ui-danger-bg);
+  border-color: rgba(255, 107, 129, 0.4);
+}
+
+.navtile--hot .navtile__name {
+  color: var(--ui-text-2);
+}
+
+.navtile__badge {
+  position: absolute;
+  top: -6px;
+  right: -4px;
+  min-width: 17px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-align: center;
+  border-radius: var(--ui-radius-pill);
+}
+
+.navtile__badge--danger {
+  color: #1a0b10;
+  background: var(--ui-danger);
+}
+
+.navtile__badge--info {
+  color: var(--ui-text);
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border-strong);
+  line-height: 14px;
+}
+
+/* "N fazendo" no Hoje: o azul de trabalho ao vivo (o mesmo de antes, quando o Hoje era uma linha do menu). */
+.navtile__badge--live {
+  color: #06202e;
+  background: var(--ui-info);
+}
+
+/* Recolhida: quatro ícones empilhados. */
+.sidenav--rail .navsection--para-voce {
+  width: 100%;
+}
+
+.sidenav--rail .navtiles {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 2px;
+  margin: 2px 0 4px;
+}
+
+.sidenav--rail .navtile {
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+}
+
+.sidenav--rail .navtile:hover {
+  background: var(--ui-hover);
+}
+
+.sidenav--rail .navtile[aria-current="page"],
+.sidenav--rail .navtile[aria-expanded="true"] {
+  background: linear-gradient(180deg, rgba(139, 124, 255, 0.2), rgba(139, 124, 255, 0.08));
+  border-color: rgba(139, 124, 255, 0.28);
+}
+
+.sidenav--rail .navtile--hot {
+  background: var(--ui-danger-bg);
+  border-color: rgba(255, 107, 129, 0.4);
+}
+
+.sidenav--rail .navtile__name {
+  display: none;
+}
+
+.sidenav--rail .navtile__badge {
+  top: -2px;
+  right: -2px;
+  min-width: 15px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  line-height: 14px;
+}
+
+.sidenav--rail .navtile__badge--info {
+  line-height: 12px;
+}
+
+/* Contagem à direita de Navegador e Scripts. */
+.navitem__muted {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ui-text-3);
+}
+
+.navitem .navitem__badge--running {
+  display: inline-flex;
+  gap: 0.3em;
+  align-items: center;
+  height: auto;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--ui-ok);
+  white-space: nowrap;
+  background: var(--ui-ok-bg);
+  border: 1px solid rgba(61, 220, 151, 0.3);
+}
+
+.sidenav--rail .navitem__muted,
+.sidenav--rail .navitem__counter-word {
+  display: none;
+}
+
+.sidenav--rail .navitem .navitem__badge--running {
+  justify-content: center;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  font-size: 9.5px;
+  line-height: 12px;
+  color: #06281a;
+  background: var(--ui-ok);
+  border: 2px solid var(--ui-surface-solid);
+}
+
+/* Destino atual dentro do grupo: traço de luz à esquerda, como na mockup. */
+.navsub .navitem--sub[aria-current="page"]::before {
+  display: block;
+  top: 5px;
+  bottom: 5px;
+  left: -10px;
+  width: 2px;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+/* Gaveta do celular: alvos de toque de 44 px, sem a descrição embaixo do nome. */
+.mdrawer .navitem__hint {
+  display: none;
+}
+
+.mdrawer .navitem:has(.navitem__hint),
+.mdrawer .navsub .navitem--sub {
+  min-height: 44px;
+  padding-block: 0;
+}
+
+.mdrawer .navgroup .navitem--group {
+  padding-right: 48px;
+}
+
+.mdrawer .navgroup__toggle {
+  right: 2px;
+  width: 44px;
+  height: 44px;
+}
+
+.mdrawer .navtiles {
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.mdrawer .navtile {
+  min-height: 64px;
+  gap: 6px;
+}
+
+.mdrawer .navtile__name {
+  font-size: 12px;
+}
+
+.mdrawer .navtile .nav-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.mdrawer .navsection__title {
+  margin: 14px 0 4px;
+}
+
+.mdrawer .navsection--para-voce .navsection__title {
+  margin-top: 6px;
 }

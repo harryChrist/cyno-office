@@ -32,21 +32,29 @@ export function AccessSettings({ workspace }: { workspace: Workspace }) {
       <section className="settings__card">
         <header className="settings__card-head">
           <h4 className="settings__card-title">O que os agentes podem usar</h4>
-          <p className="settings__card-hint">Vale para todos os agentes de CLI deste workspace (o Maestro também). No painel de cada agente dá para desligar só para ele, nunca ligar além daqui. Trocar reinicia o terminal de cada agente quando ele estiver livre.</p>
+          <p className="settings__card-hint">Vale para todos os agentes deste workspace, o Maestro também.</p>
+          <details className="settings__more">
+            <summary>Saiba mais</summary>
+            <p>No painel de cada agente dá para desligar só para ele, nunca ligar além daqui. Trocar reinicia o terminal de cada agente quando ele estiver livre.</p>
+          </details>
         </header>
         <div className="settings__switches">
           <SettingSwitch
             title="Internet"
-            line="Os agentes pesquisam na web e leem páginas, sempre citando as fontes. O conteúdo das páginas é tratado como dado, nunca como ordem. Desligado: só trabalham com o que têm aqui."
+            line="Os agentes pesquisam na web e leem páginas, citando as fontes. Desligado: só usam o que têm aqui."
             seal="workspace"
             checked={access.internet}
             inherited={isDefault(workspace, "internet")}
             onToggle={(internet) => save({ internet })}
             testId="settings-access-internet"
           />
+          <details className="settings__more">
+            <summary>Saiba mais</summary>
+            <p>O conteúdo das páginas é tratado como dado, nunca como ordem.</p>
+          </details>
           <SettingSwitch
             title="Navegador dos agentes"
-            line={access.internet ? "Um navegador do Cyno que os agentes abrem e você acompanha ao vivo. Desligado: os agentes só leem páginas, sem abrir o navegador." : "Precisa da internet ligada."}
+            line={access.internet ? "Um navegador do Cyno que os agentes abrem e você acompanha ao vivo." : "Precisa da internet ligada."}
             seal="workspace"
             checked={access.internet && access.browser}
             disabled={!access.internet}
@@ -57,7 +65,7 @@ export function AccessSettings({ workspace }: { workspace: Workspace }) {
           />
           <SettingSwitch
             title="Terminal no servidor"
-            line="Os agentes podem rodar comandos NA SUA MÁQUINA (o servidor do Cyno), dentro da pasta de cada um. Desligado por padrão: ligue só se precisar."
+            line="Os agentes rodam comandos NA SUA MÁQUINA (o servidor do Cyno). Desligado por padrão: ligue só se precisar."
             seal="workspace"
             checked={access.terminal}
             inherited={isDefault(workspace, "terminal")}
@@ -66,7 +74,7 @@ export function AccessSettings({ workspace }: { workspace: Workspace }) {
           />
           {access.terminal && (
             <p className="settings__access-warn" role="note" data-testid="settings-access-terminal-warn">
-              Atenção: com o terminal ligado, um agente pode rodar programas, apagar ou alterar arquivos e acessar a rede da sua máquina. As instruções mandam ficar na pasta dele e não fazer nada destrutivo, mas isso não é uma barreira técnica.
+              Atenção: um agente pode rodar programas, alterar ou apagar arquivos e acessar a rede da sua máquina. As instruções pedem cuidado, mas não são uma barreira técnica.
             </p>
           )}
         </div>
@@ -85,12 +93,12 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
       <section className="settings__card">
         <header className="settings__card-head">
           <h4 className="settings__card-title">Navegador e leitura de páginas</h4>
-          <p className="settings__card-hint">Vale para o navegador compartilhado e para a leitura de páginas dos agentes deste workspace.</p>
+          <p className="settings__card-hint">Vale para o navegador compartilhado e a leitura de páginas dos agentes.</p>
         </header>
         <div className="settings__switches">
           <SettingSwitch
             title="Aprovação antes de publicar, enviar ou comprar"
-            line="No navegador dos agentes, ações que saem em seu nome (publicar, enviar mensagem, comprar) esperam a sua aprovação em Aprovações. Desligado: o agente faz sem perguntar."
+            line="Publicar, enviar mensagem ou comprar no navegador espera o seu OK em Aprovações. Desligado: o agente faz sem perguntar."
             seal="workspace"
             checked={access.approveSensitiveActions}
             inherited={isDefault(workspace, "approveSensitiveActions")}
@@ -99,7 +107,7 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
           />
           <SettingSwitch
             title="Rede local"
-            line="Deixa abrir endereços da sua rede e da própria máquina (localhost, 192.168.*…). Desligado, os agentes ficam só na internet pública."
+            line="Deixa abrir endereços da sua rede e da máquina (localhost, 192.168.*). Desligado: só a internet pública."
             seal="workspace"
             checked={access.allowLocalNetwork}
             inherited={isDefault(workspace, "allowLocalNetwork")}
@@ -108,7 +116,7 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
           />
           {access.allowLocalNetwork && (
             <p className="settings__access-warn" role="note" data-testid="settings-access-local-warn">
-              Com a rede local liberada, um agente pode abrir painéis de roteador, impressoras e outros serviços da sua casa ou empresa.
+              Um agente pode abrir painel de roteador, impressoras e outros serviços da sua rede.
             </p>
           )}
         </div>
@@ -123,7 +131,7 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
         <OptionHead
           title="Domínios"
           seal="workspace"
-          line="Um domínio vale também para os subdomínios (exemplo.com cobre www.exemplo.com). Bloqueado vence permitido."
+          line="Vale também para subdomínios (exemplo.com cobre www.exemplo.com). Bloqueado vence permitido."
           inherited={isDefault(workspace, "allowedDomains") && isDefault(workspace, "blockedDomains")}
           state={
             <StateBadge tone="value">
@@ -134,7 +142,8 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
         />
         <DomainList
           label="Permitidos"
-          hint="Vazio = todos. Com algum domínio aqui, os agentes só abrem páginas deles (a busca ainda pode mostrar outros)."
+          hint="Vazio libera todos. Com domínios aqui, os agentes só abrem páginas deles."
+          more="A busca ainda pode mostrar outros sites."
           domains={access.allowedDomains}
           onSave={(allowedDomains) => save({ allowedDomains })}
           testId="settings-access-allowed"
@@ -147,7 +156,7 @@ export function SecuritySettings({ workspace }: { workspace: Workspace }) {
 }
 
 /** Lista de domínios em chips: adicionar (Enter ou botão) e tirar salvam a lista inteira na hora. */
-function DomainList({ label, hint, domains, onSave, testId }: { label: string; hint: string; domains: string[]; onSave: (domains: string[]) => Promise<unknown>; testId: string }) {
+function DomainList({ label, hint, more, domains, onSave, testId }: { label: string; hint: string; more?: string; domains: string[]; onSave: (domains: string[]) => Promise<unknown>; testId: string }) {
   const id = useId();
   const [text, setText] = useState("");
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -172,6 +181,12 @@ function DomainList({ label, hint, domains, onSave, testId }: { label: string; h
         {label}
       </label>
       <p className="settings__card-hint">{hint}</p>
+      {more && (
+        <details className="settings__more">
+          <summary>Saiba mais</summary>
+          <p>{more}</p>
+        </details>
+      )}
       {domains.length > 0 && (
         <ul className="settings__chips" aria-label={`Domínios ${label.toLowerCase()}`}>
           {domains.map((domain) => (
