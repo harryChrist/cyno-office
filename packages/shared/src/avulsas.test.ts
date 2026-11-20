@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectSchema } from "./api";
-import { AVULSAS_ID, emptyAvulsas, expandAvulsas, isArchivable, requestProject, takeAvulsasRef } from "./avulsas";
+import { AVULSAS_ID, emptyAvulsas, expandAvulsas, isArchivable, isDeletable, requestProject, takeAvulsasRef } from "./avulsas";
 import type { Project, ProjectTask } from "./projects";
 
 const at = "2026-11-11T12:00:00.000Z";
@@ -45,6 +45,20 @@ describe("Avulsas", () => {
     expect(isArchivable({ status: "em_andamento", updatedAt: "2026-01-01T00:00:00.000Z" }, now)).toBe(false);
     expect(isArchivable({ status: "falhou", updatedAt: "2026-01-01T00:00:00.000Z" }, now)).toBe(true);
     expect(isArchivable({ status: "a_fazer", updatedAt: "2026-01-01T00:00:00.000Z" }, now)).toBe(false);
+  });
+
+  it("isDeletable: concluída ou cancelada há mais de N dias (0 = qualquer idade); aberta e falhada nunca", () => {
+    const now = Date.parse("2026-11-30T00:00:00.000Z");
+    const done = { status: "concluida" as const, finishedAt: "2026-11-20T00:00:00.000Z", updatedAt: at };
+    expect(isDeletable(done, 7, now)).toBe(true);
+    expect(isDeletable(done, 10, now)).toBe(true);
+    expect(isDeletable(done, 11, now)).toBe(false);
+    expect(isDeletable(done, 0, now)).toBe(true);
+    // Sem `finishedAt`, vale a última atualização (a mesma noção do arquivamento).
+    expect(isDeletable({ status: "cancelada", updatedAt: "2026-11-01T00:00:00.000Z" }, 14, now)).toBe(true);
+    expect(isDeletable({ status: "falhou", updatedAt: "2026-01-01T00:00:00.000Z" }, 0, now)).toBe(false);
+    for (const status of ["backlog", "a_fazer", "em_andamento", "esperando_voce"] as const) expect(isDeletable({ status, updatedAt: "2026-01-01T00:00:00.000Z" }, 0, now)).toBe(false);
+    expect(isDeletable({ status: "concluida", finishedAt: "ilegível", updatedAt: "ilegível" }, 0, now)).toBe(false);
   });
 
   it("a vista antiga: um projeto kind tarefa por pedido, com o id do pedido", () => {

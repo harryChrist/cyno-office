@@ -42,4 +42,14 @@ describe("workStore", () => {
     store.apply({ type: "project:deleted", id: "r1" });
     expect(ids()).toEqual(["r-a", "r-b", "r-c"]);
   });
+
+  it("project:removed (o dono apagou o projeto de vez) tira o projeto da lista", () => {
+    const store = useWorkStore.getState();
+    store.apply({ type: "office:snapshot", office: { rooms: [], teams: [], agents: [], tasks: [] }, projects: [plan([task(0, [step("ana", "em_andamento")])])] });
+    expect(useWorkStore.getState().rawProjects.map((project) => project.id)).toEqual(["r1"]);
+    store.apply({ type: "project:removed", id: "r1" });
+    expect(useWorkStore.getState().rawProjects).toEqual([]);
+    expect(useWorkStore.getState().projects).toEqual([]);
+    expect(useWorkStore.getState().plans).toEqual([]);
+  });
 });

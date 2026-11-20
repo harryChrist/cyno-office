@@ -9,6 +9,9 @@ import {
   engineStatus,
   formatBytes,
   retentionLabel,
+  avulsasDaysBadge,
+  avulsasDaysLabel,
+  avulsasDaysOptions,
   retentionOptions,
   sameModelDefaults,
   navBadges,
@@ -86,7 +89,7 @@ describe("seção das Configurações no endereço", () => {
 
 describe("áreas das Configurações", () => {
   it("Da plataforma: acesso, motores, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
-    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "limites", "modelos-padrao", "cyno-ajustes", "avisos", "versao", "historico", "conectores-locais", "escritorio", "atalhos"]);
+    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "limites", "modelos-padrao", "cyno-ajustes", "avisos", "versao", "historico", "armazenamento", "conectores-locais", "escritorio", "atalhos"]);
     expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "distribuicao", "acesso", "seguranca", "pastas", "relatorios", "aprovacoes", "conectores"]);
     // As áreas vêm em ordem na página (toda a plataforma antes do workspace).
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id));
@@ -121,6 +124,8 @@ describe("busca por nome da opção", () => {
     expect(searchSettings("SENHA").map((option) => option.id)).toContain("senha");
     expect(searchSettings("conexão").length).toBe(0);
     expect(searchSettings("seguranca").map((option) => option.section)).toContain("seguranca");
+    // Armazenamento dos motores: acha por disco, cache e espaço.
+    for (const term of ["disco", "cache", "espaço", "armazenamento", "freebuff chats", "antigravity logs"]) expect(searchSettings(term).map((option) => option.section)).toContain("armazenamento");
   });
 
   it("todas as palavras precisam aparecer", () => {
@@ -151,7 +156,8 @@ describe("endereços das seções novas e antigas", () => {
     expect(settingsSectionFromHash("#/ws1/configuracoes/paralelo")).toBe("distribuicao");
     expect(settingsSectionFromHash("#/ws1/configuracoes/dominios")).toBe("seguranca");
     expect(settingsSectionFromHash("#/ws1/configuracoes/aparencia")).toBe("escritorio");
-    expect(settingsSectionFromHash("#/ws1/configuracoes/armazenamento")).toBe("historico");
+    expect(settingsSectionFromHash("#/ws1/configuracoes/armazenamento")).toBe("armazenamento");
+    for (const alias of ["disco", "cache", "espaco"]) expect(settingsSectionFromHash(`#/ws1/configuracoes/${alias}`)).toBe("armazenamento");
     expect(settingsSectionFromHash("#/configuracoes/plataforma")).toBe("senha");
   });
 });
@@ -165,6 +171,8 @@ describe("páginas das Configurações", () => {
 
   it("acha a página de uma seção e as páginas de cada área", () => {
     expect(settingsPageOf("historico").label).toBe("Sistema");
+    expect(settingsPageOf("armazenamento").label).toBe("Sistema");
+    expect(settingsPageOf("armazenamento").sections).toEqual(["versao", "historico", "armazenamento", "conectores-locais"]);
     expect(settingsPageOf("distribuicao").sections[0]).toBe("modelos");
     expect(settingsPageOf("senha").sections).toEqual(["senha"]);
     expect(settingsPagesOf("plataforma").map((page) => page.label)).toEqual(["Acesso e senha", "Motores", "Limites do plano", "Modelos e Cyno", "Avisos", "Sistema", "Aparência e atalhos"]);
@@ -322,5 +330,21 @@ describe("seções novas: Cyno e Conectores locais", () => {
     expect(settingsSectionFromHash("#/configuracoes/conectores-locais")).toBe("conectores-locais");
     expect(searchSettings("teto de turnos").map((option) => option.section)).toContain("cyno-ajustes");
     expect(searchSettings("stdio").map((option) => option.section)).toContain("conectores-locais");
+  });
+});
+
+describe("avulsas terminadas: apagar sozinho", () => {
+  it("opções com Nunca primeiro; um valor de fora da lista é mantido", () => {
+    expect(avulsasDaysOptions(0)).toEqual([0, 7, 14, 30, 90, 180]);
+    expect(avulsasDaysOptions(30)).toEqual([0, 7, 14, 30, 90, 180]);
+    expect(avulsasDaysOptions(45)).toEqual([0, 7, 14, 30, 45, 90, 180]);
+  });
+
+  it("rótulos e selo", () => {
+    expect(avulsasDaysLabel(0)).toBe("Nunca");
+    expect(avulsasDaysLabel(1)).toBe("1 dia");
+    expect(avulsasDaysLabel(14)).toBe("14 dias");
+    expect(avulsasDaysBadge(0)).toBe("Nunca apaga");
+    expect(avulsasDaysBadge(90)).toBe("Apaga depois de 90 dias");
   });
 });

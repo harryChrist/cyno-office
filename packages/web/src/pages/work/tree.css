@@ -2569,3 +2569,31 @@ body.dnd-active * {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ================= Apagar (tarefa avulsa, projeto) e Limpar avulsas ================= */
+
+.tp__delete {
+  margin-left: auto;
+}
+
+.w-del p + p {
+  margin-top: 8px;
+}
+
+.w-clean__count {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+@media (max-width: 760px) {
+  .tp__delete,
+  .ps-head__actions .ui-button {
+    min-height: 40px;
+  }
+
+  .w-clean .ui-input {
+    min-height: 44px;
+  }
+}

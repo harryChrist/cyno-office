@@ -99,6 +99,8 @@ export type ServerEvent =
   /** Projeto criado ou alterado (aprovação, distribuição, etapa passada adiante, fim). */
   | { type: "project:upserted"; project: Project }
   | { type: "project:deleted"; id: string }
+  /** O dono apagou o projeto de vez (sai junto com `project:deleted`, que as telas e os serviços já tratam). */
+  | { type: "project:removed"; id: string }
   /** Item do "Para você" criado ou alterado (decidido, reaberto). */
   | { type: "foryou:upserted"; item: ForYouItem }
   /** Item do "Para você" apagado (junto com o quarto, o agente ou a tarefa a que pertencia). */
@@ -199,6 +201,7 @@ const EVENT_TYPES: Record<ServerEventType, true> = {
   "task:upserted": true,
   "project:upserted": true,
   "project:deleted": true,
+  "project:removed": true,
   "task:progress": true,
   "calendar:upserted": true,
   "calendar:deleted": true,

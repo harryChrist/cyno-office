@@ -36,8 +36,8 @@ type WorkState = {
 let handoffSeq = 0;
 
 /** Os eventos de plano (e o office:snapshot) passam por aqui. */
-export const isPlanEvent = (event: ServerEvent): event is Extract<ServerEvent, { type: "project:upserted" | "project:deleted" }> =>
-  event.type === "project:upserted" || event.type === "project:deleted";
+export const isPlanEvent = (event: ServerEvent): event is Extract<ServerEvent, { type: "project:upserted" | "project:deleted" | "project:removed" }> =>
+  event.type === "project:upserted" || event.type === "project:deleted" || event.type === "project:removed";
 
 export const useWorkStore = create<WorkState>()((set, get) => ({
   projects: [],
@@ -52,7 +52,8 @@ export const useWorkStore = create<WorkState>()((set, get) => ({
       if (event.projects) set({ rawProjects: event.projects, projects: expandAvulsas(event.projects), plans: event.projects.filter(isPlanProject) });
       return;
     }
-    if (event.type === "project:deleted") {
+    // "project:removed" = o dono apagou o projeto de vez; sai da lista como no "project:deleted".
+    if (event.type === "project:deleted" || event.type === "project:removed") {
       const raw = get().rawProjects.filter((project) => project.id !== event.id);
       set({ rawProjects: raw, projects: expandAvulsas(raw), plans: raw.filter(isPlanProject) });
       return;

@@ -5,6 +5,7 @@ import type { Brain } from "../brain/brain";
 import type { ForYouService } from "../for-you/service";
 import type { Orchestrator } from "../office/orchestrator";
 import type { AvulsasArchive } from "../../store/avulsas-archive";
+import type { DataCleanup } from "../../store/cleanup";
 import type { StateManager } from "../../store/state-manager";
 
 /** Por que o Maestro é acordado (uma mensagem por motivo, nunca a cada entrega). */
@@ -40,7 +41,9 @@ export type ProjectServiceDeps = {
   /** Quem cuida do pedido (undefined = pedido que não é do Maestro). */
   host: (requestId: string) => ProjectHost | undefined;
   /** Arquivo mensal somente leitura do "Avulsas" (folhas finalizadas há mais de 14 dias); sem ele nada é arquivado. */
-  archive?: Pick<AvulsasArchive, "find" | "append" | "ofRequest">;
+  archive?: Pick<AvulsasArchive, "find" | "append" | "ofRequest" | "matching" | "remove">;
+  /** Apagar de vez (avulsas e projetos): os logs `logs/<taskId>.jsonl` das Tasks que saíram e a memória do log de trabalho. */
+  cleanup?: Pick<DataCleanup, "removeLeftovers" | "countTaskLogs">;
   /** Rotinas: as execuções que apontam para estas Tasks passam a apontar para o projeto (converter avulsa em projeto e o contrário). */
   remapRoutineRuns?: (taskIds: ReadonlySet<string>, projectId: string) => void;
   /** Esperas entre as tentativas de gravar (os testes passam zeros). */

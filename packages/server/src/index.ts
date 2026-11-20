@@ -55,6 +55,7 @@ async function start(): Promise<FastifyInstance> {
     },
     // Retenção do histórico (conversas das CLIs dos nossos agentes e logs de tarefas): boot + diária.
     retention: { claudeProjectsDir: config.retention.claudeProjectsDir, autoRun: config.retention.autoRun },
+    engineStorage: config.engineStorage,
     connectors: { allowStdio: config.connectorsStdio },
     // Aviso de atualização: CYNO_UPDATE_CHECK=off|0 desliga a verificação automática; CYNO_UPDATE_BRANCH troca o ramo (padrão main);
     // CYNO_UPDATE_APPLY=off|0 desliga o botão que baixa a atualização.

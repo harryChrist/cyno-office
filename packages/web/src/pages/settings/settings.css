@@ -517,6 +517,12 @@
   min-width: 150px;
 }
 
+@media (max-width: 760px) {
+  .settings__retention-row select {
+    min-height: 44px;
+  }
+}
+
 .settings__retention-usage {
   margin-left: auto;
   font-size: 13px;

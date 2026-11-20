@@ -63,6 +63,11 @@ export type RetentionDeps = {
   activeTaskIds: (workspaceId: string) => ReadonlySet<string>;
   /** Avisa o workspace que esses logs saíram (o log de trabalho esquece o que guardava). */
   forgetLogs?: (workspaceId: string, taskIds: string[]) => void;
+  /**
+   * Apaga de vez, no workspace, as tarefas avulsas (e as do arquivo mensal) concluídas ou canceladas há mais de N dias,
+   * com as Tasks e os logs delas. Só é chamada quando o ajuste `avulsasDays` é maior que 0; devolve quantas saíram.
+   */
+  cleanAvulsas?: (workspaceId: string, olderThanDays: number) => Promise<{ deleted: number; archivedDeleted: number }>;
   now: () => Date;
   log: Pick<FastifyBaseLogger, "info" | "warn" | "error">;
 };
@@ -117,7 +122,9 @@ const add = (into: DiskUsage, more: { bytes: number; files: number }) => {
  *   simbólicos nunca são seguidos;
  * - logs de trabalho das tarefas (`workspaces/<ws>/logs/<taskId>.jsonl`) mais velhos que o limite,
  *   nunca de tarefa ativa.
- * Tarefas, resultados e o Cérebro ficam para sempre. O Antigravity guarda as conversas fora da
+ * - tarefas avulsas terminadas há mais de `avulsasDays` dias (só com o ajuste ligado; 0 = nunca): quem apaga é o workspace
+ *   (`cleanAvulsas`), com as Tasks e os logs delas.
+ * Os projetos, os resultados e o Cérebro ficam para sempre. O Antigravity guarda as conversas fora da
  * pasta do agente (~/.gemini/antigravity-cli/conversations, junto com as do usuário): não mexemos.
  */
 export class RetentionService {
@@ -259,12 +266,26 @@ export class RetentionService {
     const { transcriptsDays, logsDays } = this.current;
     if (transcriptsDays > 0) await this.cleanTranscripts(nowMs - transcriptsDays * DAY_MS, result.transcripts);
     if (logsDays > 0) await this.cleanLogs(nowMs - logsDays * DAY_MS, result.logs);
+    // Tarefas avulsas terminadas: só quando o dono ligou (0 = nunca, o padrão). Sem passar pela Atividade de "Você apagou": quem registra é o workspace.
+    if (this.current.avulsasDays > 0) await this.cleanAvulsas(this.current.avulsasDays);
     // A Atividade tem retenção própria (fixa): não depende dos ajustes acima.
     await this.cleanActivity(nowMs).catch((error: unknown) => this.deps.log.warn({ err: errorMessage(error) }, "não foi possível limpar a Atividade antiga"));
     this.last = result;
     await this.save().catch((error: unknown) => this.deps.log.warn({ err: error }, "não foi possível gravar settings.json"));
     if (result.transcripts.files + result.logs.files > 0) this.deps.log.info({ ...result }, "limpeza do histórico");
     return result;
+  }
+
+  private async cleanAvulsas(days: number): Promise<void> {
+    if (!this.deps.cleanAvulsas) return;
+    for (const workspace of await this.workspaceDirs()) {
+      try {
+        const done = await this.deps.cleanAvulsas(workspace.id, days);
+        if (done.deleted + done.archivedDeleted > 0) this.deps.log.info({ workspaceId: workspace.id, ...done, days }, "limpeza das tarefas avulsas terminadas");
+      } catch (error) {
+        this.deps.log.warn({ err: errorMessage(error), workspaceId: workspace.id }, "não foi possível apagar as tarefas avulsas antigas");
+      }
+    }
   }
 
   private async cleanTranscripts(cutoffMs: number, removed: DiskUsage): Promise<void> {

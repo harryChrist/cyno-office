@@ -48,8 +48,10 @@ import { EngineSettingsStore } from "./platform/models/engine-settings";
 import { registerSettingsRoutes } from "./routes/settings";
 import { PlatformSettings } from "./platform/settings/platform-settings";
 import { registerSystemActivityRoutes } from "./routes/activity";
+import { registerEngineStorageRoutes } from "./routes/engine-storage";
 import { setActivityLog, type ActivityLog } from "./workspace/activity/log";
 import { registerSpendSettingsRoutes } from "./routes/usage-history";
+import { EngineStorage } from "./platform/engine-storage/engine-storage";
 import { RetentionService } from "./platform/retention/retention";
 import { McpTokens } from "./mcp/tokens";
 import { ModelDefaultsStore } from "./platform/models/defaults-store";
@@ -173,6 +175,12 @@ export type AppDeps = {
    * (padrão: desligado; o index.ts liga).
    */
   retention?: { claudeProjectsDir?: string; autoRun?: boolean };
+  /**
+   * Armazenamento dos motores: onde o Antigravity e o Freebuff guardam logs e chats. Sem a pasta, o motor não é
+   * medido nem limpo (o padrão nos testes: nunca toca nas pastas reais do dono). A limpeza automática liga junto
+   * com a do histórico (`retention.autoRun`).
+   */
+  engineStorage?: { antigravityHome?: string; freebuffHome?: string };
   /**
    * Versão do app e aviso de atualização. `autoCheck`: liga a verificação automática (1 min depois da subida e a cada 6 h;
    * padrão: desligada, o index.ts liga conforme `CYNO_UPDATE_CHECK`). `applyEnabled`: liga o botão "Baixar atualização"
@@ -367,10 +375,22 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     activeTaskIds: (workspaceId) =>
       new Set(manager.find(workspaceId)?.store.snapshot().tasks.filter((task) => isActiveTaskStatus(task.status)).map((task) => task.id) ?? []),
     forgetLogs: (workspaceId, taskIds) => manager.find(workspaceId)?.agentLog.forget(taskIds, []),
+    // Limpeza diária das tarefas avulsas terminadas (ajuste `avulsasDays`): cada workspace apaga as suas.
+    cleanAvulsas: (workspaceId, olderThanDays) => manager.find(workspaceId)?.plans.cleanupAvulsas({ olderThanDays, includeArchive: true }, "sistema") ?? Promise.resolve({ deleted: 0, archivedDeleted: 0 }),
     now,
     log: app.log,
   });
   await retention.load();
+  const engineStorage = new EngineStorage({
+    dataDir: deps.dataDir,
+    claudeProjectsDir: deps.retention?.claudeProjectsDir,
+    antigravityHome: deps.engineStorage?.antigravityHome,
+    freebuffHome: deps.engineStorage?.freebuffHome,
+    now,
+    log: app.log,
+    record: ({ auto, summary, data }) => activity({ category: "sistema", action: "limpeza-armazenamento-motores", actor: auto ? "sistema" : "usuario", summary, data }),
+  });
+  await engineStorage.load();
   // O prazo da lista viva das aprovações mudou: cada workspace carregado varre o arquivo na hora.
   retention.onChange((settings, before) => {
     if (settings.approvalsLiveDays !== before.approvalsLiveDays) void manager.sweepApprovals();
@@ -722,6 +742,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     ...deps.engineTools,
   }).applySavedPaths();
   registerSettingsRoutes(app, retention, modelDefaults, { settings: platformSettings, library, envDefault: deps.connectors?.allowStdio ?? true });
+  registerEngineStorageRoutes(app, engineStorage);
   registerSystemActivityRoutes(app, deps.dataDir);
   // Entradas do servidor (sem workspace) vão ao vivo para todos os sockets.
   const unsubscribeSystemActivity = deps.activity?.onAppend((entry) => {
@@ -744,12 +765,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (deps.bootOn !== "listen") await bootWorkspaces();
     accountUsage?.start();
     antigravityUsage?.start();
-    if (deps.retention?.autoRun) retention.start();
+    if (deps.retention?.autoRun) {
+      retention.start();
+      engineStorage.start();
+    }
     if (deps.version?.autoCheck) versionService.start();
   });
   app.addHook("onClose", async () => {
     await engineSettings.flush();
     await retention.stop();
+    await engineStorage.stop();
     versionService.stop();
     unsubscribeSystemActivity?.();
     accountUsage?.stop();

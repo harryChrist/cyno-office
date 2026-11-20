@@ -13,6 +13,7 @@ import { DeliveryHead } from "./DeliveryHead";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { AgentAvatar, AgentTag } from "./Agent";
 import { ApprovalCard } from "./ApprovalCard";
+import { canDeleteAvulsaTask } from "./avulsasCleanupView";
 import { HISTORY_LABELS, statusHistory, statusLabel, taskError } from "./board";
 import { DueForm, LabelsForm } from "./TaskTree";
 import { DependsField, FlowBlock } from "./FlowBlock";
@@ -41,6 +42,8 @@ type PanelProps = {
   onSelect: (ref: string) => void;
   onClose: () => void;
   onConvert: (ref: string) => void;
+  /** Só no Avulsas: pede para apagar de vez a folha terminada (quem chama abre a confirmação). */
+  onDelete?: (ref: string) => void;
 };
 
 /** A folha já começou (não dá para trocar o responsável nem o briefing)? */
@@ -51,7 +54,7 @@ const started = (task: ProjectTask): boolean => (task.status !== "backlog" && ta
  * o que espera você (aprovar e recusar ali mesmo), a entrega e o histórico. Edita responsável, prazo,
  * prioridade e etiquetas (é por aqui que o celular edita).
  */
-export function TaskPanel({ project, task, agents, workers, items, works, progress, now, editable, avulsa, actions, onSelect, onClose, onConvert }: PanelProps) {
+export function TaskPanel({ project, task, agents, workers, items, works, progress, now, editable, avulsa, actions, onSelect, onClose, onConvert, onDelete }: PanelProps) {
   const titleId = useId();
   const types = useOfficeStore((state) => state.forYouTypes);
   const [stepIndex, setStepIndex] = useState(() => Math.min(task.current, Math.max(0, task.steps.length - 1)));
@@ -61,6 +64,7 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
   const leaf = isLeaf(project, task);
   const children = childrenOf({ tasks: project.tasks.filter((candidate) => !candidate.archived) }, task.ref);
   const locked = started(task);
+  const canDelete = onDelete !== undefined && canDeleteAvulsaTask(project, task);
   const step = task.steps[stepIndex];
   const work = step?.taskId ? works.find((candidate) => candidate.id === step.taskId) : undefined;
 
@@ -318,9 +322,14 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
             </>
           )}
         </div>
-        {leaf && (step?.agentId ?? "") !== "" && (
+        {leaf && ((step?.agentId ?? "") !== "" || canDelete) && (
           <footer className="tp__foot">
-            <AgentLinks agent={agents.get(step!.agentId)} onClose={onClose} />
+            {(step?.agentId ?? "") !== "" && <AgentLinks agent={agents.get(step!.agentId)} onClose={onClose} />}
+            {canDelete && (
+              <button type="button" className="ui-button ui-button--ghost ui-button--small tp__delete" onClick={() => onDelete?.(task.ref)} data-testid="task-panel-delete">
+                Apagar
+              </button>
+            )}
           </footer>
         )}
       </aside>

@@ -300,7 +300,7 @@ describe("Avulsas: fechamento do pedido, arquivo e boot", () => {
   const flush = () => new Promise((resolve) => setTimeout(resolve, 5));
   const fakeArchive = () => {
     const stored: { ref: string }[] = [];
-    return { stored, find: async (ref: string) => stored.find((task) => task.ref === ref) as never, append: async (leaves: readonly { ref: string }[]) => void stored.push(...leaves), ofRequest: async () => [] };
+    return { stored, find: async (ref: string) => stored.find((task) => task.ref === ref) as never, append: async (leaves: readonly { ref: string }[]) => void stored.push(...leaves), ofRequest: async () => [], matching: async () => [], remove: async () => [] };
   };
 
   it("pedido que falhou cancela a folha aberta (com o motivo); pedido concluído deixa cada folha seguir a própria Task", async () => {

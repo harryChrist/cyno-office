@@ -30,6 +30,7 @@ import {
   type TaskEntry,
   type TaskFilters,
 } from "./allTasksView";
+import { DeleteAvulsaTaskDialog } from "./DeleteDialogs";
 import { TaskPanel, itemsOfTask } from "./TaskPanel";
 import { AssigneeCell, DueCell, PrioCell, SprintCell, type CellActions } from "./TaskTree";
 import { TREE_STATUS_LABEL } from "./taskTreeView";
@@ -530,6 +531,7 @@ function PanelBody({ project, task, forYou, agents, workers, now, query }: { pro
   const progress = useOfficeStore((state) => state.progress);
   const office = useOfficeStore((state) => state.office);
   const [converting, setConverting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const close = useCallback(() => go({ view: "tasks", query }), [query]);
   const select = useCallback((ref: string) => go({ view: "tasks", query, projectId: project.id, ref }), [project.id, query]);
   return (
@@ -549,7 +551,9 @@ function PanelBody({ project, task, forYou, agents, workers, now, query }: { pro
         onSelect={select}
         onClose={close}
         onConvert={(ref) => setConverting(ref)}
+        {...(isAvulsas(project) ? { onDelete: () => setDeleting(true) } : {})}
       />
+      {deleting && <DeleteAvulsaTaskDialog projectId={project.id} taskRef={task.ref} title={task.title} onClose={() => setDeleting(false)} onDeleted={close} />}
       {converting && (
         <ConfirmDialog
           title="Transformar em projeto?"

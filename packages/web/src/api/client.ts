@@ -115,6 +115,7 @@ import type {
   RoutinesOverview,
   UpdateRoutineBody,
 } from "@cyno/shared";
+import type { AvulsasCleanupBody, AvulsasCleanupPreview, AvulsasCleanupResult, ProjectDeleteResult } from "@cyno/shared";
 import type { ForYouArchiveSummary, ForYouBatchResponse, ModelSaving, SprintCreateBody, SprintPatchBody, TaskCreateBody, TaskMoveBody, TaskPatchBody, TaskReassignBody } from "@cyno/shared";
 import { TODAY_PATH, type PlatformToday, type TodayView } from "@cyno/shared";
 import { ATTENTION_PATH, ATTENTION_PREFS_PATH, type AttentionPrefs, type AttentionPrefsBody, type AttentionResponse } from "@cyno/shared";
@@ -422,6 +423,14 @@ export const api = {
   duplicateProjectTask: (projectId: string, ref: string) => requestJson<ProjectTaskCreated>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/duplicate`, { method: "POST" }),
   archiveProjectTask: (projectId: string, ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/archive`, { method: "POST" }),
   labelProjectTask: (projectId: string, ref: string, name: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/label`, { method: "POST", body: { name } }),
+  /** Quantas avulsas terminadas dariam para apagar (só leitura); 0 dias = qualquer idade. */
+  previewAvulsasCleanup: (olderThanDays: number) => requestJson<AvulsasCleanupPreview>(`${ws()}/projects/avulsas/cleanup${queryString({ olderThanDays })}`),
+  /** Apaga de vez as avulsas terminadas mais velhas que `olderThanDays` (e as do arquivo, se pedido). */
+  cleanupAvulsas: (body: AvulsasCleanupBody) => requestJson<AvulsasCleanupResult>(`${ws()}/projects/avulsas/cleanup`, { method: "POST", body }),
+  /** Apaga de vez uma avulsa terminada (409 com a mensagem do servidor nos outros casos). */
+  deleteAvulsaTask: (projectId: string, ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}`, { method: "DELETE" }),
+  /** Apaga um projeto comum de vez, com as tarefas e os logs (409 para o Avulsas e com tarefa rodando). */
+  deleteProject: (projectId: string) => requestJson<ProjectDeleteResult>(`${ws()}/projects/${segment(projectId)}`, { method: "DELETE" }),
   convertTaskToProject: (ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/avulsas/tasks/${segment(ref)}/convert`, { method: "POST" }),
   createSprint: (projectId: string, body: SprintCreateBody) => requestJson<{ project: Project; sprintId: string }>(`${ws()}/projects/${segment(projectId)}/sprints`, { method: "POST", body }),
   updateSprint: (projectId: string, sprintId: string, body: SprintPatchBody) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/sprints/${segment(sprintId)}`, { method: "PATCH", body }),

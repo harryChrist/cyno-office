@@ -28,6 +28,7 @@ export const SETTINGS_SECTIONS = [
   { id: "avisos", area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", seal: "plataforma" },
   { id: "versao", area: "plataforma", label: "Versão e atualizações", hint: "Qual versão roda e se há novidade", seal: "plataforma" },
   { id: "historico", area: "plataforma", label: "Histórico guardado", hint: "Conversas, logs e aprovações antigas", seal: "plataforma" },
+  { id: "armazenamento", area: "plataforma", label: "Armazenamento dos motores", hint: "Quanto cada motor guarda em disco", seal: "plataforma" },
   { id: "conectores-locais", area: "plataforma", label: "Conectores locais", hint: "Comandos e apps nesta máquina", seal: "plataforma" },
   { id: "escritorio", area: "plataforma", label: "Aparência", hint: "Sons e bichos do escritório", seal: "navegador" },
   { id: "atalhos", area: "plataforma", label: "Atalhos do teclado", hint: "Abrir o chat do Maestro pelo teclado", seal: "navegador" },
@@ -67,7 +68,10 @@ const SECTION_ALIASES: Readonly<Record<string, SettingsSectionId>> = {
   atualizacao: "versao",
   atualizacoes: "versao",
   update: "versao",
-  armazenamento: "historico",
+  disco: "armazenamento",
+  cache: "armazenamento",
+  espaco: "armazenamento",
+  storage: "armazenamento",
   motor: "motores",
   limite: "limites",
   pausa: "limites",
@@ -105,7 +109,7 @@ export const SETTINGS_PAGES = [
   { area: "plataforma", label: "Limites do plano", hint: "Pausar o trabalho quando o plano chega perto do fim", sections: ["limites"] },
   { area: "plataforma", label: "Modelos e Cyno", hint: "Modelos padrão e o jeito do Cyno", sections: ["modelos-padrao", "cyno-ajustes"] },
   { area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", sections: ["avisos"] },
-  { area: "plataforma", label: "Sistema", hint: "Versão, histórico guardado e conectores locais", sections: ["versao", "historico", "conectores-locais"] },
+  { area: "plataforma", label: "Sistema", hint: "Versão, histórico guardado, armazenamento dos motores e conectores locais", sections: ["versao", "historico", "armazenamento", "conectores-locais"] },
   { area: "plataforma", label: "Aparência e atalhos", hint: "Sons, bichos e teclado deste navegador", sections: ["escritorio", "atalhos"] },
   { area: "workspace", label: "Agentes e Maestro", hint: "Modelos e quantos trabalham juntos", sections: ["modelos", "distribuicao"] },
   { area: "workspace", label: "Acesso e segurança", hint: "Internet, navegador, terminal e domínios", sections: ["acesso", "seguranca"] },
@@ -192,6 +196,10 @@ export const SETTINGS_OPTIONS: readonly SettingsOption[] = [
   { id: "hist-logs", section: "historico", title: "Guardar os logs das tarefas", line: "Por quanto tempo fica o passo a passo de cada tarefa.", seal: "plataforma", keywords: "histórico apagar retenção disco dias logs" },
   { id: "hist-aprovacoes", section: "historico", title: "Aprovações decididas", line: "Por quanto tempo uma aprovação decidida fica na lista antes de ir para o arquivo.", seal: "plataforma", keywords: "aprovações arquivo arquivar antigas lista dias decididas mais antigos" },
   { id: "hist-limpar", section: "historico", title: "Limpar o histórico agora", line: "Apaga já o que passou do prazo (tarefas e Cérebro nunca são apagados).", seal: "plataforma", keywords: "apagar limpar histórico disco espaço" },
+  { id: "arm-uso", section: "armazenamento", title: "Quanto cada motor guarda", line: "Tamanho em disco do Claude Code, Antigravity, Freebuff, Hermes e OpenClaw.", seal: "plataforma", keywords: "armazenamento disco espaço cache tamanho motor gigas mb pasta" },
+  { id: "arm-antigravity-logs", section: "armazenamento", title: "Logs do Antigravity", line: "Apagar sozinho os logs antigos do Antigravity (nunca, 7, 14, 30 ou 90 dias).", seal: "plataforma", keywords: "armazenamento disco antigravity agy logs log apagar limpar dias" },
+  { id: "arm-freebuff-chats", section: "armazenamento", title: "Chats dos agentes no Freebuff", line: "Apagar sozinho os chats antigos dos agentes do Cyno no Freebuff (nunca, 7, 14, 30 ou 90 dias).", seal: "plataforma", keywords: "armazenamento disco freebuff chats conversas apagar limpar dias" },
+  { id: "arm-limpar", section: "armazenamento", title: "Limpar o armazenamento agora", line: "Mostra o que sairia e apaga só o que for dos agentes do Cyno.", seal: "plataforma", keywords: "armazenamento apagar limpar disco espaço cache" },
   { id: "versao-instalada", section: "versao", title: "Versão instalada", line: "A versão do projeto, o número do build (commits) e o commit que roda agora.", seal: "plataforma", keywords: "versão build commit hash ramo branch release" },
   { id: "versao-atualizacao", section: "versao", title: "Atualizações no GitHub", line: "Avisa quando o ramo estável tem commits novos e mostra como atualizar. O app só avisa; quem atualiza é você.", seal: "plataforma", keywords: "atualizar atualização novidade github git pull docker pm2 verificar" },
   { id: "som", section: "escritorio", title: "Sons do escritório", line: "Liga o som do mapa do Escritório (teclado, elevador, ping-pong, fliperama) e o volume. Vem desligado.", seal: "navegador", keywords: "aparência som áudio volume barulho teclado elevador" },
@@ -353,6 +361,26 @@ export function retentionLabel(days: number, kind?: keyof typeof RETENTION_DAY_O
 export function retentionOptions(kind: keyof typeof RETENTION_DAY_OPTIONS, current: number): number[] {
   const options = new Set<number>([...RETENTION_DAY_OPTIONS[kind], current]);
   return [...options].sort((a, b) => (a === 0 ? 1 : b === 0 ? -1 : a - b));
+}
+
+/** Prazos do "Apagar sozinho depois de" das avulsas terminadas (0 = Nunca, o padrão). */
+export const AVULSAS_AUTO_DAYS = [0, 7, 14, 30, 90, 180] as const;
+
+/** Opções do select das avulsas: Nunca primeiro, depois os prazos (e o valor atual, se vier de fora da lista). */
+export function avulsasDaysOptions(current: number): number[] {
+  const options = new Set<number>([...AVULSAS_AUTO_DAYS, current]);
+  return [...options].sort((a, b) => a - b);
+}
+
+/** "Nunca" ou "30 dias". */
+export function avulsasDaysLabel(days: number): string {
+  if (days <= 0) return "Nunca";
+  return days === 1 ? "1 dia" : `${days} dias`;
+}
+
+/** O selo da linha: "Nunca apaga" ou "Apaga depois de 30 dias". */
+export function avulsasDaysBadge(days: number): string {
+  return days <= 0 ? "Nunca apaga" : `Apaga depois de ${avulsasDaysLabel(days)}`;
 }
 
 // ---------- Modelos padrão ----------

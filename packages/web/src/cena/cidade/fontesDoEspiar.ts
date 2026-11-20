@@ -26,7 +26,7 @@ export function aplicarEvento(estado: EstadoDoEspiar, evento: ServerEvent): Esta
   const terminais = applyTerminalEvent(estado.terminais, evento);
   let projetos = estado.projetos;
   if (evento.type === "office:snapshot" && evento.projects) projetos = expandAvulsas(evento.projects);
-  else if (evento.type === "project:deleted") projetos = estado.projetos.filter((p) => p.id !== evento.id);
+  else if (evento.type === "project:deleted" || evento.type === "project:removed") projetos = estado.projetos.filter((p) => p.id !== evento.id);
   else if (evento.type === "project:upserted") {
     const existe = estado.projetos.some((p) => p.id === evento.project.id);
     projetos = expandAvulsas(existe ? estado.projetos.map((p) => (p.id === evento.project.id ? evento.project : p)) : [...estado.projetos, evento.project]);

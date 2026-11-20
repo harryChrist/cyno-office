@@ -111,6 +111,7 @@ export function applyServerEvent(office: OfficeState, event: ServerEvent): Offic
       return office;
     case "project:upserted":
     case "project:deleted":
+    case "project:removed":
       // Planos dos pedidos têm store próprio (ver workStore.ts).
       return office;
     case "routine:upserted":

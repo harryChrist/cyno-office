@@ -40,6 +40,8 @@ type TreeProps = {
   actions: TaskActions;
   /** Tarefa do Avulsas: ganha "Transformar em projeto" no menu. */
   onConvert?: (ref: string) => void;
+  /** Só no Avulsas: apaga de vez a folha terminada. */
+  onDelete?: (ref: string) => void;
 };
 
 /**
@@ -85,7 +87,7 @@ const started = (row: Pick<TreeNodeRow, "node">): boolean => (row.node.status !=
  * contador, etiquetas e as colunas Responsáveis, Data e Prioridade (e Sprint, quando o projeto tiver sprints).
  * Clicar na linha abre o painel da tarefa; as colunas editam ali mesmo (no celular, a edição fica no painel).
  */
-export function TaskTree({ project, agents, workers, workspaceId, now, selectedRef, onSelect, editable, canCreate, actions, onConvert }: TreeProps) {
+export function TaskTree({ project, agents, workers, workspaceId, now, selectedRef, onSelect, editable, canCreate, actions, onConvert, onDelete }: TreeProps) {
   const storageKey = treeClosedKey(workspaceId, project.id);
   const [closedRefs, setClosedRefs] = useState<Set<string>>(() => readClosedRefs(storageKey) ?? defaultClosed(project));
   const [adding, setAdding] = useState<{ parentRef?: string; group?: boolean } | null>(null);
@@ -212,6 +214,7 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
               onMoveSprint={() => setMovingSprint(row.ref)}
               onCancel={() => setCancelling(row.ref)}
               {...(onConvert ? { onConvert } : {})}
+              {...(onDelete ? { onDelete } : {})}
             />
           ),
         )}
@@ -262,9 +265,11 @@ type NodeRowProps = {
   onMoveSprint: () => void;
   onCancel: () => void;
   onConvert?: (ref: string) => void;
+  /** Só no Avulsas: apaga de vez a folha terminada. */
+  onDelete?: (ref: string) => void;
 };
 
-function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert }: NodeRowProps) {
+function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert, onDelete }: NodeRowProps) {
   const { node } = row;
   const leaf = !row.isGroup && !row.hasChildren;
   const editableCells = editable && leaf && !mobile;
@@ -410,6 +415,7 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
           onCancel={onCancel}
           onOpen={() => onSelect(row.ref)}
           {...(onConvert ? { onConvert } : {})}
+          {...(onDelete ? { onDelete } : {})}
         />
       </div>
 
@@ -713,9 +719,11 @@ type MenuProps = {
   onCancel: () => void;
   onOpen: () => void;
   onConvert?: (ref: string) => void;
+  /** Só no Avulsas: apaga de vez a folha terminada. */
+  onDelete?: (ref: string) => void;
 };
 
-function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert }: MenuProps) {
+function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert, onDelete }: MenuProps) {
   const done = row.status === "concluida" || row.status === "cancelada";
   const item = (label: string, run: () => void, close: () => void, testId?: string, danger = false) => (
     <li key={label} role="none">
@@ -761,6 +769,7 @@ function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMo
           {editable && onConvert && !row.isGroup && !row.hasChildren && !done && item("Transformar em projeto", () => onConvert(row.ref), close, `tree-convert-${row.ref}`)}
           {editable && !done && item("Cancelar", onCancel, close, `tree-cancel-${row.ref}`, true)}
           {done && item("Arquivar", () => void actions.archive(row.ref), close, `tree-archive-${row.ref}`)}
+          {done && onDelete && !row.isGroup && !row.hasChildren && item("Apagar", () => onDelete(row.ref), close, `tree-delete-${row.ref}`)}
         </ul>
       )}
     </Popover>

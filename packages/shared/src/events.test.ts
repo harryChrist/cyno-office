@@ -15,7 +15,8 @@ describe("parseServerEvent", () => {
   });
 
   it("lista todos os tipos de evento", () => {
-    expect(SERVER_EVENT_TYPES).toHaveLength(54);
+    expect(SERVER_EVENT_TYPES).toHaveLength(55);
+    expect(SERVER_EVENT_TYPES).toContain("project:removed");
     expect(SERVER_EVENT_TYPES).toContain("board:upserted");
     expect(SERVER_EVENT_TYPES).toContain("board:deleted");
     expect(SERVER_EVENT_TYPES).toContain("foryou:archived");

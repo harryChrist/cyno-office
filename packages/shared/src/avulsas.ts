@@ -61,6 +61,26 @@ export function isArchivable(task: Pick<ProjectTask, "status" | "finishedAt" | "
   return !Number.isNaN(at) && at < now - AVULSAS_KEEP_DAYS * DAY_MS;
 }
 
+/** A folha terminou de verdade (concluída ou cancelada)? Falhada não conta: ela ainda pode ser reatribuída. */
+export function isCleanable(task: Pick<ProjectTask, "status">): boolean {
+  return task.status === "concluida" || task.status === "cancelada";
+}
+
+/** Quando a folha terminou (o mesmo `finishedAt ?? updatedAt` do `isArchivable`), em ms; NaN se a data é ilegível. */
+export function leafFinishedMs(task: Pick<ProjectTask, "finishedAt" | "updatedAt">): number {
+  return Date.parse(task.finishedAt ?? task.updatedAt);
+}
+
+/**
+ * A folha pode ser APAGADA de vez na limpeza: concluída ou cancelada há mais de `olderThanDays` dias (a mesma noção de
+ * "finalizada há" do `isArchivable`; 0 = qualquer idade). Quem chama ainda confere se não há Task rodando.
+ */
+export function isDeletable(task: Pick<ProjectTask, "status" | "finishedAt" | "updatedAt">, olderThanDays: number, now: number): boolean {
+  if (!isCleanable(task)) return false;
+  const at = leafFinishedMs(task);
+  return !Number.isNaN(at) && at <= now - olderThanDays * DAY_MS;
+}
+
 /** Id do pedido que gerou a folha (o de `meta.requestId`; sem ele, a própria folha). */
 export const leafRequestId = (task: Pick<ProjectTask, "ref" | "meta">): string => task.meta?.requestId ?? task.ref;
 

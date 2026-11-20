@@ -1,4 +1,4 @@
-import { idParamsSchema, planAdjustBodySchema, projectCreateBodySchema, projectModeBodySchema, projectPatchBodySchema, sprintCreateBodySchema, sprintPatchBodySchema, sprintReorderBodySchema, taskCreateBodySchema, taskLabelBodySchema, taskMoveBodySchema, taskPatchBodySchema, taskReassignBodySchema, type Plan, type Project } from "@cyno/shared";
+import { avulsasCleanupBodySchema, avulsasCleanupQuerySchema, idParamsSchema, planAdjustBodySchema, projectCreateBodySchema, projectModeBodySchema, projectPatchBodySchema, sprintCreateBodySchema, sprintPatchBodySchema, sprintReorderBodySchema, taskCreateBodySchema, taskLabelBodySchema, taskMoveBodySchema, taskPatchBodySchema, taskReassignBodySchema, type AvulsasCleanupPreview, type AvulsasCleanupResult, type Plan, type Project, type ProjectDeleteResult } from "@cyno/shared";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { HttpError } from "../platform/http/errors";
@@ -47,6 +47,26 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
     return { project: await plansOf(request).setMode(id, body) };
   });
 
+  // ---------- Apagar de vez: o dono tira o que não quer mais guardar (nada é apagado sozinho, só pela retenção que ele liga) ----------
+
+  // Quantas tarefas avulsas terminadas há mais de N dias dariam para apagar agora (só lê).
+  scope.get("/projects/avulsas/cleanup", async (request): Promise<AvulsasCleanupPreview> => {
+    const { olderThanDays } = avulsasCleanupQuerySchema.parse(request.query);
+    return plansOf(request).avulsasCleanupPreview(olderThanDays);
+  });
+
+  // Apaga de vez as tarefas avulsas concluídas ou canceladas há mais de N dias (e, se pedir, as do arquivo mensal).
+  scope.post("/projects/avulsas/cleanup", async (request): Promise<AvulsasCleanupResult> => {
+    const body = avulsasCleanupBodySchema.parse(request.body);
+    return plansOf(request).cleanupAvulsas(body);
+  });
+
+  // Um projeto comum inteiro: 409 no Avulsas e com tarefa rodando ou esperando o dono.
+  scope.delete("/projects/:id", async (request): Promise<ProjectDeleteResult> => {
+    const { id } = idParamsSchema.parse(request.params);
+    return plansOf(request).deleteProject(id);
+  });
+
   // ---------- Árvore de tarefas: o dono cria e edita pela tela ----------
 
   const taskParams = z.object({ id: z.string().min(1).max(64), ref: z.string().min(1).max(12) });
@@ -93,6 +113,12 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
   scope.post("/projects/:id/tasks/:ref/archive", async (request): Promise<{ project: Project }> => {
     const { id, ref } = taskParams.parse(request.params);
     return { project: await plansOf(request).archiveTask(id, ref) };
+  });
+
+  // Apaga UMA tarefa avulsa já terminada (de projeto comum não: quebraria os "Depois de").
+  scope.delete("/projects/:id/tasks/:ref", async (request): Promise<{ project: Project }> => {
+    const { id, ref } = taskParams.parse(request.params);
+    return { project: await plansOf(request).deleteAvulsasTask(id, ref) };
   });
 
   scope.post("/projects/:id/tasks/:ref/label", async (request): Promise<{ project: Project }> => {

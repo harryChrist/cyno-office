@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { manicodeDirOf } from "./engines/freebuff/files";
 
 /** Raiz do monorepo (packages/server/src -> ../../..). */
 export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -84,6 +85,8 @@ const envSchema = z.object({
    * então ficam DESLIGADOS por padrão: "1" libera (só faça isso numa rede em que confia).
    */
   CONNECTORS_STDIO: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).default("0")),
+  /** Pasta de dados do Antigravity (logs, conversas); padrão ~/.gemini/antigravity-cli. Só a medição e a limpeza opcional dos logs a leem. */
+  ANTIGRAVITY_HOME: z.preprocess(emptyToUndefined, z.string().optional()),
   /** Limpeza automática do histórico (boot + uma vez por dia): "0" desliga. */
   RETENTION_AUTO: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).default("1")),
   /** Navegador compartilhado dos agentes (Chromium com perfil por workspace): "0" desliga. */
@@ -160,6 +163,8 @@ export type AppConfig = {
    * são tocadas) e se a limpeza roda sozinha (boot + diária).
    */
   retention: { claudeProjectsDir: string; autoRun: boolean };
+  /** Armazenamento dos motores: onde o Antigravity e o Freebuff guardam logs e chats (medição e limpeza opcional). */
+  engineStorage: { antigravityHome: string; freebuffHome: string };
   /** Conectores stdio (comando local) liberados? Padrão: não (CONNECTORS_STDIO=1 libera). */
   connectorsStdio: boolean;
   /** Navegador compartilhado: ligado, ociosidade e domínios sempre bloqueados. */
@@ -206,6 +211,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     retention: {
       claudeProjectsDir: path.join(path.resolve(parsed.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude")), "projects"),
       autoRun: parsed.RETENTION_AUTO === "1",
+    },
+    engineStorage: {
+      antigravityHome: path.resolve(parsed.ANTIGRAVITY_HOME ?? path.join(os.homedir(), ".gemini", "antigravity-cli")),
+      freebuffHome: manicodeDirOf(env),
     },
     connectorsStdio: parsed.CONNECTORS_STDIO === "1",
     browser: {

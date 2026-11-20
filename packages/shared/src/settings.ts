@@ -17,6 +17,8 @@ export const RETENTION_DAY_OPTIONS = {
    * nunca arquivar). Vale para todos os workspaces.
    */
   approvals: FOR_YOU_LIVE_DAY_OPTIONS,
+  /** Tarefas avulsas terminadas: dias até serem APAGADAS de vez (0 = nunca; é o padrão). */
+  avulsas: [7, 14, 30, 90, 180, 0],
 } as const;
 
 export const retentionSettingsSchema = z.object({
@@ -24,17 +26,20 @@ export const retentionSettingsSchema = z.object({
   logsDays: z.number().int().min(0).max(3650),
   /** Dias que uma aprovação decidida fica na lista viva; 0 = nunca arquivar. Ausente no arquivo antigo = o padrão. */
   approvalsLiveDays: z.number().int().min(0).max(3650).default(DEFAULT_FOR_YOU_LIVE_DAYS),
+  /** Dias depois dos quais uma tarefa avulsa concluída ou cancelada é apagada de vez (a limpeza diária); 0 = nunca (padrão). Ausente no arquivo antigo = 0. */
+  avulsasDays: z.number().int().min(0).max(365).default(0),
 });
 export type RetentionSettings = z.infer<typeof retentionSettingsSchema>;
 
 /** Padrões: conversas das CLIs por 7 dias; logs das tarefas por 90 dias. Tarefas, resultados e Cérebro ficam para sempre. */
-export const DEFAULT_RETENTION: RetentionSettings = { transcriptsDays: 7, logsDays: 90, approvalsLiveDays: DEFAULT_FOR_YOU_LIVE_DAYS };
+export const DEFAULT_RETENTION: RetentionSettings = { transcriptsDays: 7, logsDays: 90, approvalsLiveDays: DEFAULT_FOR_YOU_LIVE_DAYS, avulsasDays: 0 };
 
 /** PATCH /api/settings/retention (só os campos que mudam). */
 export const updateRetentionBodySchema = z.strictObject({
   transcriptsDays: retentionSettingsSchema.shape.transcriptsDays.optional(),
   logsDays: retentionSettingsSchema.shape.logsDays.optional(),
   approvalsLiveDays: z.number().int().min(0).max(3650).optional(),
+  avulsasDays: retentionSettingsSchema.shape.avulsasDays.optional(),
 });
 export type UpdateRetentionBody = z.input<typeof updateRetentionBodySchema>;
 

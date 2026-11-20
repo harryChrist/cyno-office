@@ -15,6 +15,7 @@ export function isTodayEvent(event: ServerEvent): boolean {
     case "task:upserted":
     case "project:upserted":
     case "project:deleted":
+    case "project:removed":
     case "foryou:upserted":
     case "foryou:deleted":
     case "agent:upserted":

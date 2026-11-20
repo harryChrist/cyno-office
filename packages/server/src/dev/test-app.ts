@@ -130,6 +130,8 @@ export type TestAppOptions = {
   version?: AppDeps["version"];
   /** Freebuff: nos testes, nunca o de verdade (executável que não existe e uma pasta de dados vazia); os testes do motor passam a TUI falsa. */
   freebuff?: AppDeps["freebuff"];
+  /** Armazenamento dos motores: pastas temporárias do Antigravity e do Freebuff (padrão nos testes: nenhuma, nunca as de verdade). */
+  engineStorage?: AppDeps["engineStorage"];
 };
 
 /** Padrões dos testes: Maestro e agentes simulados (workspace novo não cria agente de CLI de verdade). */
@@ -187,6 +189,7 @@ export function useTestApp(): (options?: TestAppOptions) => Promise<TestApp> {
       ...(options.oneShot ? { oneShot: options.oneShot } : {}),
       ...(options.version ? { version: options.version } : {}),
       ...(options.activity ? { activity: options.activity } : {}),
+      ...(options.engineStorage ? { engineStorage: options.engineStorage } : {}),
       freebuff: { command: "/nao-existe/freebuff-nunca-nos-testes", manicodeDir: path.join(dataDir, "fake-manicode"), ...options.freebuff },
       terminals: {
         // Os testes nunca sobem o OpenClaw nem o Hermes de verdade (o OpenClaw está instalado na máquina do dono).

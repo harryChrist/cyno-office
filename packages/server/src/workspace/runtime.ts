@@ -689,6 +689,8 @@ export class WorkspaceRuntime {
       typeNote: (typeId) => delegationTypeNote(this.forYouTypes.list(), typeId),
       brain: this.brain,
       archive: new AvulsasArchive(store.paths.projectsArchiveDir),
+      // Apagar de vez: os logs e a memória do log de trabalho (a limpeza é criada logo depois; só roda a pedido).
+      cleanup: { removeLeftovers: (leftovers) => this.cleanup.removeLeftovers(leftovers), countTaskLogs: (taskIds) => this.cleanup.countTaskLogs(taskIds) },
       // Modo Automático das rotinas: o teto do dia é da rotina (soma das execuções), não de cada projeto de execução.
       routineAuto: (routineId, input) => this.routines.autoReserve(routineId, input),
       remapRoutineRuns: (taskIds, projectId) => void this.routines.remapRunProject(taskIds, projectId),

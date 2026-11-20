@@ -214,7 +214,9 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `CYNO_UPDATE_CHECK` | on | `off` ou `0` desliga a verificação automática de atualização (1 min depois da subida e a cada 6 h); o botão **Verificar agora** continua. Veja "Versão e atualizações" |
 | `CYNO_UPDATE_BRANCH` | main | ramo do `origin` com que a instalação é comparada |
 | `CYNO_UPDATE_APPLY` | on | `off` ou `0` desliga o botão **Baixar atualização** (o aviso e o **Verificar agora** continuam). O app nunca reinicia sozinho |
-| `RETENTION_AUTO` | 1 | limpeza automática do histórico (boot + diária); `0` desliga |
+| `RETENTION_AUTO` | 1 | limpeza automática do histórico (boot + diária); `0` desliga. Vale também para a limpeza do armazenamento dos motores (que só age no que o dono ligou) |
+| `ANTIGRAVITY_HOME` | `~/.gemini/antigravity-cli` | pasta de dados do Antigravity, lida pelo armazenamento dos motores (medir e limpar logs) |
+| `FREEBUFF_HOME` | `~/.config/manicode` | pasta de dados do Freebuff (chats `fb-*` dos agentes do Cyno) |
 | `BROWSER` / `BROWSER_IDLE_MS` | 1 / 600000 | navegador compartilhado dos agentes e ociosidade até fechar (`0` = nunca) |
 | `ROUTINE_TICK_MS` | 600000 (10 min) | **só para teste**: intervalo do vigia das rotinas (mínimo 1000); a primeira passada vem depois de um intervalo |
 | `BROWSER_BLOCKED_HOSTS` | (vazio) | domínios que o navegador nunca abre (vírgulas) |

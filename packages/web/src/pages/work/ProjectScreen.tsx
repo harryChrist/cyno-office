@@ -6,8 +6,11 @@ import { useOfficeStore } from "../../store/officeStore";
 import { ConfirmDialog, ErrorText, ProgressBar } from "../../ui/widgets";
 import { JointPartPanel } from "../joint/JointCard";
 import { ApprovalCard } from "./ApprovalCard";
+import { AvulsasCleanupDialog } from "./AvulsasCleanupDialog";
+import { DeleteAvulsaTaskDialog, DeleteProjectDialog } from "./DeleteDialogs";
 import { ModeCard } from "./ModeCard";
 import { PlanDecision } from "./PlanDecision";
+import { canDeleteProject } from "./projectDeleteView";
 import { ProjectControls } from "./ProjectControls";
 import { DueForm } from "./TaskTree";
 import { ActivityTab, DeliveriesTab } from "./ProjectTabs";
@@ -86,6 +89,10 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
   const actions = useTaskActions(project.id);
   const [view, setView] = useState<"lista" | "quadro">("lista");
   const [converting, setConverting] = useState<string | "projeto" | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [deletingTask, setDeletingTask] = useState<{ ref: string; title: string } | null>(null);
+  const askDelete = (ref: string) => setDeletingTask({ ref, title: project.tasks.find((candidate) => candidate.ref === ref)?.title ?? ref });
   const open = isProjectOpen(project);
   const editable = open && project.status !== "ajustando";
   const live = useMemo(() => ({ tasks: project.tasks.filter((task) => !task.archived) }), [project.tasks]);
@@ -136,6 +143,8 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
         agents={agents}
         waiting={pending.length}
         onConvertToTask={() => setConverting("projeto")}
+        onCleanup={() => setCleaning(true)}
+        onDelete={() => setDeletingProject(true)}
       />
       <PageTabs
         flush
@@ -212,7 +221,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
                   editable={editable}
                   canCreate={!fixed}
                   actions={actions}
-                  {...(fixed ? { onConvert: (ref: string) => setConverting(ref) } : {})}
+                  {...(fixed ? { onConvert: (ref: string) => setConverting(ref), onDelete: askDelete } : {})}
                 />
               </>
             ) : (
@@ -242,6 +251,27 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
           onSelect={select}
           onClose={closePanel}
           onConvert={(ref) => void convert(ref)}
+          {...(fixed ? { onDelete: askDelete } : {})}
+        />
+      )}
+      {cleaning && <AvulsasCleanupDialog onClose={() => setCleaning(false)} />}
+      {deletingProject && (
+        <DeleteProjectDialog
+          project={project}
+          onClose={() => setDeletingProject(false)}
+          // Volta à lista de projetos (o projeto já saiu da lista pelo evento project:removed).
+          onDeleted={() => useNavStore.getState().go("trabalho", "", true)}
+        />
+      )}
+      {deletingTask && (
+        <DeleteAvulsaTaskDialog
+          projectId={project.id}
+          taskRef={deletingTask.ref}
+          title={deletingTask.title}
+          onClose={() => setDeletingTask(null)}
+          onDeleted={() => {
+            if (taskRef === deletingTask.ref) closePanel();
+          }}
         />
       )}
       {converting && converting !== "projeto" && (
@@ -291,9 +321,13 @@ type HeaderProps = {
   agents: ReadonlyMap<string, Agent>;
   waiting: number;
   onConvertToTask: () => void;
+  /** Só no Avulsas: abre o "Limpar avulsas". */
+  onCleanup: () => void;
+  /** Só em projeto comum: abre "Apagar projeto". */
+  onDelete: () => void;
 };
 
-function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, counted, openCount, agentIds, agents, waiting, onConvertToTask }: HeaderProps) {
+function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, counted, openCount, agentIds, agents, waiting, onConvertToTask, onCleanup, onDelete }: HeaderProps) {
   const { error, run } = useAsyncAction();
   const mobile = useIsMobile();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -532,6 +566,16 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
               data-testid="work-pause"
             >
               {project.status === "pausado" ? "Retomar" : "Pausar"}
+            </button>
+          )}
+          {fixed && (
+            <button type="button" className="ui-button ui-button--secondary ui-button--small" onClick={onCleanup} data-testid="avulsas-cleanup">
+              Limpar avulsas
+            </button>
+          )}
+          {canDeleteProject(project) && (
+            <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onDelete} data-testid="project-delete">
+              Apagar projeto
             </button>
           )}
         </div>

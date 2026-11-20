@@ -15,6 +15,7 @@ import { LocalConnectorsSettings } from "./LocalConnectorsSettings";
 import { DispatchSettings } from "./DispatchSettings";
 import { GestaoSettings } from "./GestaoSettings";
 import { EnginesPanel } from "./EnginesPanel";
+import { EngineStorageSettings } from "./EngineStorageSettings";
 import { HistorySettings } from "./HistorySettings";
 import { GlobalModelsSettings, WorkspaceModelsSettings } from "./ModelsSettings";
 import { OfficeSettings } from "./OfficeSettings";
@@ -425,6 +426,9 @@ export function SettingsPage() {
             </SectionBlock>
             <SectionBlock id="historico" mode={mode("historico")}>
               <HistorySettings />
+            </SectionBlock>
+            <SectionBlock id="armazenamento" mode={mode("armazenamento")}>
+              <EngineStorageSettings />
             </SectionBlock>
             <SectionBlock id="conectores-locais" mode={mode("conectores-locais")}>
               <LocalConnectorsSettings />

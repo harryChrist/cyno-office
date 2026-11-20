@@ -111,6 +111,12 @@ Clique num projeto para abrir a **tela dele** (tem endereço próprio: o botão 
 
 **Avulsas** não tem "+ Tarefa" (as tarefas chegam pelo Maestro; para criar à mão, faça um projeto ou peça ao Maestro) e a tarefa avulsa não pausa, não tem ritmo nem modo Automático: no painel dela, **Pausar**, **Ritmo** e **Modo Automático** oferecem **Transformar em projeto** (vira um projeto de uma tarefa só, com o mesmo agente e o que já foi feito). O contrário também existe: um projeto seu de uma tarefa só, sem ritmo nem Automático, tem **Virar tarefa avulsa**. Projetos vindos de um plano do Maestro continuam projetos.
 
+**Apagar o que você não quer mais guardar.** Nada é apagado sozinho por padrão; quem decide é você:
+- **Limpar avulsas** (botão no topo do Avulsas): escolha a idade (todas as terminadas, mais de 7, 30 ou 90 dias), veja quantas serão apagadas e, se quiser, apague junto as que já foram para o arquivo mensal. Só saem as concluídas e as canceladas; a que falhou, a aberta e a que ainda roda ficam. Não dá para desfazer; o histórico da Atividade continua.
+- **Apagar uma tarefa avulsa terminada:** botão **Apagar** no painel da tarefa (ou no menu dela).
+- **Apagar projeto:** botão **Apagar projeto** no cabeçalho de qualquer projeto comum (o Avulsas nunca se apaga). Apaga as tarefas e os logs delas. Se alguma tarefa está rodando, o app pede para parar antes.
+- **Apagar sozinho:** em **Configurações > Sistema > Histórico**, "Tarefas avulsas terminadas" apaga as avulsas terminadas (e as do arquivo) depois de 7, 14, 30, 90 ou 180 dias. Vem em **Nunca**.
+
 No celular, cada projeto vira um cartão de duas linhas, as colunas da árvore viram uma linha de detalhes embaixo do nome (avatares, data, prioridade, sprint) e a página não rola de lado; o cabeçalho do projeto mostra só o nome, o estado e o progresso, e o resto fica atrás de **Detalhes**.
 
 ## A tela
@@ -397,7 +403,7 @@ O item **Configurações** (rodapé da barra lateral) abre **uma página por vez
   - **Limites do plano**: em que percentual de uso do plano o trabalho pausa, por motor e por janela (veja "Pausa por limite do plano", abaixo).
   - **Modelos e Cyno**: os modelos padrão (Maestro, agentes, subagentes e o do Cyno) e o jeito do Cyno (sono, teto de turnos por dia, resumo diário).
   - **Avisos**: aviso na tela, som, notificação, aviso com o site fechado e o que avisa.
-  - **Sistema**: versão e atualizações, histórico guardado (por quanto tempo ficam as conversas das CLIs e os logs) e conectores locais.
+  - **Sistema**: versão e atualizações, histórico guardado (por quanto tempo ficam as conversas das CLIs e os logs), **armazenamento dos motores** (quanto cada motor guarda em disco e a limpeza por idade dos logs do Antigravity e dos chats do Freebuff) e conectores locais.
   - **Aparência e atalhos**: sons e bichos do escritório e o atalho do chat do Maestro (valem só neste navegador).
 - **Do workspace**: vale só para o workspace escolhido no **seletor** ao lado do título do grupo (trocar ali troca o workspace aberto no app).
   - **Agentes e Maestro**: os modelos dos agentes e do Maestro daquele workspace e o trabalho em paralelo (quantos trabalham ao mesmo tempo).
@@ -415,6 +421,8 @@ O **índice** também faz as vezes de resumo: ao lado de Acesso e senha aparece 
 **Como a página se arruma por largura.** Em janelas médias o índice fica ao lado. A partir de 1280 px, em **Motores** o detalhe do motor abre **ao lado** da lista; a partir de 1680 px os cartões de cada seção se arrumam em **duas colunas** e a partir de 2200 px em **três**, sempre com uma largura máxima para o texto não esticar. O selo de onde a opção vale aparece no título da página quando não é o padrão ("Só em <workspace>", "Só neste navegador") e, nos cartões, só quando o escopo muda.
 
 **Pausa por limite do plano.** Em **Configurações > Limites do plano** há uma linha por motor e por janela do plano, cada uma com a sua chave e o seu percentual. **Tudo vem desligado**, com 90% já preenchido: nada pausa sozinho, só as janelas que você ligar (o percentual aceita de 10 a 100). Mesmo desligada, a linha mostra o uso atual.
+
+**Armazenamento dos motores.** Em **Configurações > Sistema > Armazenamento dos motores** você vê quanto cada motor guarda (Claude Code, Antigravity, Freebuff, Hermes e OpenClaw) e pode limpar por idade, **tudo desligado por padrão**. A limpeza cobre só os logs antigos do Antigravity (inclusive os do seu uso pessoal; as conversas dele ficam intactas) e os chats dos agentes do Cyno no Freebuff. Nunca apaga o que tem menos de 24 horas nem o chat em uso. O Claude Code já se limpa sozinho (30 dias, regra dele) e o Cyno limpa as conversas dos agentes em **Histórico**; OpenClaw e Hermes cuidam do próprio histórico. O Antigravity não tem limpeza própria: as conversas dele ainda não são apagadas pelo Cyno.
 
 - **Claude Code**: a janela de **5 h** e a da **semana**, separadas. Quando a conta tem uma janela semanal de um modelo só (ex.: "semana · só Opus"), ela aparece como regra à parte e só segura os agentes que usam aquele modelo.
 - **Antigravity**: cada janela que a cota informa, por grupo de modelos (ex.: "Semana · Modelos Gemini", "Sessão 5h · Claude e GPT"); a pausa de um grupo só segura os agentes dos modelos dele.

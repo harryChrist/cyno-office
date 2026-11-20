@@ -38,6 +38,9 @@ import {
   isActiveTaskStatus,
   isArchivable,
   isAvulsas,
+  isCleanable,
+  isDeletable,
+  leafFinishedMs,
   isDeadlineAtRisk,
   isPlanProject,
   isProjectOpen,
@@ -63,11 +66,15 @@ import {
   taskRankInput,
   workClock,
   type Agent,
+  type AvulsasCleanupBody,
+  type AvulsasCleanupPreview,
+  type AvulsasCleanupResult,
   type ForYouItem,
   type HandoffIntent,
   type HelpKind,
   type AutoGrant,
   type OfficeState,
+  type ProjectDeleteResult,
   type ProjectModeBody,
   type ProjectCreateBody,
   type SprintCreateBody,
@@ -92,6 +99,7 @@ import {
 import type { AgentLogService } from "../agent-log/service";
 import { HttpError } from "../../platform/http/errors";
 import { activeActivity } from "../activity/log";
+import { dropForYouItems } from "../for-you/service";
 import { persist, persistOrThrow } from "../../util/persist";
 import { shorten } from "../../util/text";
 import { doneWhenBlock, dueLine, flowLine, motherNote, receiverLine } from "./work-scheduler";
@@ -1031,6 +1039,182 @@ export class ProjectService {
       throw error;
     }
     return this.finishEdit(project, before, "tarefa-atribuida", `Você atribuiu ${quoteName(shorten(task.title, 60))} a ${ids.length} agente(s) (${mode}) em ${quoteName(shorten(project.title, 60))}`, { ref, assignees: ids, mode }, by);
+  }
+
+  // ---------- Apagar de vez: tarefas avulsas terminadas e projetos inteiros ----------
+
+  /** A folha tem alguma Task do runner ainda na fila, rodando ou esperando o dono (as das etapas e as que `Task.work` aponta para ela)? */
+  private leafBusy(state: OfficeState, leaf: ProjectTask, busy: ReadonlySet<string>): boolean {
+    return leaf.steps.some((step) => step.taskId !== undefined && busy.has(step.taskId)) || state.tasks.some((task) => busy.has(task.id) && task.work?.projectId === AVULSAS_ID && task.work.ref === leaf.ref);
+  }
+
+  private activeTaskIds(state: OfficeState): Set<string> {
+    return new Set(state.tasks.filter((task) => isActiveTaskStatus(task.status)).map((task) => task.id));
+  }
+
+  /** Ids das Tasks que a folha usou: as das etapas (`steps[].taskId`) e as que `Task.work` aponta para ela. */
+  private leafTaskIds(state: OfficeState, leaf: ProjectTask): string[] {
+    const fromSteps = leaf.steps.flatMap((step) => (step.taskId ? [step.taskId] : []));
+    const fromWork = state.tasks.filter((task) => task.work?.projectId === AVULSAS_ID && task.work.ref === leaf.ref).map((task) => task.id);
+    return [...new Set([...fromSteps, ...fromWork])];
+  }
+
+  /** As folhas (vivas e do arquivo mensal) que a limpeza apagaria agora: concluídas ou canceladas há mais de N dias, sem Task ativa. */
+  private async cleanupCandidates(olderThanDays: number, includeArchive: boolean): Promise<{ live: ProjectTask[]; archived: ProjectTask[] }> {
+    const now = this.deps.now().getTime();
+    const state = this.deps.state.read();
+    const busy = this.activeTaskIds(state);
+    const deletable = (leaf: ProjectTask) => isDeletable(leaf, olderThanDays, now) && !this.leafBusy(state, leaf, busy);
+    const live = this.avulsas()?.tasks.filter(deletable) ?? [];
+    const archived = includeArchive && this.deps.archive ? await this.deps.archive.matching(deletable) : [];
+    return { live: structuredClone(live), archived };
+  }
+
+  /** `GET /projects/avulsas/cleanup`: quantas folhas a limpeza apagaria agora (só lê). */
+  async avulsasCleanupPreview(olderThanDays: number): Promise<AvulsasCleanupPreview> {
+    const { live, archived } = await this.cleanupCandidates(olderThanDays, true);
+    const oldest = [...live, ...archived].sort((a, b) => leafFinishedMs(a) - leafFinishedMs(b))[0];
+    return { count: live.length, archivedCount: archived.length, ...(oldest ? { oldestAt: oldest.finishedAt ?? oldest.updatedAt } : {}) };
+  }
+
+  /**
+   * `POST /projects/avulsas/cleanup`: apaga de vez as folhas concluídas ou canceladas há mais de N dias (e, com
+   * `includeArchive`, as do arquivo mensal). Nunca apaga folha aberta, em andamento, esperando o dono ou com Task
+   * ativa. `by: "sistema"` é a limpeza diária da retenção.
+   */
+  async cleanupAvulsas(body: AvulsasCleanupBody, by: "usuario" | "sistema" = "usuario"): Promise<AvulsasCleanupResult> {
+    const { live, archived } = await this.cleanupCandidates(body.olderThanDays, body.includeArchive === true);
+    if (live.length === 0 && archived.length === 0) return { deleted: 0, archivedDeleted: 0 };
+    const done = await this.dropLeaves(new Set(live.map((leaf) => leaf.ref)), new Set(archived.map((leaf) => leaf.ref)));
+    const total = done.live.length + done.archived.length;
+    if (total > 0) {
+      const one = total === 1;
+      const summary = by === "usuario" ? `Você apagou ${total} ${one ? "tarefa avulsa" : "tarefas avulsas"}` : `${total} ${one ? "tarefa avulsa terminada" : "tarefas avulsas terminadas"} há mais de ${body.olderThanDays} dias ${one ? "foi apagada" : "foram apagadas"}`;
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "avulsas-apagadas", actor: by === "usuario" ? ACTIVITY_USER : ACTIVITY_SYSTEM, summary, refs: { planId: AVULSAS_ID }, data: { deleted: done.live.length, archivedDeleted: done.archived.length, olderThanDays: body.olderThanDays } });
+    }
+    return { deleted: done.live.length, archivedDeleted: done.archived.length };
+  }
+
+  /** `DELETE /projects/:id/tasks/:ref`: apaga UMA folha do Avulsas já terminada (no arquivo vivo ou no mensal). */
+  async deleteAvulsasTask(projectId: string, ref: string): Promise<Project> {
+    if (projectId !== AVULSAS_ID) {
+      if (!this.plans.some((candidate) => candidate.id === projectId)) throw new HttpError(404, `Projeto "${projectId}" não encontrado`);
+      throw new HttpError(409, "Só dá para apagar tarefas do projeto Avulsas: apagar uma tarefa no meio de um projeto quebraria os “Depois de”");
+    }
+    const live = this.avulsas()?.tasks.find((candidate) => candidate.ref === ref);
+    const leaf = live ?? (await this.deps.archive?.find(ref));
+    if (!leaf) throw new HttpError(404, `A tarefa avulsa "${ref}" não existe`);
+    if (!isCleanable(leaf)) throw new HttpError(409, "A tarefa ainda não terminou: só dá para apagar o que já foi concluído ou cancelado");
+    const state = this.deps.state.read();
+    if (this.leafBusy(state, leaf, this.activeTaskIds(state))) throw new HttpError(409, "A tarefa ainda tem uma execução em andamento: pare antes de apagar");
+    const done = await this.dropLeaves(new Set(live ? [ref] : []), new Set(live ? [] : [ref]));
+    if (done.live.length + done.archived.length > 0) {
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "avulsa-apagada", actor: ACTIVITY_USER, summary: `Você apagou a tarefa avulsa ${quoteName(shorten(leaf.title, 60))}`, refs: { planId: AVULSAS_ID }, data: { ref } });
+    }
+    return structuredClone(this.avulsas() ?? emptyAvulsas(this.at()));
+  }
+
+  /**
+   * Tira de vez as folhas dadas (por `ref`) do arquivo mensal e do vivo, com as Tasks que elas usaram, os itens do
+   * "Para você" ligados a elas e os logs. Ordem: o arquivo mensal (escrita atômica) primeiro; depois o estado vivo (projeto,
+   * Tasks e "Para você") num commit só, sem `await` no meio, conferindo de novo que a folha segue terminada e sem Task
+   * ativa; por último os logs (o pesado). Uma queda no meio deixa, no pior caso, uma sobra sem dono (log ou Task), nunca
+   * folha sem arquivo. Idempotente: o que já saiu não conta.
+   */
+  private async dropLeaves(liveRefs: ReadonlySet<string>, archivedRefs: ReadonlySet<string>): Promise<{ live: ProjectTask[]; archived: ProjectTask[] }> {
+    const archived = archivedRefs.size > 0 && this.deps.archive ? await this.deps.archive.remove((leaf) => archivedRefs.has(leaf.ref) && isCleanable(leaf)) : [];
+    const avulsas = this.avulsas();
+    const state = this.deps.state.read();
+    const busy = this.activeTaskIds(state);
+    const live = avulsas ? avulsas.tasks.filter((leaf) => liveRefs.has(leaf.ref) && isCleanable(leaf) && !this.leafBusy(state, leaf, busy)) : [];
+    if (live.length === 0 && archived.length === 0) return { live: [], archived: [] };
+    const goneRefs = new Set(live.map((leaf) => leaf.ref));
+    const keptLeaves = avulsas ? avulsas.tasks.filter((leaf) => !goneRefs.has(leaf.ref)) : [];
+    // As Tasks que alguma folha que fica ainda usa nunca saem.
+    const inUse = new Set(keptLeaves.flatMap((leaf) => this.leafTaskIds(state, leaf)));
+    const dropIds = new Set([...live, ...archived].flatMap((leaf) => this.leafTaskIds(state, leaf)).filter((id) => !inUse.has(id) && !busy.has(id)));
+    const tasks = state.tasks.filter((task) => !(dropIds.has(task.id) && task.role !== "request"));
+    const removedIds = state.tasks.filter((task) => !tasks.includes(task)).map((task) => task.id);
+    const droppedIds = new Set(removedIds);
+    const items = this.deps.state.readForYou();
+    const forYou = dropForYouItems(items, (item) => item.taskId !== undefined && droppedIds.has(item.taskId));
+    const taskEvents: ServerEvent[] = removedIds.length > 0 ? [{ type: "office:snapshot", office: { ...state, tasks } }] : [];
+    const fail = (error: unknown) => new HttpError(500, `Não consegui gravar no disco: ${error instanceof Error ? error.message : String(error)}`);
+    if (avulsas && live.length > 0) {
+      const before = structuredClone(avulsas);
+      avulsas.tasks = keptLeaves;
+      avulsas.updatedAt = this.at();
+      const copies = this.copies([avulsas]);
+      const events: ServerEvent[] = [...forYou.events, ...taskEvents, { type: "project:upserted", project: structuredClone(copies[0]!) }];
+      try {
+        await persistOrThrow((attempt) => this.deps.state.commit({ projects: copies, ...(removedIds.length > 0 ? { tasks } : {}), ...(forYou.forYou ? { forYou: forYou.forYou } : {}), events: attempt === 0 ? events : [] }), { ...this.persistOptions("a limpeza das tarefas avulsas"), fail });
+      } catch (error) {
+        const index = this.plans.indexOf(avulsas);
+        if (index >= 0) this.plans[index] = before;
+        void this.deps.state.commit({ projects: [before], tasks: state.tasks, forYou: items, events: [{ type: "project:upserted", project: structuredClone(before) }] }).catch(() => undefined);
+        throw error;
+      }
+    } else if (removedIds.length > 0 || forYou.forYou) {
+      // Só folhas do arquivo mensal: as Tasks e os itens delas saem sem mexer no projeto vivo.
+      const events: ServerEvent[] = [...forYou.events, ...taskEvents];
+      await persistOrThrow((attempt) => this.deps.state.commit({ ...(removedIds.length > 0 ? { tasks } : {}), ...(forYou.forYou ? { forYou: forYou.forYou } : {}), events: attempt === 0 ? events : [] }), { ...this.persistOptions("a limpeza das tarefas avulsas"), fail });
+    }
+    // O estado novo já está no disco: só agora os logs (uma queda aqui deixa log sem dono; a varredura do boot apaga).
+    await this.deps.cleanup?.removeLeftovers({ taskIds: removedIds });
+    this.deps.log.info({ deleted: live.length, archivedDeleted: archived.length }, "tarefas avulsas apagadas");
+    return { live, archived };
+  }
+
+  /**
+   * `DELETE /projects/:id`: apaga um projeto comum inteiro (arquivo do projeto, tarefas, sprints, as Tasks das etapas, os
+   * itens do "Para você" e os logs). 409 no Avulsas e com tarefa rodando ou esperando o dono. As tarefas que ainda não
+   * começaram saem junto: o projeto sai da lista do agendador antes de qualquer outra coisa, então nada dispara depois.
+   */
+  async deleteProject(id: string): Promise<ProjectDeleteResult> {
+    if (id === AVULSAS_ID) throw new HttpError(409, "O projeto Avulsas nunca é apagado: apague as tarefas dele");
+    const index = this.plans.findIndex((candidate) => candidate.id === id && !isAvulsas(candidate));
+    const project = this.plans[index];
+    if (!project) {
+      if (this.leavesOfRequest(id).length > 0) throw new HttpError(409, "Este pedido é uma tarefa avulsa: apague a tarefa no projeto Avulsas");
+      throw new HttpError(404, `Projeto "${id}" não encontrado`);
+    }
+    const state = this.deps.state.read();
+    const stepIds = new Set(project.tasks.flatMap((task) => task.steps.flatMap((step) => (step.taskId ? [step.taskId] : []))));
+    const owned = state.tasks.filter((task) => task.role !== "request" && (task.work?.projectId === id || stepIds.has(task.id)));
+    const holding = project.tasks.some((task) => task.status === "em_andamento" || task.status === "esperando_voce") || owned.some((task) => task.status === "in_progress" || task.status === "waiting_approval");
+    if (holding) throw new HttpError(409, "Pare as tarefas em andamento antes de apagar o projeto");
+    const wasOpen = isProjectOpen(project) && hasLifecycle(project);
+    const items = this.deps.state.readForYou();
+    const attached = new Set([project.forYouId, ...(project.sprints ?? []).map((sprint) => sprint.forYouId)].filter((value): value is string => value !== undefined));
+    const ownedIds = new Set(owned.map((task) => task.id));
+    // Daqui até o commit não há `await`: o agendador nunca vê o projeto pela metade.
+    this.plans.splice(index, 1);
+    for (const task of owned) if (task.status === "queued") this.deps.orchestrator.cancelTask(task.id, "Projeto apagado pelo usuário");
+    const fresh = this.deps.state.read();
+    const tasks = fresh.tasks.filter((task) => !ownedIds.has(task.id));
+    const forYou = dropForYouItems(items, (item) => item.projectId === id || attached.has(item.id) || (item.taskId !== undefined && ownedIds.has(item.taskId)));
+    const events: ServerEvent[] = [...forYou.events, ...(tasks.length !== fresh.tasks.length ? [{ type: "office:snapshot" as const, office: { ...fresh, tasks } }] : []), { type: "project:deleted", id }, { type: "project:removed", id }];
+    try {
+      await persistOrThrow((attempt) => this.deps.state.commit({ deletedProjects: [id], tasks, ...(forYou.forYou ? { forYou: forYou.forYou } : {}), events: attempt === 0 ? events : [] }), {
+        ...this.persistOptions("a exclusão do projeto"),
+        fail: (error) => new HttpError(500, `Não consegui gravar no disco: ${error instanceof Error ? error.message : String(error)}`),
+      });
+    } catch (error) {
+      this.plans.splice(Math.min(index, this.plans.length), 0, project);
+      void this.deps.state.commit({ projects: [structuredClone(project)], tasks: fresh.tasks, forYou: items, events: [{ type: "project:upserted", project: structuredClone(project) }] }).catch(() => undefined);
+      throw error;
+    }
+    this.handoffWarned.delete(id);
+    // O estado novo já está no disco: só agora os logs.
+    const taskIds = [...ownedIds];
+    const logs = (await this.deps.cleanup?.countTaskLogs(taskIds)) ?? 0;
+    await this.deps.cleanup?.removeLeftovers({ taskIds });
+    if (wasOpen) this.deps.host(id)?.close(id, "Projeto apagado pelo usuário");
+    activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-apagado", actor: ACTIVITY_USER, summary: `Você apagou o projeto ${quoteName(shorten(project.title, 60))}`, refs: { planId: id }, data: { tasks: project.tasks.length, logs } });
+    this.deps.log.info({ projectId: id, tasks: project.tasks.length, logs }, "projeto apagado");
+    this.pump();
+    this.deps.orchestrator.retryWaiting();
+    return { deleted: { tasks: project.tasks.length, logs } };
   }
 
   // ---------- Converter: tarefa avulsa <-> projeto ----------

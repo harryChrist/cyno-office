@@ -4,7 +4,7 @@ import { api, describeError } from "../../api/client";
 import { countLabel, formatDateTime } from "../../ui/format";
 import { ConfirmDialog, ErrorText } from "../../ui/widgets";
 import { OptionHead, StateBadge } from "./SettingsOption";
-import { formatBytes, retentionLabel, retentionOptions } from "./settingsView";
+import { avulsasDaysBadge, avulsasDaysLabel, avulsasDaysOptions, formatBytes, retentionLabel, retentionOptions } from "./settingsView";
 
 type State = { data: RetentionResponse | null; error: string | null; saving: boolean };
 
@@ -81,6 +81,34 @@ function ApprovalsCard({ value, disabled, onChange }: { value: number; disabled:
           {retentionOptions("approvals", value).map((days) => (
             <option key={days} value={days}>
               {retentionLabel(days, "approvals")}
+            </option>
+          ))}
+        </select>
+      </div>
+    </section>
+  );
+}
+
+/** As avulsas terminadas: apagar sozinho depois de N dias (vem em Nunca). Apaga também as do arquivo; a Atividade fica. */
+function AvulsasCard({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (days: number) => void }) {
+  const selectId = useId();
+  const testId = "settings-history-avulsas";
+  return (
+    <section className="settings__card" data-testid={testId}>
+      <OptionHead
+        title="Tarefas avulsas terminadas"
+        line="Vem em Nunca. Apaga as avulsas terminadas e as do arquivo; o histórico da Atividade fica."
+        seal="plataforma"
+        state={<StateBadge tone="value">{avulsasDaysBadge(value)}</StateBadge>}
+      />
+      <div className="settings__retention-row">
+        <label htmlFor={selectId} className="settings__retention-label">
+          Apagar sozinho depois de
+        </label>
+        <select id={selectId} className="ui-input ui-input--compact" value={value} disabled={disabled} onChange={(event) => onChange(Number(event.currentTarget.value))} data-testid={`${testId}-days`}>
+          {avulsasDaysOptions(value).map((days) => (
+            <option key={days} value={days}>
+              {avulsasDaysLabel(days)}
             </option>
           ))}
         </select>
@@ -171,6 +199,7 @@ export function HistorySettings() {
         testId="settings-history-logs"
       />
       <ApprovalsCard value={data.settings.approvalsLiveDays} disabled={saving} onChange={(days) => change({ approvalsLiveDays: days })} />
+      <AvulsasCard value={data.settings.avulsasDays ?? 0} disabled={saving} onChange={(days) => change({ avulsasDays: days })} />
       <section className="settings__card" data-testid="settings-history-kept">
         <OptionHead title="Guardados para sempre" seal="plataforma" state={<StateBadge tone="on">Nunca são apagados</StateBadge>} />
         <ul className="settings__retention-kept">

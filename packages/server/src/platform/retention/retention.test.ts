@@ -162,10 +162,10 @@ describe("retenção do histórico", () => {
     expect(service.settings()).toEqual(DEFAULT_RETENTION);
     await service.update({ logsDays: 30 });
     const saved = JSON.parse(await readFile(path.join(dataDir, "settings.json"), "utf8")) as { retention: unknown };
-    expect(saved.retention).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7 });
+    expect(saved.retention).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7, avulsasDays: 0 });
     const reloaded = make();
     await reloaded.load();
-    expect(reloaded.settings()).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7 });
+    expect(reloaded.settings()).toEqual({ transcriptsDays: 7, logsDays: 30, approvalsLiveDays: 7, avulsasDays: 0 });
     await expect(reloaded.update({ logsDays: -1 })).rejects.toThrow();
 
     const snapshot = await reloaded.snapshot();
@@ -180,7 +180,7 @@ describe("retenção do histórico", () => {
     await writeFile(path.join(dataDir, "settings.json"), JSON.stringify({ retention: { transcriptsDays: 3, logsDays: 30 } }), "utf8");
     const service = make();
     await service.load();
-    expect(service.settings()).toEqual({ transcriptsDays: 3, logsDays: 30, approvalsLiveDays: 7 });
+    expect(service.settings()).toEqual({ transcriptsDays: 3, logsDays: 30, approvalsLiveDays: 7, avulsasDays: 0 });
     const changes: [number, number][] = [];
     service.onChange((settings, before) => changes.push([before.approvalsLiveDays, settings.approvalsLiveDays]));
     await service.update({ approvalsLiveDays: 30 });
@@ -189,6 +189,45 @@ describe("retenção do histórico", () => {
     const saved = JSON.parse(await readFile(path.join(dataDir, "settings.json"), "utf8")) as { retention: { approvalsLiveDays: number } };
     expect(saved.retention.approvalsLiveDays).toBe(0);
     await expect(service.update({ approvalsLiveDays: -1 })).rejects.toThrow();
+  });
+});
+
+describe("tarefas avulsas terminadas (ajuste avulsasDays)", () => {
+  it("0 (o padrão) não chama a limpeza; maior que 0 chama uma vez por workspace com o prazo; falha de um não trava os outros", async () => {
+    const { dataDir } = await setup();
+    await mkdir(path.join(dataDir, "workspaces", "outro"), { recursive: true });
+    const calls: [string, number][] = [];
+    const make = () =>
+      new RetentionService({
+        dataDir,
+        activeTaskIds: () => new Set(),
+        cleanAvulsas: async (ws, days) => {
+          calls.push([ws, days]);
+          if (ws === "lab") throw new Error("disco cheio");
+          return { deleted: 2, archivedDeleted: 1 };
+        },
+        now: () => NOW,
+        log: silent,
+      });
+    const service = make();
+    await service.load();
+    expect(service.settings().avulsasDays).toBe(0);
+    await service.cleanup();
+    expect(calls).toEqual([]);
+
+    await service.update({ avulsasDays: 30 });
+    await service.cleanup();
+    expect(calls.sort()).toEqual([["lab", 30], ["outro", 30]]);
+    // O ajuste fica gravado e volta ao reabrir; valor inválido é recusado.
+    const reloaded = make();
+    await reloaded.load();
+    expect(reloaded.settings().avulsasDays).toBe(30);
+    await expect(reloaded.update({ avulsasDays: -1 })).rejects.toThrow();
+    await expect(reloaded.update({ avulsasDays: 400 })).rejects.toThrow();
+    await reloaded.update({ avulsasDays: 0 });
+    calls.length = 0;
+    await reloaded.cleanup();
+    expect(calls).toEqual([]);
   });
 });
 
@@ -201,9 +240,13 @@ describe("API /api/settings/retention", () => {
 
     expect((await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { logsDays: "muito" } })).statusCode).toBe(400);
     expect((await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { outra: 1 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { avulsasDays: -5 } })).statusCode).toBe(400);
+    const avulsas = await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { avulsasDays: 90 } });
+    expect(avulsas.json<RetentionResponse>().settings.avulsasDays).toBe(90);
+    await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { avulsasDays: 0 } });
     const patched = await app.inject({ method: "PATCH", url: RETENTION_PATH, payload: { transcriptsDays: 3 } });
     expect(patched.statusCode).toBe(200);
-    expect(patched.json<RetentionResponse>().settings).toEqual({ transcriptsDays: 3, logsDays: 90, approvalsLiveDays: 7 });
+    expect(patched.json<RetentionResponse>().settings).toEqual({ transcriptsDays: 3, logsDays: 90, approvalsLiveDays: 7, avulsasDays: 0 });
 
     const cleaned = await app.inject({ method: "POST", url: RETENTION_CLEANUP_PATH });
     expect(cleaned.statusCode).toBe(200);

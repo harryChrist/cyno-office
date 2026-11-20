@@ -1,0 +1,102 @@
+/* Armazenamento dos motores: uma cartela por motor, itens com tamanho e (quando há limpeza) o seletor de dias. Neutro; sem cor de destaque. */
+.es__items {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-2);
+}
+
+.es__item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.es__item + .es__item {
+  border-top: 1px solid var(--ui-border);
+}
+
+.es__main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.es__label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.es__usage {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-2);
+}
+
+.es__note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.es__select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 4px;
+}
+
+.es__days {
+  min-width: 120px;
+}
+
+.es__state {
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+.es__preview {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+
+.es__preview li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.es__preview-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ui-text-3);
+}
+
+/* Celular: alvos de toque de 40 a 44 px. */
+@media (max-width: 767px) {
+  .es__days,
+  .es__clean {
+    min-height: 44px;
+  }
+
+  .es__days {
+    flex: 1 1 140px;
+    font-size: 16px;
+  }
+
+  .es__select .settings__retention-label {
+    flex: 1 1 100%;
+  }
+}
