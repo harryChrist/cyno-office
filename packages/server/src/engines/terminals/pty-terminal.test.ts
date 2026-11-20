@@ -121,6 +121,18 @@ describe("PtyTerminal (Maestro interativo com a CLI falsa)", () => {
     expect(terminal.replay()).toContain("Fake Claude Code");
   });
 
+  it("responde sozinho o diálogo \"Adding a new directory\" das pastas de trabalho (escolhe \"Yes, add it\", nunca o \"No, exit\")", async () => {
+    const { terminal, events } = await setup({ env: { FAKE_TUI_TRUST: "add-dir" } });
+    const output: string[] = [];
+    terminal.onOutput((data) => output.push(data));
+    await terminal.ensureRunning();
+    await until(() => terminal.status() === "idle", 6000, "idle");
+    expect(events.some((event) => event.type === "raw" && event.text.includes("Pasta de trabalho liberada"))).toBe(true);
+    // A CLI não saiu (um Enter no "No, exit" a fecharia) e chegou ao prompt de verdade.
+    expect(stripAnsi(output.join(""))).toContain("Fake Claude Code");
+    expect(terminal.status()).toBe("idle");
+  });
+
   it("send cola a mensagem (bracketed paste + Enter); o turno vem da conversa em disco, com a tag, o texto e os tokens", async () => {
     const { terminal, events, cwd } = await setup();
     terminal.send("Pedido de teste [ferramenta]\nsegunda linha", "t1");

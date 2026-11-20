@@ -116,11 +116,16 @@ export function promptMatches(prompt: string, message: string): boolean {
   return head.length > 0 && normalize(prompt).startsWith(head);
 }
 
-/** Diálogo de confiança na pasta ("Yes, I trust this folder"), procurado sem espaços. */
-const TRUST_PROMPT = /Yes,?Itrustthisfolder/i;
-const TRUST_SCREEN = /trustthisfolder|Quicksafetycheck|Accessingworkspace/i;
+/**
+ * Diálogos de confiança, procurados sem espaços: o da pasta do agente ("Yes, I trust this folder") e o de cada
+ * pasta de trabalho posta por `--add-dir` ("Adding a new directory ... Yes, add it"). Nos dois a seleção
+ * começa no "No, exit".
+ */
+const TRUST_PROMPT = /Yes,?Itrustthisfolder|Addinganewdirectory[\s\S]*Yes,?addit/i;
+const TRUST_FOLDER_PROMPT = /Addinganewdirectory/i;
+const TRUST_SCREEN = /trustthisfolder|Quicksafetycheck|Accessingworkspace|Addinganewdirectory/i;
 /** A seleção do diálogo está no "Yes" (o "❯" logo antes dele). */
-const TRUST_SELECTED = /❯(\d\.)?Yes,?Itrustthisfolder/i;
+const TRUST_SELECTED = /❯(\d\.)?(Yes,?Itrustthisfolder|Yes,?addit)/i;
 /** Teclas tentadas para descer a seleção: seta normal, seta no modo de cursor da aplicação, seta de novo. */
 const TRUST_KEYS = ["\x1b[B", "\x1bOB", "\x1b[B"];
 const READY_MARK = /❯/;
@@ -175,6 +180,8 @@ export class PtyTerminal implements TerminalAgent {
   private toolsWait: ToolsWait | undefined;
   /** Diálogo de confiança na pasta: nada visto, movendo a seleção para "Yes" ou resolvido. */
   private trust: "none" | "moving" | "done" = "none";
+  /** O diálogo em curso é o de uma pasta de trabalho (pode vir um por pasta) e não o da pasta do agente. */
+  private trustFolder = false;
   private trustTries = 0;
   private trustTimer: NodeJS.Timeout | undefined;
   private screen = "";
@@ -490,9 +497,11 @@ export class PtyTerminal implements TerminalAgent {
     this.screen = (this.screen + stripAnsi(data)).slice(-4000);
     const flat = compact(this.screen);
     if (this.trust === "none" && TRUST_PROMPT.test(flat)) {
-      // A pasta é do próprio agente: escolhe "Yes, I trust this folder" (a segunda opção). O Enter só
+      // A pasta é do próprio agente (ou uma pasta de trabalho dele): escolhe o "Yes" (a segunda opção). O Enter só
       // vai quando a tela mostra a seleção no "Yes" (Enter no "No, exit" fecharia a CLI).
       this.trust = "moving";
+      this.trustFolder = TRUST_FOLDER_PROMPT.test(flat);
+      this.trustTries = 0;
       this.trustStep(pty, 500);
       return;
     }
@@ -518,7 +527,7 @@ export class PtyTerminal implements TerminalAgent {
       }
       if (this.trustTries >= TRUST_KEYS.length) {
         this.trust = "done";
-        this.emitRaw("Não deu para responder sozinho o diálogo de confiança da pasta: escolha “Yes, I trust this folder” no terminal do painel.");
+        this.emitRaw(`Não deu para responder sozinho o diálogo de confiança da pasta: escolha “${this.trustFolder ? "Yes, add it" : "Yes, I trust this folder"}” no terminal do painel.`);
         return;
       }
       this.screen = "";
@@ -531,10 +540,11 @@ export class PtyTerminal implements TerminalAgent {
   private confirmTrust(pty: PtyProcess): void {
     if (this.trustTimer) clearTimeout(this.trustTimer);
     this.trustTimer = undefined;
-    this.trust = "done";
+    // O diálogo da pasta do agente vem uma vez; o das pastas de trabalho vem um por pasta: depois dele, a tela volta a ser vigiada.
+    this.trust = this.trustFolder ? "none" : "done";
     this.screen = "";
     pty.write("\r");
-    this.emitRaw("Pasta do agente marcada como confiável no Claude Code (diálogo de confiança respondido).");
+    this.emitRaw(this.trustFolder ? "Pasta de trabalho liberada no Claude Code (diálogo de confiança respondido)." : "Pasta do agente marcada como confiável no Claude Code (diálogo de confiança respondido).");
   }
 
   /** Sem sinal de pronto a tempo: dá como pronto, menos se a tela ainda é o diálogo de confiança. */

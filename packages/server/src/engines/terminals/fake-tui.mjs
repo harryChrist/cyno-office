@@ -14,7 +14,8 @@
  *
  * Ambiente: FAKE_TUI_PROJECTS (pasta de projetos; padrão ~/.claude/projects NUNCA: obrigatória),
  * FAKE_TUI_LOG (arquivo: uma linha JSON por subida com argv e cwd), FAKE_TUI_TRUST=1 (mostra o
- * diálogo de confiança na pasta antes do prompt), FAKE_TUI_FAIL_START=1 (sai com código 1 na hora) e
+ * diálogo de confiança na pasta antes do prompt) ou FAKE_TUI_TRUST=add-dir (mostra o diálogo "Adding a new
+ * directory", das pastas de trabalho, com "No, exit" marcado), FAKE_TUI_FAIL_START=1 (sai com código 1 na hora) e
  * FAKE_TUI_STATE (pasta: marcas de [crash]).
  */
 import { randomUUID } from "node:crypto";
@@ -139,7 +140,8 @@ function start() {
   prompt();
 }
 
-let trusting = process.env.FAKE_TUI_TRUST === "1";
+const trustMode = process.env.FAKE_TUI_TRUST === "add-dir" ? "add-dir" : "folder";
+let trusting = process.env.FAKE_TUI_TRUST === "1" || process.env.FAKE_TUI_TRUST === "add-dir";
 let input = "";
 let pasting = false;
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
@@ -152,6 +154,10 @@ let trustReadyAt = 0;
 function drawTrust() {
   // Como o TUI de verdade: as palavras separadas por movimento de cursor (CSI 1 C), não por espaços.
   const mark = (index) => (trustSelection === index ? "❯" : " ");
+  if (trustMode === "add-dir") {
+    out(`\x1b[2J\x1b[HAdding\x1b[1Ca\x1b[1Cnew\x1b[1Cdirectory:\n\n/tmp/pasta-de-trabalho\n\nThis\x1b[1Csession\x1b[1Chasn't\x1b[1Cworked\x1b[1Chere\x1b[1Cbefore.\x1b[1CIs\x1b[1Cthis\x1b[1Ca\x1b[1Cdirectory\x1b[1Cyou\x1b[1Ccreated\x1b[1Cor\x1b[1Cone\x1b[1Cyou\x1b[1Ctrust?\n\n${mark(0)}\x1b[1CNo,\x1b[1Cexit\n${mark(1)}\x1b[1CYes,\x1b[1Cadd\x1b[1Cit\n`);
+    return;
+  }
   out(`\x1b[2J\x1b[HQuick\x1b[1Csafety\x1b[1Ccheck:\x1b[1CIs\x1b[1Cthis\x1b[1Ca\x1b[1Cproject?\n\x1b[1C${mark(0)}\x1b[1CNo,\x1b[1Cexit\n`);
   out(`\x1b[1C${mark(1)}\x1b[1CYes,\x1b[1CI\x1b[1Ctrust\x1b[1Cthis\x1b[1Cfolder\n`);
 }
