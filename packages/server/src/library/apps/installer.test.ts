@@ -311,14 +311,17 @@ describe("AppInstaller: instalar", () => {
   it("cancelar no meio apaga tudo: pasta do app, conector e runtimes baixados por ela", async () => {
     const world = await setup();
     let release!: () => void;
+    let entered!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
+    const reached = new Promise<void>((resolve) => (entered = resolve));
     world.behavior.steps.venv = async () => {
+      entered();
       await gate;
     };
     const starting = world.installer.install("fake");
     const { job } = await starting;
-    // Espera o passo travado começar.
-    await new Promise((resolve) => setTimeout(resolve, 30));
+    // Espera o passo travado começar de verdade (um tempo fixo falhava em máquina lenta, como a do CI).
+    await reached;
     expect(await exists(world.paths.appDir("fake"))).toBe(true);
     expect(await exists(path.join(world.paths.runtimesRoot, "uv"))).toBe(true);
     const cancelling = world.installer.cancel("fake");
