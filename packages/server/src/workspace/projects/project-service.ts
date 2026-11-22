@@ -1551,30 +1551,39 @@ export class ProjectService {
   }
 
   /**
-   * `DELETE /projects/:id`: apaga um projeto comum inteiro (arquivo do projeto, tarefas, sprints, as Tasks das etapas, os
-   * itens do "Para você" e os logs). 409 no Avulsas e com tarefa rodando ou esperando o dono. As tarefas que ainda não
-   * começaram saem junto: o projeto sai da lista do agendador antes de qualquer outra coisa, então nada dispara depois.
+   * `DELETE /projects/:id` (e `delete_project` do Maestro): apaga um projeto comum inteiro (arquivo do projeto, tarefas,
+   * sprints, as Tasks das etapas, os itens do "Para você" e os logs). 409 no Avulsas e com tarefa rodando ou esperando o
+   * dono. As tarefas que ainda não começaram saem junto: o projeto sai da lista do agendador antes de qualquer outra
+   * coisa, então nada dispara depois.
    */
-  async deleteProject(id: string): Promise<ProjectDeleteResult> {
-    if (id === AVULSAS_ID) throw new HttpError(409, "O projeto Avulsas nunca é apagado: apague as tarefas dele");
+  async deleteProject(id: string, options?: { by?: "dono" | "maestro"; reason?: string }): Promise<ProjectDeleteResult> {
+    const byMaestro = options?.by === "maestro";
+    if (id === AVULSAS_ID) {
+      throw new HttpError(409, byMaestro ? 'The "avulsas" project can never be deleted; delete its individual tasks instead.' : "O projeto Avulsas nunca é apagado: apague as tarefas dele");
+    }
     const index = this.plans.findIndex((candidate) => candidate.id === id && !isAvulsas(candidate));
     const project = this.plans[index];
     if (!project) {
-      if (this.leavesOfRequest(id).length > 0) throw new HttpError(409, "Este pedido é uma tarefa avulsa: apague a tarefa no projeto Avulsas");
-      throw new HttpError(404, `Projeto "${id}" não encontrado`);
+      if (this.leavesOfRequest(id).length > 0) {
+        throw new HttpError(409, byMaestro ? "This request is a standalone task in Avulsas, not a project; delete the task in Avulsas instead." : "Este pedido é uma tarefa avulsa: apague a tarefa no projeto Avulsas");
+      }
+      throw new HttpError(404, byMaestro ? `Project "${id}" not found` : `Projeto "${id}" não encontrado`);
     }
     const state = this.deps.state.read();
     const stepIds = new Set(project.tasks.flatMap((task) => task.steps.flatMap((step) => (step.taskId ? [step.taskId] : []))));
     const owned = state.tasks.filter((task) => task.role !== "request" && (task.work?.projectId === id || stepIds.has(task.id)));
     const holding = project.tasks.some((task) => task.status === "em_andamento" || task.status === "esperando_voce") || owned.some((task) => task.status === "in_progress" || task.status === "waiting_approval");
-    if (holding) throw new HttpError(409, "Pare as tarefas em andamento antes de apagar o projeto");
+    if (holding) {
+      throw new HttpError(409, byMaestro ? "Cannot delete project: stop or wait for tasks that are running or waiting for the owner first." : "Pare as tarefas em andamento antes de apagar o projeto");
+    }
     const wasOpen = isProjectOpen(project) && hasLifecycle(project);
     const items = this.deps.state.readForYou();
     const attached = new Set([project.forYouId, ...(project.sprints ?? []).map((sprint) => sprint.forYouId)].filter((value): value is string => value !== undefined));
     const ownedIds = new Set(owned.map((task) => task.id));
+    const closeReason = byMaestro ? "Projeto apagado pelo Maestro" : "Projeto apagado pelo usuário";
     // Daqui até o commit não há `await`: o agendador nunca vê o projeto pela metade.
     this.plans.splice(index, 1);
-    for (const task of owned) if (task.status === "queued") this.deps.orchestrator.cancelTask(task.id, "Projeto apagado pelo usuário");
+    for (const task of owned) if (task.status === "queued") this.deps.orchestrator.cancelTask(task.id, closeReason);
     const fresh = this.deps.state.read();
     const tasks = fresh.tasks.filter((task) => !ownedIds.has(task.id));
     const forYou = dropForYouItems(items, (item) => item.projectId === id || attached.has(item.id) || (item.taskId !== undefined && ownedIds.has(item.taskId)));
@@ -1595,9 +1604,19 @@ export class ProjectService {
     const logs = (await this.deps.cleanup?.countTaskLogs(taskIds)) ?? 0;
     await this.deps.cleanup?.removeLeftovers({ taskIds });
     const reqId = requestIdOf(project);
-    if (wasOpen && !this.holds(reqId)) this.deps.host(reqId)?.close(reqId, "Projeto apagado pelo usuário");
-    activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-apagado", actor: ACTIVITY_USER, summary: `Você apagou o projeto ${quoteName(shorten(project.title, 60))}`, refs: { planId: id }, data: { tasks: project.tasks.length, logs } });
-    this.deps.log.info({ projectId: id, tasks: project.tasks.length, logs }, "projeto apagado");
+    if (wasOpen && !this.holds(reqId)) this.deps.host(reqId)?.close(reqId, closeReason);
+    const titleShort = shorten(project.title, 60);
+    const reason = options?.reason?.trim();
+    activeActivity()?.record({
+      workspaceId: this.deps.workspaceId,
+      category: "plano",
+      action: "projeto-apagado",
+      actor: byMaestro ? ACTIVITY_MAESTRO : ACTIVITY_USER,
+      summary: byMaestro ? `O Maestro apagou o projeto «${titleShort}»` : `Você apagou o projeto ${quoteName(titleShort)}`,
+      refs: { planId: id },
+      data: { tasks: project.tasks.length, logs, ...(reason ? { reason } : {}) },
+    });
+    this.deps.log.info({ projectId: id, tasks: project.tasks.length, logs, ...(byMaestro ? { by: "maestro" } : {}) }, "projeto apagado");
     this.pump();
     this.deps.orchestrator.retryWaiting();
     return { deleted: { tasks: project.tasks.length, logs } };

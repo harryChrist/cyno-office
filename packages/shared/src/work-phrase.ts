@@ -193,6 +193,7 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   update_project: row("🗺️", "ajustar projeto", "Ajustando o projeto", "Ajustou o projeto"),
   update_task: row("✏️", "ajustar tarefa", "Ajustando uma tarefa do projeto", "Ajustou uma tarefa do projeto"),
   delete_task: row("🗑️", "apagar tarefa", "Apagando um item do projeto", "Apagou um item do projeto"),
+  delete_project: row("🗑️", "apagar projeto", "Apagando um projeto", "Apagou um projeto"),
   release_work: row("▶️", "liberar trabalho", "Liberando trabalho do projeto", "Liberou trabalho do projeto"),
   hold_work: row("⏸️", "segurar trabalho", "Segurando trabalho do projeto", "Segurou trabalho do projeto"),
   set_release_pace: row("📅", "liberação diária", "Ajustando a liberação diária", "Ajustou a liberação diária"),

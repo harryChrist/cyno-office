@@ -41,7 +41,7 @@ export type OfficeToolsDeps = {
   maestro: Pick<CliMaestro, "team" | "openRequest" | "delegate" | "viewTask" | "conclude" | "requestApproval" | "askQuestions" | "requestFor"> & Partial<Pick<CliMaestro, "cancelRequest">>;
   runner: Pick<CliAgentRunner, "deliver" | "progress" | "requestApproval" | "requestInformation" | "currentTaskId" | "hasActive" | "holdForHelp">;
   /** Planos e projetos (create_project & cia do Maestro; get_task e request_help dos agentes). */
-  plans?: Pick<ProjectService, "propose" | "addTasks" | "createSprint" | "updateSprint" | "moveTask" | "updateTask" | "deleteTask" | "releaseWork" | "holdWork" | "setReleasePace" | "setProjectStatus" | "assignTask" | "reassignTask" | "closeSprint" | "sprintIdOf" | "decideTask" | "describe" | "workerView" | "help" | "helpReleased" | "handoff" | "updateProject" | "recordChecklist">;
+  plans?: Pick<ProjectService, "list" | "propose" | "addTasks" | "createSprint" | "updateSprint" | "moveTask" | "updateTask" | "deleteTask" | "deleteProject" | "releaseWork" | "holdWork" | "setReleasePace" | "setProjectStatus" | "assignTask" | "reassignTask" | "closeSprint" | "sprintIdOf" | "decideTask" | "describe" | "workerView" | "help" | "helpReleased" | "handoff" | "updateProject" | "recordChecklist">;
   /** Regra de aprovação de projetos do workspace (`set_plan_approval_rule` e contexto do retorno de `create_project`). */
   planApproval?: {
     get: () => PlanApprovalSettings;

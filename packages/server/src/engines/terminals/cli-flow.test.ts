@@ -623,6 +623,7 @@ describe("servidor MCP /mcp", () => {
       "update_project",
       "update_task",
       "delete_task",
+      "delete_project",
       "release_work",
       "hold_work",
       "set_release_pace",

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { soloTeam } from "../../dev/test-api";
 import { API, gatedSleep, testRunner, useTestApp, type TestApp } from "../../dev/test-app";
 import type { Sleep } from "../../engines/runner/sleep";
+import { handleMcpPayload } from "../../mcp/protocol";
 import { ActivityLog, setActivityLog } from "../activity/log";
 import type { ProjectServiceDeps } from "./project-service";
 
@@ -402,5 +403,95 @@ describe("DELETE /projects/:id (um projeto inteiro)", () => {
     commit.mockRestore();
     expect((await t.del(`/projects/${project.id}`)).statusCode).toBe(200);
     expect(t.runtime.plans.list().map((plan) => plan.id)).not.toContain(project.id);
+  });
+});
+
+describe("MCP delete_project (Maestro apaga projeto a pedido do dono)", () => {
+  const newProject = async (t: Awaited<ReturnType<typeof setup>>, title: string): Promise<Project> => (await t.ctx.app.inject({ method: "POST", url: `${API}/projects`, payload: { title } })).json<Reply>().project;
+  const addTask = async (t: Awaited<ReturnType<typeof setup>>, id: string, title: string, extra: object = {}, release = false): Promise<string> => {
+    const response = await t.ctx.app.inject({ method: "POST", url: `${API}/projects/${id}/tasks`, payload: { title, ...extra } });
+    expect(response.statusCode, response.body).toBe(201);
+    const ref = response.json<Reply>().ref!;
+    if (release) expect((await t.ctx.app.inject({ method: "POST", url: `${API}/projects/${id}/release`, payload: { refs: [ref] } })).statusCode).toBe(200);
+    return ref;
+  };
+  const mcpCall = async (t: Awaited<ReturnType<typeof setup>>, name: string, args: Record<string, unknown>) => {
+    const tools = () => t.runtime.officeTools("maestro");
+    const response = (await handleMcpPayload({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }, tools)) as {
+      result: { isError: boolean; content: { text: string }[] };
+    };
+    return { isError: response.result.isError, text: response.result.content[0]?.text ?? "" };
+  };
+
+  it("caminho feliz: Maestro apaga projeto parado, some do plans e do disco, Atividade tem ator Maestro e frase do dono", async () => {
+    const t = await setup();
+    const project = await newProject(t, "Campanha antiga");
+    await addTask(t, project.id, "Post 1", { assignee: t.agent.id });
+    await addTask(t, project.id, "Post 2", { assignee: t.agent.id });
+    const keep = await newProject(t, "Fica aqui");
+    const projectFile = path.join(t.ctx.dir, "projects", `${project.id}.json`);
+    await vi.waitFor(() => expect(existsSync(projectFile)).toBe(true));
+
+    const res = await mcpCall(t, "delete_project", { project_id: project.id, owner_quote: "apague esse projeto antigo por favor" });
+    expect(res.isError, res.text).toBe(false);
+    expect(res.text).toContain('"Campanha antiga"');
+    expect(res.text).toContain("2 item(s)");
+    expect(existsSync(projectFile)).toBe(false);
+    expect(t.runtime.plans.list().map((plan) => plan.id)).not.toContain(project.id);
+    expect(t.runtime.plans.list().map((plan) => plan.id)).toContain(keep.id);
+
+    const entry = t.entries.find((candidate) => candidate.action === "projeto-apagado");
+    expect(entry).toMatchObject({
+      actor: "maestro",
+      summary: "O Maestro apagou o projeto «Campanha antiga»",
+      refs: { planId: project.id },
+      data: { tasks: 2, logs: 0, reason: "apague esse projeto antigo por favor" },
+    });
+  });
+
+  it("plano esperando aprovação apagado pelo Maestro fecha o pedido com 'Projeto apagado pelo Maestro'", async () => {
+    const t = await setup();
+    const created = await t.ctx.app.inject({ method: "POST", url: `${API}/tasks`, payload: { prompt: "[plano] Campanha para apagar" } });
+    expect(created.statusCode).toBe(201);
+    const request = created.json<Task>();
+    const planEvent = (await t.ctx.log.waitFor((event) => event.type === "project:upserted" && event.project.id === request.id)) as Extract<ServerEvent, { type: "project:upserted" }>;
+    const plan: Plan = planEvent.project;
+    await t.ctx.log.waitForTask(request.id, "waiting_approval");
+
+    const res = await mcpCall(t, "delete_project", { project_id: plan.id, owner_quote: "pode apagar esse plano" });
+    expect(res.isError, res.text).toBe(false);
+    expect(t.runtime.plans.list().map((project) => project.id)).not.toContain(plan.id);
+    await vi.waitFor(() => expect(t.ctx.store.snapshot().tasks.find((task) => task.id === request.id)!.status).not.toBe("waiting_approval"), { timeout: 3000 });
+    const closed = t.ctx.store.snapshot().tasks.find((task) => task.id === request.id)!;
+    expect(closed.result).toContain("Projeto apagado pelo Maestro");
+  });
+
+  it("recusa com tarefa rodando (409), recusa no Avulsas (409) e recusa frase curta", async () => {
+    const t = await setup();
+    t.w.state.hold = true;
+    const running = await newProject(t, "Em andamento");
+    await addTask(t, running.id, "Post", { assignee: t.agent.id }, true);
+    await vi.waitFor(() => expect(t.ctx.store.snapshot().tasks.some((task) => task.work?.projectId === running.id && task.status === "in_progress")).toBe(true), { timeout: 3000 });
+
+    // 409 com tarefa rodando
+    await expect(t.runtime.plans.deleteProject(running.id, { by: "maestro", reason: "apague tudo" })).rejects.toMatchObject({ statusCode: 409 });
+    const busy = await mcpCall(t, "delete_project", { project_id: running.id, owner_quote: "apague esse projeto" });
+    expect(busy.isError).toBe(true);
+    expect(busy.text).toMatch(/running or waiting/i);
+    expect(t.runtime.plans.list().map((plan) => plan.id)).toContain(running.id);
+
+    // 409 no Avulsas
+    await expect(t.runtime.plans.deleteProject("avulsas", { by: "maestro", reason: "apague tudo" })).rejects.toMatchObject({ statusCode: 409 });
+    const avulsas = await mcpCall(t, "delete_project", { project_id: "avulsas", owner_quote: "apague o avulsas" });
+    expect(avulsas.isError).toBe(true);
+    expect(avulsas.text).toMatch(/avulsas/i);
+
+    // Frase curta recusada
+    const idle = await newProject(t, "Parado");
+    const shortQuote = await mcpCall(t, "delete_project", { project_id: idle.id, owner_quote: "ok" });
+    expect(shortQuote.isError).toBe(true);
+    const blankQuote = await mcpCall(t, "delete_project", { project_id: idle.id, owner_quote: "   " });
+    expect(blankQuote.isError).toBe(true);
+    expect(t.runtime.plans.list().map((plan) => plan.id)).toContain(idle.id);
   });
 });

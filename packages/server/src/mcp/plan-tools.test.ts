@@ -22,6 +22,7 @@ const STATE = {
 function setup(options: { rule?: "maestro" | "always" | "never"; proposedStatus?: "proposto" | "ativo"; approvalBy?: "regra" | "maestro" } = {}) {
   const project = {
     id: "req-1",
+    title: "Projeto Teste",
     status: options.proposedStatus ?? "proposto",
     ...(options.approvalBy ? { approval: { by: options.approvalBy, at: "2026-11-12T12:00:00.000Z" } } : {}),
     tasks: [
@@ -48,6 +49,8 @@ function setup(options: { rule?: "maestro" | "always" | "never"; proposedStatus?
     updateProject: vi.fn(async () => ({ id: "req-1" })),
     updateTask: vi.fn(async () => project),
     deleteTask: vi.fn(async () => ({ project, deleted: ["T2"], cleanedDependsOn: [{ ref: "T3", removed: ["T2"] }] })),
+    deleteProject: vi.fn(async () => ({ deleted: { tasks: 2, logs: 1 } })),
+    list: vi.fn(() => [project]),
     releaseWork: vi.fn(async () => project),
     holdWork: vi.fn(async () => project),
     setReleasePace: vi.fn(async () => project),
@@ -158,7 +161,7 @@ describe("ferramentas de projeto do Maestro", () => {
     }
   });
 
-  it("os nomes novos aparecem no tools/list (sem delete_project nem add_sprint) e os antigos seguem chamáveis", async () => {
+  it("os nomes novos aparecem no tools/list (sem add_sprint) e os antigos seguem chamáveis", async () => {
     const { deps, plans } = setup();
     const tools = () => officeToolsFor("maestro", deps);
     const listed = (await handleMcpPayload({ jsonrpc: "2.0", id: 1, method: "tools/list" }, tools)) as { result: { tools: { name: string }[] } };
@@ -172,6 +175,7 @@ describe("ferramentas de projeto do Maestro", () => {
         "update_project",
         "update_task",
         "delete_task",
+        "delete_project",
         "release_work",
         "hold_work",
         "set_release_pace",
@@ -179,8 +183,7 @@ describe("ferramentas de projeto do Maestro", () => {
         "set_plan_approval_rule",
       ]),
     );
-    // Apagar projeto NUNCA entra no MCP; add_sprint fica escondida (listed: false) para projetos novos.
-    expect(names).not.toContain("delete_project");
+    // add_sprint fica escondida (listed: false) para projetos novos.
     expect(names).not.toContain("add_sprint");
     for (const old of ["create_plan", "add_plan_tasks", "resolve_plan_task", "get_plan", "list_plans"]) expect(names).not.toContain(old);
     // Chamar pelo nome antigo funciona (uma sessão retomada ainda usa).
@@ -271,12 +274,29 @@ describe("ferramentas novas do Lote 3 (poderes do Maestro sobre módulos, tarefa
     await expect(call("maestro", "update_task", { project_id: "p1", ref: "T2", start_at: "amanha" })).rejects.toThrow(/start_at/);
   });
 
-  it("delete_task repassa project_id, ref, reason e relata dependências limpas", async () => {
-    const { plans, call } = setup();
+  it("delete_task repassa project_id, ref, reason, relata dependências limpas e aponta para delete_project", async () => {
+    const { plans, call, find } = setup();
+    const desc = find("maestro", "delete_task").description;
+    expect(desc).not.toContain("only the owner can delete projects");
+    expect(desc).toContain("delete_project");
     const res = await call("maestro", "delete_task", { project_id: "p1", ref: "T2", reason: "não precisa" });
     expect(plans.deleteTask).toHaveBeenCalledWith("p1", "T2", { by: "maestro", reason: "não precisa" });
     expect(res.text).toContain("Deleted 1 item(s) (T2)");
     expect(res.text).toContain("T3 (T2)");
+  });
+
+  it("delete_project exige owner_quote (3..300), chama deleteProject como Maestro e devolve título e contagens", async () => {
+    const { plans, call } = setup();
+    await expect(call("maestro", "delete_project", { project_id: "req-1" })).rejects.toThrow();
+    await expect(call("maestro", "delete_project", { project_id: "req-1", owner_quote: "ok" })).rejects.toThrow();
+    await expect(call("maestro", "delete_project", { project_id: "req-1", owner_quote: "   " })).rejects.toThrow();
+    await expect(call("maestro", "delete_project", { project_id: "req-1", owner_quote: "x".repeat(301) })).rejects.toThrow();
+
+    const res = await call("maestro", "delete_project", { project_id: "req-1", owner_quote: "apague esse projeto de teste" });
+    expect(plans.deleteProject).toHaveBeenCalledWith("req-1", { by: "maestro", reason: "apague esse projeto de teste" });
+    expect(res.text).toContain('"Projeto Teste"');
+    expect(res.text).toContain("2 item(s)");
+    expect(res.text).toContain("1 log(s)");
   });
 
   it("release_work, hold_work, set_release_pace e set_project_status validam e chamam o serviço como Maestro", async () => {
@@ -393,14 +413,14 @@ describe("ferramentas de árvore e sprint (só o Maestro)", () => {
     expect(officeToolsFor("clara", deps).map((tool) => tool.name)).not.toContain("reassign_task");
   });
 
-  it("os agentes comuns não recebem nenhuma ferramenta de gestão de projeto (nem delete_project existe)", () => {
+  it("os agentes comuns não recebem nenhuma ferramenta de gestão de projeto (nem delete_project)", () => {
     const { deps } = setup();
     const names = officeToolsFor("clara", deps).map((tool) => tool.name);
     for (const name of ["add_sprint", "update_sprint", "move_task", "assign_task", "close_sprint", "create_project", "get_project", "update_task", "delete_task", "release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule", "delete_project"]) {
       expect(names).not.toContain(name);
     }
     expect(officeToolsFor("maestro", deps).map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(["add_sprint", "update_sprint", "move_task", "assign_task", "close_sprint", "update_task", "delete_task", "release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule"]),
+      expect.arrayContaining(["add_sprint", "update_sprint", "move_task", "assign_task", "close_sprint", "update_task", "delete_task", "delete_project", "release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule"]),
     );
   });
 });

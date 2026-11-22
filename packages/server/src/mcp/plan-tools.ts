@@ -86,7 +86,7 @@ function withAlias(tool: McpTool, oldName: string): McpTool[] {
   return [tool, { ...tool, name: oldName, description: `Deprecated alias of ${tool.name}. ${tool.description}`, listed: false }];
 }
 
-/** Ferramentas de projeto do Maestro (nunca expõe apagar projeto). */
+/** Ferramentas de projeto do Maestro (criar, editar, liberar, gerenciar e apagar projetos a pedido do dono). */
 export function planTools(maestro: OfficeToolsDeps["maestro"], plans: NonNullable<OfficeToolsDeps["plans"]>, planApproval?: OfficeToolsDeps["planApproval"]): McpTool[] {
   const projectId = z.string().trim().min(1).max(64).describe("Project id (from create_project or list_projects; works on manual projects too)");
   const sprintId = z.string().trim().min(1).max(60).describe('Sprint id (e.g. "S2") or its name; see get_project');
@@ -297,7 +297,7 @@ export function planTools(maestro: OfficeToolsDeps["maestro"], plans: NonNullabl
   const deleteTaskTool = defineTool({
     name: "delete_task",
     description:
-      "Deletes a task, subtask or module (and its entire subtree) from a project. Refuses if any leaf in the subtree is running or waiting for the owner (cancel or wait first). Cleans up runner tasks, logs, pending items and removes references to the deleted items from other items' depends_on. Never deletes a whole project (only the owner can delete projects).",
+      "Deletes a task, subtask or module (and its entire subtree) from a project. Refuses if any leaf in the subtree is running or waiting for the owner (cancel or wait first). Cleans up runner tasks, logs, pending items and removes references to the deleted items from other items' depends_on. Never deletes a whole project (use delete_project for that).",
     input: z.object({
       project_id: projectId,
       ref: z.string().trim().min(1).max(PROJECT_LIMITS.ref).describe('Task or module ref to delete (e.g. "T3", "M1")'),
@@ -307,6 +307,21 @@ export function planTools(maestro: OfficeToolsDeps["maestro"], plans: NonNullabl
       const result = await plans.deleteTask(project_id, ref, { by: "maestro", ...(reason ? { reason } : {}) });
       const cleaned = result.cleanedDependsOn.length > 0 ? ` Removed dependencies from: ${result.cleanedDependsOn.map((entry) => `${entry.ref} (${entry.removed.join(", ")})`).join("; ")}.` : "";
       return text(`Deleted ${result.deleted.length} item(s) (${result.deleted.join(", ")}) from project ${project_id}.${cleaned}`);
+    },
+  });
+
+  const deleteProjectTool = defineTool({
+    name: "delete_project",
+    description:
+      'Deletes a whole project with everything in it (tasks, modules, logs, pending items); cannot be undone. Call it ONLY when the owner asked in this conversation to delete it, quoting their words in owner_quote. Refuses if a task is running or waiting for the owner, and never deletes the Avulsas project. Deletes one project per call.',
+    input: z.object({
+      project_id: projectId,
+      owner_quote: z.string().trim().min(3).max(300).describe("The owner's own words from this conversation asking to delete the project (3 to 300 characters)"),
+    }),
+    call: async ({ project_id, owner_quote }) => {
+      const title = plans.list().find((candidate) => candidate.id === project_id)?.title;
+      const result = await plans.deleteProject(project_id, { by: "maestro", reason: owner_quote });
+      return text(`Deleted project ${title ? `"${title}" (${project_id})` : project_id}: removed ${result.deleted.tasks} item(s) and ${result.deleted.logs} log(s).`);
     },
   });
 
@@ -507,6 +522,7 @@ export function planTools(maestro: OfficeToolsDeps["maestro"], plans: NonNullabl
     updateProject,
     updateTaskTool,
     deleteTaskTool,
+    deleteProjectTool,
     releaseWorkTool,
     holdWorkTool,
     setReleasePaceTool,

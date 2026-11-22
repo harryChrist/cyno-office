@@ -26,9 +26,12 @@ describe("prompt do Maestro: módulos, liberação e poderes de gestão", () => 
     expect(prompt).toContain("OBRIGATÓRIO");
     expect(prompt).toContain("UM `owner`");
     expect(prompt).toContain("UMA subtarefa por agente");
-    expect(prompt).toContain("NUNCA apague projeto");
+    expect(prompt).not.toContain("NUNCA apague projeto");
+    expect(prompt).toContain("APAGAR PROJETO");
+    expect(prompt).toContain("SÓ quando o dono pedir");
+    expect(prompt).toContain("apague sem pedir de novo");
     expect(prompt).not.toContain("Até 3 agentes");
-    for (const tool of ["release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule", "update_task", "delete_task", "move_task", "assign_task"]) expect(prompt).toContain(tool);
+    for (const tool of ["release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule", "update_task", "delete_task", "delete_project", "move_task", "assign_task"]) expect(prompt).toContain(tool);
     expect(prompt).toContain("aprovação NUNCA é obrigatória");
     expect(prompt).toContain("Projeto que já tem sprint: as ferramentas de sprint continuam valendo.");
     expect(prompt).not.toContain("add_sprint");
