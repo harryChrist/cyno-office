@@ -1,4 +1,4 @@
-import { type Agent, type DispatchSettings, type EngineBlock, type OfficeState, type Project, type ServerEvent, type Task } from "@cyno/shared";
+import { type Agent, type DispatchSettings, type EngineBlock, type OfficeState, type PlanApprovalSettings, type Project, type ServerEvent, type Task } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
 import type { AgentLogService } from "../agent-log/service";
 import type { Brain } from "../brain/brain";
@@ -50,6 +50,8 @@ export type ProjectServiceDeps = {
   persistDelaysMs?: readonly number[];
   /** Paralelismo (tarefas rodando no workspace e por agente). */
   settings: () => DispatchSettings;
+  /** Regra de aprovação de projetos do workspace (ausente = "maestro"). */
+  planApproval?: () => PlanApprovalSettings;
   /** Motor indisponível (sem cota, CLI ausente): a etapa espera, nada troca de motor. */
   availability?: (agent: Agent) => EngineBlock | undefined;
   /** O agente (de Freebuff) tem uma hora aberta? O agendador dá trabalho primeiro a quem já pagou a hora. */

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import {
   agentAddress,
   clearBlocked,
@@ -12,19 +13,22 @@ import {
   activeSprint,
   assigneesOf,
   buildProjectPlan,
+  childrenOf,
   deliveryLeaves,
   effectiveDeps,
   receivedBy,
   sprintProgress,
   sprintsInOrder,
   statusOf,
-  treeProgress,
+  moduleProgress,
+  projectUnitProgress,
   projectTreeMarkdown,
   type LabelInput,
-  type SprintInput,
   blockedLeaves,
   completedRefs,
   deadDependencies,
+  DEFAULT_PLAN_APPROVAL,
+  hasSprints,
   isLeaf,
   effectivePriority,
   emptyAvulsas,
@@ -57,9 +61,16 @@ import {
   paceFromInput,
   PROJECT_BRIEF_MAX,
   PROJECT_INPUT_PRIORITIES,
-  PROJECT_LIMITS,
+  PROJECT_SAFETY,
   progressLabel,
   parseClock,
+  plannedLeafCount,
+  isParked,
+  isReleased,
+  releaseHold,
+  releaseState,
+  requestIdOf,
+  prerequisiteClosure,
   projectDefaults,
   projectProgress,
   takeAvulsasRef,
@@ -84,15 +95,20 @@ import {
   type TaskPatchBody,
   type TaskReassignBody,
   type Pace,
+  type PlanApprovalRule,
+  type ProjectApproval,
   type ProjectMode,
   type Project,
+  type ProjectInputApproval,
   type ProjectInputPriority,
+  type ProjectInputRelease,
   type ProjectJointRef,
   type ProjectPaceInput,
   type ProjectPriority,
   type ProjectTask,
   type ProjectTaskInput,
   type RankInput,
+  type ReleasePace,
   type ServerEvent,
   type Task,
 } from "@cyno/shared";
@@ -104,7 +120,8 @@ import { persist, persistOrThrow } from "../../util/persist";
 import { shorten } from "../../util/text";
 import { doneWhenBlock, dueLine, flowLine, motherNote, receiverLine } from "./work-scheduler";
 import { HANDOFF_TITLES, handoffBriefing, handoffFamily, handoffRefusal, nextHandoffRef, NOTHING_HANDED_OFF, originAgent } from "./handoff";
-import { addNode, assertValidTree, becomeMother, duplicateNode, ensureLabel, hasStarted, idleStatus, moveNode, moveToSprint, refreshIdle, requireTask, setDependsOn, singleStep } from "./project-edit";
+import { addNode, assertValidTree, becomeMother, duplicateNode, ensureLabel, hasStarted, idleStatus, moveNode, moveToSprint, refreshIdle, requireTask, restoreEmptyParent, setDependsOn, singleStep } from "./project-edit";
+import { applyReleasePace, holdNodes, normalizeReleasePace, releaseNodes } from "./release-service";
 import { addSprint, advanceSprints, approveSprint, closeSprintNow, closingSprints, closingTitle, createReworkTasks, summaryText, editSprint, inheritSprint, removeSprint, reorderSprints, requireSprint, shiftSprints, startSprintNow, type SprintEvent } from "./sprint-service";
 import { WorkClock } from "./work-clock";
 import { WorkScheduler } from "./work-scheduler";
@@ -130,6 +147,8 @@ export type ProjectUpdate = {
   startAt?: string | null;
   dueAt?: string | null;
   pace?: Pace | null;
+  /** Liberação diária (objeto liga, `null` desliga; a conta do dia, `given`, é do servidor). */
+  releasePace?: { perDay: number; unit: ReleasePace["unit"]; startsOn?: string | undefined } | null;
   status?: "ativo" | "pausado";
   /** "Isso primeiro": true fixa no topo da fila (`pinnedAt` agora), false solta. */
   pinned?: boolean;
@@ -156,19 +175,34 @@ function instantOf(value: string | null | undefined, label: string): string | nu
 /** O que o Maestro manda em `create_project` (contrato MCP, em inglês). */
 export type ProposeInput = {
   tasks: ProjectTaskInput[];
+  /** Liberação padrão da chamada ("now" = entra na fila, "later" = Planejada); cada item pode sobrescrever. */
+  release?: ProjectInputRelease;
+  /** Escolha de aprovação do Maestro ("ask" = pedir OK, "skip" = começar sem pedir); a regra do workspace vence quando é "always" ou "never". */
+  approval?: ProjectInputApproval;
+  /** true = cria um projeto adicional no mesmo pedido (com id UUID próprio e `requestId` apontando para o pedido). */
+  new_project?: boolean;
   summary?: string;
   title?: string;
   priority?: ProjectInputPriority;
   start_at?: string;
   due_at?: string;
   pace?: ProjectPaceInput;
-  /** Sprints da proposta (datas ou duração); as tarefas citam pelo `ref`. */
-  sprints?: SprintInput[];
   labels?: LabelInput[];
   /** Só preenche `modeProposal`; o Automático só vale com o OK do usuário (fatia 7). */
   suggested_mode?: "auto";
   auto_scope?: { actions: string[]; sites?: string[]; connectors?: string[]; daily_cap?: number };
 };
+
+/** Como uma ferramenta do Maestro aponta o projeto: pelo `project_id` direto, pelo `request_id` do pedido (ou string legada). */
+export type ProjectTarget = string | { projectId: string } | { requestId: string };
+
+/** O que `deleteTask` devolve: o projeto atualizado, os refs apagados e as referências limpas de `dependsOn`. */
+export type TaskDeleteResult = { project: Project; deleted: string[]; cleanedDependsOn: { ref: string; removed: string[] }[] };
+
+/** Limites do `describe` resumido: projetos pequenos saem inteiros; árvores grandes mostram módulos + folhas abertas com teto. */
+const DESCRIBE_SMALL_MAX = 40;
+const DESCRIBE_MODULE_MAX = 40;
+const DESCRIBE_TOTAL_MAX = 300;
 
 /** Mudança de um projeto (o `update_project` do Maestro e a rota PATCH). `null` apaga o campo. */
 
@@ -228,6 +262,7 @@ export class ProjectService {
         cancelPlan: (plan, reason) => this.cancelPlan(plan, reason),
         failTask: (plan, task, reason) => this.failTask(plan, task, reason),
         advanceSprints: () => this.advanceAllSprints(),
+        advanceRelease: () => this.advanceAllRelease(),
       },
     );
     const every = deps.checkEveryMs ?? CHECK_EVERY_MS;
@@ -247,10 +282,22 @@ export class ProjectService {
     return structuredClone(plan);
   }
 
-  /** O plano mais novo do pedido ou, se o pedido virou folha do "Avulsas" (`meta.requestId`), a vista de projeto de uma tarefa dele; undefined se não há. */
+  /** O plano principal do pedido (ou qualquer projeto dele) ou, se o pedido virou folha do "Avulsas", a vista de projeto; undefined se não há. */
   forRequest(requestId: string): Project | undefined {
-    const plan = this.plans.find((candidate) => candidate.id === requestId && isPlanProject(candidate));
+    const plan =
+      this.plans.find((candidate) => candidate.id === requestId && !isAvulsas(candidate) && isPlanProject(candidate)) ??
+      this.plans.find((candidate) => !isAvulsas(candidate) && requestIdOf(candidate) === requestId && isPlanProject(candidate));
     return plan ? structuredClone(plan) : this.leavesView(requestId);
+  }
+
+  /** Todos os projetos (com ciclo ou casca, exceto Avulsas) ligados a um pedido do Maestro. */
+  private plansForRequest(requestId: string): Project[] {
+    return this.plans.filter((candidate) => !isAvulsas(candidate) && requestIdOf(candidate) === requestId);
+  }
+
+  /** Todos os projetos ABERTOS com ciclo de plano ligados a um pedido do Maestro. */
+  private openPlansForRequest(requestId: string): Project[] {
+    return this.plans.filter((plan) => !isAvulsas(plan) && requestIdOf(plan) === requestId && isProjectOpen(plan) && hasLifecycle(plan));
   }
 
   /** O projeto fixo "Avulsas" (undefined só em workspace que ainda não passou pela migração). */
@@ -342,18 +389,20 @@ export class ProjectService {
     return this.locateAny(task)?.planTask.rework.count ?? 0;
   }
 
-  /** O pedido tem um plano aberto (esperando aprovação, sendo ajustado ou rodando)? Então o fim de um turno não o fecha. */
+  /** O pedido tem algum projeto aberto segurando o pedido (esperando aprovação, sendo ajustado ou com trabalho liberado)? Projeto estacionado (só Planejado) não segura. */
   holds(requestId: string): boolean {
-    return this.plans.some((plan) => plan.id === requestId && isProjectOpen(plan) && hasLifecycle(plan));
+    return this.openPlansForRequest(requestId).some((plan) => !isParked(plan));
   }
 
-  /** O pedido pode ser concluído agora? (plano rodando com tarefas por terminar = não) */
+  /** O pedido pode ser concluído agora? (qualquer projeto rodando/pausado com trabalho liberado por terminar = não; projeto estacionado não bloqueia) */
   blocksConclusion(requestId: string): string | undefined {
-    const plan = this.openPlan(requestId);
-    if (!plan || (plan.status !== "ativo" && plan.status !== "pausado")) return undefined;
-    const left = leafTasks(plan.tasks).filter((task) => !isProjectTaskFinished(task));
-    if (left.length === 0) return undefined;
-    return `The project of this request still has ${left.length} task(s) to finish (${left.map((task) => task.ref).join(", ")}). Wait for the final message, or use resolve_task(action: "cancel_project") before completing.`;
+    const open = this.openPlansForRequest(requestId).filter((plan) => (plan.status === "ativo" || plan.status === "pausado") && !isParked(plan));
+    for (const plan of open) {
+      const left = leafTasks(plan.tasks).filter((task) => !isProjectTaskFinished(task));
+      if (left.length === 0) continue;
+      return `The project ${plan.id} («${plan.title}») of this request still has ${left.length} task(s) to finish (${left.map((task) => task.ref).join(", ")}). Wait for the final message, or use set_project_status(project_id: "${plan.id}", status: "canceled") / resolve_task(action: "cancel_project") before completing.`;
+    }
+    return undefined;
   }
 
   stop(): void {
@@ -384,7 +433,7 @@ export class ProjectService {
    * informado SUBSTITUI o anterior. Pausar não interrompe a etapa em andamento: só não começa outra;
    * retomar põe a fila para andar. Projeto que ainda espera aprovação do plano não pausa/retoma.
    */
-  async updateProject(id: string, patch: ProjectUpdate): Promise<Project> {
+  async updateProject(id: string, patch: ProjectUpdate, by?: "maestro"): Promise<Project> {
     const project = this.plans.find((candidate) => candidate.id === id);
     // Pedido simples (folha do Avulsas): título, prioridade, começo e prazo valem para a tarefa.
     if (!project) return this.updateRequestLeaves(id, patch);
@@ -404,6 +453,7 @@ export class ProjectService {
     const startAt = instantOf(patch.startAt, "O começo");
     const dueAt = instantOf(patch.dueAt, "O prazo");
     const pace = patch.pace === undefined ? undefined : patch.pace === null ? null : this.normalizePace(patch.pace);
+    const releasePace = patch.releasePace === undefined ? undefined : patch.releasePace === null ? null : normalizeReleasePace(patch.releasePace, project.releasePace);
     if (patch.status !== undefined && patch.status !== project.status) {
       if (project.status !== "ativo" && project.status !== "pausado") throw new HttpError(409, "O plano ainda não foi aprovado: não dá para pausar ou retomar");
       next.status = patch.status;
@@ -430,10 +480,15 @@ export class ProjectService {
     }
     if (pace === null || (pace && Object.keys(pace).length === 0)) delete project.pace;
     else if (pace) project.pace = pace;
+    const hadReleasePace = project.releasePace !== undefined;
+    if (releasePace === null) delete project.releasePace;
+    else if (releasePace) project.releasePace = releasePace;
     project.updatedAt = at;
     const saved = this.save([project]);
     this.deps.log.info({ projectId: id, patch: Object.keys(patch) }, "projeto atualizado");
     if (pinChange) this.recordPin(project.id, project.title, pinChange);
+    if (releasePace) this.recordReleasePace(project, "ligada", by);
+    else if (releasePace === null && hadReleasePace) this.recordReleasePace(project, "desligada", by);
     // Prioridade, começo, prazo, ritmo e retomada mudam quem pode começar: a fila reavalia.
     if (patch.status !== "pausado") {
       this.pump();
@@ -441,6 +496,106 @@ export class ProjectService {
     }
     await saved;
     return structuredClone(project);
+  }
+
+  /**
+   * Muda o status do projeto (`set_project_status` do Maestro e rotas `reopen`/`complete` do dono):
+   * - `ativo`: reabre concluído/cancelado (limpa `finishedAt`/`doneNotified`; tarefas canceladas ficam canceladas) ou retoma pausado (empurra sprints).
+   * - `pausado`: pausa um projeto ativo.
+   * - `concluido`: conclui (recusa se houver folha em andamento ou esperando você; tarefas abertas ficam como estão; `finishedAt`, `doneNotified: true`).
+   * - `cancelado`: cancela o projeto e suas tarefas abertas (como `cancelPlan`, sem mexer em outros projetos do mesmo pedido).
+   * O projeto `system: "avulsas"` nunca muda de status.
+   */
+  async setProjectStatus(projectId: string, status: "ativo" | "pausado" | "concluido" | "cancelado", by: "usuario" | "maestro" = "usuario"): Promise<Project> {
+    const project = this.plans.find((candidate) => candidate.id === projectId);
+    if (!project) throw new HttpError(404, `Projeto "${projectId}" não encontrado`);
+    if (isAvulsas(project)) throw new HttpError(409, "O projeto Avulsas é fixo e nunca muda de status");
+    if (project.status === status) return structuredClone(project);
+    const at = this.at();
+    const before = structuredClone(project);
+    const who = by === "maestro" ? "O Maestro" : "Você";
+    const actor = by === "maestro" ? ACTIVITY_MAESTRO : ACTIVITY_USER;
+    const title = quoteName(shorten(project.title, 60));
+    if (status === "cancelado") {
+      await this.cancelPlan(project, by === "maestro" ? "Cancelado pelo Maestro" : "Cancelado pelo usuário", true);
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-cancelado", actor, summary: `${who} cancelou o projeto ${title}`, refs: { planId: project.id } });
+      return structuredClone(project);
+    }
+    if (status === "ativo") {
+      if (project.status === "proposto" || project.status === "ajustando") {
+        throw new HttpError(409, by === "maestro" ? "Project is still waiting for approval: it cannot be activated directly." : "O plano ainda não foi aprovado: aprove o plano em vez de reabrir");
+      }
+      const wasPaused = project.status === "pausado";
+      if (wasPaused && project.pausedAt) {
+        shiftSprints(project, Date.parse(at) - Date.parse(project.pausedAt));
+      }
+      delete project.pausedAt;
+      if (!wasPaused) {
+        delete project.finishedAt;
+        delete project.doneNotified;
+      }
+      project.status = "ativo";
+      project.updatedAt = at;
+      await this.saveUser(project, before);
+      activeActivity()?.record({
+        workspaceId: this.deps.workspaceId,
+        category: "plano",
+        action: wasPaused ? "projeto-retomado" : "projeto-reaberto",
+        actor,
+        summary: wasPaused ? `${who} retomou o projeto ${title}` : `${who} reabriu o projeto ${title}`,
+        refs: { planId: project.id },
+      });
+      this.pump();
+      this.deps.orchestrator.retryWaiting();
+      return structuredClone(project);
+    }
+    if (status === "pausado") {
+      if (project.status !== "ativo") {
+        throw new HttpError(409, by === "maestro" ? `Only an active project can be paused (current status: ${project.status}).` : "Só dá para pausar um projeto em execução");
+      }
+      project.status = "pausado";
+      project.pausedAt = at;
+      project.updatedAt = at;
+      await this.saveUser(project, before);
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-pausado", actor, summary: `${who} pausou o projeto ${title}`, refs: { planId: project.id } });
+      return structuredClone(project);
+    }
+    // status === "concluido"
+    if (project.status === "proposto" || project.status === "ajustando") {
+      throw new HttpError(409, by === "maestro" ? "Project has not been approved yet." : "O plano ainda não foi aprovado");
+    }
+    if (project.status === "cancelado") {
+      throw new HttpError(409, by === "maestro" ? "Project is canceled: reopen it first with status \"active\"." : "O projeto foi cancelado: reabra antes de concluir");
+    }
+    const state = this.deps.state.read();
+    const busyLeaf = leavesOf(project).find((leaf) => leaf.status === "em_andamento" || leaf.status === "esperando_voce");
+    const busyTask = state.tasks.find((task) => task.role !== "request" && task.work?.projectId === project.id && (task.status === "in_progress" || task.status === "waiting_approval"));
+    if (busyLeaf || busyTask) {
+      throw new HttpError(
+        409,
+        by === "maestro"
+          ? `Cannot complete project: task ${busyLeaf?.ref ?? busyTask?.work?.ref ?? ""} is still running or waiting for the owner. Cancel it or wait for it to finish first.`
+          : "Não dá para concluir o projeto enquanto houver tarefa em andamento ou esperando você",
+      );
+    }
+    project.status = "concluido";
+    project.finishedAt = at;
+    project.doneNotified = true;
+    delete project.pausedAt;
+    project.updatedAt = at;
+    await this.saveUser(project, before);
+    activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-concluido", actor, summary: `${who} concluiu o projeto ${title}`, refs: { planId: project.id } });
+    this.pump();
+    return structuredClone(project);
+  }
+
+  /** Atividade da liberação diária: o dono ou o Maestro ligou (com o ritmo) ou desligou. */
+  private recordReleasePace(project: Project, change: "ligada" | "desligada", by?: "maestro"): void {
+    const pace = project.releasePace;
+    const who = by ? "O Maestro" : "Você";
+    const what = pace ? `${pace.perDay} ${pace.unit === "modulos" ? (pace.perDay === 1 ? "módulo" : "módulos") : pace.perDay === 1 ? "tarefa" : "tarefas"} por dia${pace.startsOn ? `, a partir de ${pace.startsOn.slice(8, 10)}/${pace.startsOn.slice(5, 7)}` : ""}` : "";
+    const summary = change === "ligada" ? `${who} ligou a liberação diária (${what}) em ${quoteName(shorten(project.title, 60))}` : `${who} desligou a liberação diária em ${quoteName(shorten(project.title, 60))}`;
+    activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: change === "ligada" ? "liberacao-diaria-ligada" : "liberacao-diaria-desligada", actor: by ? ACTIVITY_MAESTRO : ACTIVITY_USER, summary, refs: { planId: project.id } });
   }
 
   /** Atividade de "Isso primeiro": fixou ou soltou. */
@@ -457,7 +612,7 @@ export class ProjectService {
     const open = leaves.filter((leaf) => !isProjectTaskFinished(leaf));
     if (open.length === 0) throw new HttpError(409, "A tarefa já terminou");
     if (patch.pinned !== undefined && open.some((leaf) => isSeedTask(leaf))) throw new HttpError(409, "Tarefa de demonstração: ela não roda, então não há o que fixar");
-    if (patch.pace !== undefined) throw new HttpError(409, "Tarefa avulsa não tem ritmo próprio: crie um projeto para isso");
+    if (patch.pace !== undefined || patch.releasePace !== undefined) throw new HttpError(409, "Tarefa avulsa não tem ritmo próprio: crie um projeto para isso");
     if (patch.status === "pausado") throw new HttpError(409, "Tarefa avulsa não pausa: cancele-a, ou crie um projeto");
     const title = patch.title !== undefined ? titleOf(patch.title) : undefined;
     const startAt = instantOf(patch.startAt, "O começo");
@@ -493,13 +648,13 @@ export class ProjectService {
 
   // ---------- Árvore de tarefas: o dono cria e edita pela tela ----------
 
-  /** O projeto que a tela pode mexer: existe, não está sendo refeito pelo Maestro e não terminou (um projeto concluído do dono reabre ao ganhar tarefa). */
+  /** O projeto que a tela/Maestro pode mexer: existe, não está sendo refeito e não foi cancelado (concluído de QUALQUER origem reabre ao ganhar item). */
   private editable(id: string, creating = false): Project {
     const project = this.plans.find((candidate) => candidate.id === id);
     if (!project) throw new HttpError(404, `Projeto "${id}" não encontrado`);
     if (project.status === "ajustando") throw new HttpError(409, "O Maestro está ajustando o plano: espere ele terminar");
     if (project.status === "cancelado") throw new HttpError(409, "O projeto foi cancelado");
-    if (project.status === "concluido" && !(creating && project.origin === "usuario")) throw new HttpError(409, "O projeto já terminou");
+    if (project.status === "concluido" && !creating) throw new HttpError(409, "O projeto já terminou");
     return project;
   }
 
@@ -595,13 +750,16 @@ export class ProjectService {
       delete project.finishedAt;
       delete project.doneNotified;
     }
-    const kind = task.group ? "o entregável" : task.parent ? "a subtarefa" : "a tarefa";
+    const kind = task.group ? "o módulo" : task.parent ? "a subtarefa" : "a tarefa";
     const saved = await this.finishEdit(project, before, "tarefa-criada", `Você criou ${kind} ${quoteName(shorten(task.title, 60))} em ${quoteName(shorten(project.title, 60))}`, { ref: task.ref });
+    if (reopen) {
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-reaberto", actor: ACTIVITY_USER, summary: `Você reabriu o projeto ${quoteName(shorten(project.title, 60))} ao adicionar ${kind}`, refs: { planId: project.id } });
+    }
     return { project: saved, ref: task.ref };
   }
 
-  /** `PATCH /projects/:id/tasks/:ref`: edita na linha (nome, briefing, responsável, datas, prioridade, etiquetas, "pronto quando") ou cancela. */
-  async updateTask(projectId: string, ref: string, patch: TaskPatchBody): Promise<Project> {
+  /** `PATCH /projects/:id/tasks/:ref` (e `update_task` do Maestro): edita na linha (nome, briefing, responsável, datas, prioridade, etiquetas, "pronto quando", dependências) ou cancela. */
+  async updateTask(projectId: string, ref: string, patch: TaskPatchBody, by?: "maestro"): Promise<Project> {
     const project = this.editable(projectId);
     const before = structuredClone(project);
     const task = requireTask(project, ref);
@@ -622,15 +780,17 @@ export class ProjectService {
         else delete task.labels;
       }
       if (patch.doneWhen !== undefined) {
-        if (parent) throw new HttpError(400, "O \"pronto quando\" fica nas tarefas que executam");
+        if (parent) throw new HttpError(400, by === "maestro" ? "done_when only applies to leaf tasks, not modules or parent tasks" : "O \"pronto quando\" fica nas tarefas que executam");
         task.doneWhen = patch.doneWhen.map((text, index) => ({ id: `d${index + 1}`, text: text.trim() }));
       }
       if (patch.dependsOn !== undefined) {
-        if (task.group) throw new HttpError(400, "Entregável não espera ninguém: ponha o \"depois de\" nas tarefas dentro dele");
         setDependsOn(project, task, patch.dependsOn, at);
         refreshIdle(project, at);
       }
-      if (patch.assignee !== undefined) this.assign(project, task, patch.assignee, at);
+      if (patch.assignee !== undefined) {
+        if (by === "maestro" && parent) throw new HttpError(400, "A module or parent task has no owner: set owner on the leaf tasks inside it");
+        this.assign(project, task, patch.assignee, at);
+      }
       if (patch.status === "cancelada") return await this.cancelTask(project, before, task);
       if (patch.status === "refazer") return await this.redoTask(project, before, task);
       task.updatedAt = at;
@@ -640,7 +800,7 @@ export class ProjectService {
       throw error;
     }
     const what = Object.keys(patch).join(", ");
-    return this.finishEdit(project, before, "tarefa-editada", `Você mudou ${quoteName(shorten(task.title, 60))} em ${quoteName(shorten(project.title, 60))} (${what})`, { ref });
+    return this.finishEdit(project, before, "tarefa-editada", `Você mudou ${quoteName(shorten(task.title, 60))} em ${quoteName(shorten(project.title, 60))} (${what})`, { ref }, by);
   }
 
   /** Muda o responsável de uma folha que ainda não começou (`null` tira); o primeiro passo passa a ser dele. */
@@ -712,6 +872,9 @@ export class ProjectService {
   async moveTask(projectId: string, ref: string, body: TaskMoveBody, by?: "maestro"): Promise<Project> {
     const project = this.editable(projectId);
     if (isAvulsas(project)) throw new HttpError(409, "As tarefas avulsas não se movem: converta em projeto");
+    if (body.sprintId !== undefined && !hasSprints(project)) {
+      throw new HttpError(409, by === "maestro" ? "This project does not use sprints (sprints are retired for new projects: use modules and release_work/set_release_pace)" : "Este projeto não usa sprints");
+    }
     const before = structuredClone(project);
     const sprintOnly = body.sprintId !== undefined && body.parent === undefined && body.before === undefined && !body.step;
     try {
@@ -729,11 +892,12 @@ export class ProjectService {
     return this.finishEdit(project, before, "tarefa-movida", `Você moveu ${quoteName(shorten(moved.title, 60))} em ${quoteName(shorten(project.title, 60))}`, { ref }, by);
   }
 
-  /** `POST .../duplicate`: copia a tarefa (com as filhas) sem estado. */
+  /** `POST .../duplicate`: copia a tarefa (com as filhas) sem estado; em projeto concluído, reabre o projeto. */
   async duplicateTask(projectId: string, ref: string): Promise<{ project: Project; ref: string }> {
-    const project = this.editable(projectId);
+    const project = this.editable(projectId, true);
     if (isAvulsas(project)) throw new HttpError(409, "As tarefas avulsas não se duplicam: peça de novo ao Maestro");
     const before = structuredClone(project);
+    const reopen = project.status === "concluido";
     let copy: ProjectTask;
     try {
       copy = duplicateNode(project, ref, this.at());
@@ -741,7 +905,15 @@ export class ProjectService {
       this.restore(project, before);
       throw error;
     }
+    if (reopen) {
+      project.status = "ativo";
+      delete project.finishedAt;
+      delete project.doneNotified;
+    }
     const saved = await this.finishEdit(project, before, "tarefa-duplicada", `Você duplicou ${quoteName(shorten(requireTask(project, ref).title, 60))} em ${quoteName(shorten(project.title, 60))}`, { ref, copy: copy.ref });
+    if (reopen) {
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-reaberto", actor: ACTIVITY_USER, summary: `Você reabriu o projeto ${quoteName(shorten(project.title, 60))} ao duplicar uma tarefa`, refs: { planId: project.id } });
+    }
     return { project: saved, ref: copy.ref };
   }
 
@@ -775,6 +947,100 @@ export class ProjectService {
       throw error;
     }
     return this.finishEdit(project, before, "tarefa-editada", `Você pôs a etiqueta ${quoteName(name)} em ${quoteName(shorten(task.title, 60))}`, { ref });
+  }
+
+  // ---------- Liberação: criar não executa; só entra na fila o que for liberado ----------
+
+  /** O projeto que aceita liberar ou segurar: o que a tela pode mexer, menos o Avulsas (as tarefas dele nascem liberadas, sempre). */
+  private releasable(id: string): Project {
+    const project = this.editable(id);
+    if (isAvulsas(project)) throw new HttpError(409, "As tarefas avulsas já nascem liberadas: não há o que liberar ou segurar");
+    return project;
+  }
+
+  /**
+   * `POST /projects/:id/release` (e a ferramenta do Maestro): libera tarefas ou módulos (`refs`; módulo = as folhas dele) ou o projeto inteiro
+   * (`all`). `withPrerequisites` leva junto as Planejadas de que elas dependem. Quem já terminou, roda ou está liberado fica como está; sem
+   * nada para liberar, devolve o projeto sem mudança. A fila anda na hora.
+   */
+  async releaseWork(projectId: string, input: { refs?: string[]; all?: boolean; withPrerequisites?: boolean }, by?: "maestro"): Promise<Project> {
+    const project = this.releasable(projectId);
+    const refs = [...new Set((input.refs ?? []).map((ref) => ref.trim()).filter(Boolean))];
+    if (input.all !== true && refs.length === 0) throw new HttpError(400, "Diga o que liberar: tarefas ou módulos (refs), ou o projeto inteiro (all)");
+    const before = structuredClone(project);
+    const withPrerequisites = input.withPrerequisites === true;
+    let released: string[];
+    let prerequisites: Set<string>;
+    try {
+      prerequisites = new Set(withPrerequisites && input.all !== true ? prerequisiteClosure(project, refs) : []);
+      released = releaseNodes(project, input.all === true ? "all" : refs, { withPrerequisites }, this.at());
+    } catch (error) {
+      this.restore(project, before);
+      throw error;
+    }
+    if (isDeepStrictEqual(project.tasks, before.tasks)) return structuredClone(project);
+    const title = quoteName(shorten(project.title, 60));
+    const count = `${released.length} ${released.length === 1 ? "tarefa" : "tarefas"}`;
+    const extra = [...prerequisites].filter((ref) => released.includes(ref)).length;
+    const only = refs.length === 1 && input.all !== true ? requireTask(project, refs[0]!) : undefined;
+    const what = input.all === true ? `todo o projeto (${count})` : only && !isLeaf(project, only) ? `o módulo ${quoteName(shorten(only.title, 60))}${released.length > 0 ? ` (${count})` : ""}` : `${count}${extra > 0 ? ` (${extra} como pré-requisito)` : ""}`;
+    return this.finishEdit(project, before, "tarefas-liberadas", `Você liberou ${what} em ${title}`, { refs: released, ...(withPrerequisites ? { withPrerequisites: true } : {}) }, by);
+  }
+
+  /**
+   * `POST /projects/:id/hold`: volta a Planejada o que ainda não começou (módulo = as folhas dele). Quem já roda, espera o dono, falhou ou
+   * terminou fica como está; se NADA pôde ser segurado por isso, é 409 com o motivo. A folha que estava na fila sai dela.
+   */
+  async holdWork(projectId: string, input: { refs: string[] }, by?: "maestro"): Promise<Project> {
+    const project = this.releasable(projectId);
+    const refs = [...new Set(input.refs.map((ref) => ref.trim()).filter(Boolean))];
+    if (refs.length === 0) throw new HttpError(400, "Diga o que segurar (refs)");
+    const before = structuredClone(project);
+    let result: ReturnType<typeof holdNodes>;
+    try {
+      result = holdNodes(project, refs, this.at());
+    } catch (error) {
+      this.restore(project, before);
+      throw error;
+    }
+    if (result.held.length === 0 && result.ignored.length > 0) {
+      this.restore(project, before);
+      throw new HttpError(409, `Não dá para segurar: ${result.ignored.slice(0, 3).map((item) => `${quoteName(shorten(item.title, 40))} ${item.reason}`).join("; ")}`);
+    }
+    if (isDeepStrictEqual(project.tasks, before.tasks)) return structuredClone(project);
+    const count = `${result.held.length} ${result.held.length === 1 ? "tarefa" : "tarefas"}`;
+    const skipped = result.ignored.length > 0 ? `; ${result.ignored.length} já ${result.ignored.length === 1 ? "tinha começado" : "tinham começado"} e ${result.ignored.length === 1 ? "ficou" : "ficaram"} como estava` : "";
+    return this.finishEdit(project, before, "tarefas-seguradas", `Você segurou ${count} em ${quoteName(shorten(project.title, 60))} (voltaram a Planejada${skipped})`, { refs: result.held, ignored: result.ignored.map((item) => item.ref) }, by);
+  }
+
+  /** Liga (objeto) ou desliga (`null`) a liberação diária do projeto; o mesmo que `PATCH /projects/:id` com `releasePace`. */
+  async setReleasePace(projectId: string, pace: ProjectUpdate["releasePace"], by?: "maestro"): Promise<Project> {
+    return this.updateProject(projectId, { releasePace: pace ?? null }, by);
+  }
+
+  /**
+   * A liberação diária (agendador, a cada pump): para cada projeto ativo com `releasePace`, solta o lote do dia (código, sem acordar o
+   * Maestro), grava, registra na Atividade e devolve quando acordar de novo (virada do dia, janela, "começa em").
+   */
+  private advanceAllRelease(): { projectId: string; wakeAt: number }[] {
+    const now = this.deps.now().getTime();
+    const changed: Project[] = [];
+    const wakes: { projectId: string; wakeAt: number }[] = [];
+    for (const plan of this.plans) {
+      if (!plan.releasePace || plan.status !== "ativo" || !hasLifecycle(plan) || isSeedProject(plan)) continue;
+      const run = applyReleasePace(plan, now, this.at());
+      if (run.wakeAt !== undefined) wakes.push({ projectId: plan.id, wakeAt: run.wakeAt });
+      if (run.released.length === 0) continue;
+      plan.updatedAt = this.at();
+      changed.push(plan);
+      const unit = plan.releasePace.unit === "modulos" ? (run.units === 1 ? "módulo" : "módulos") : run.units === 1 ? "tarefa" : "tarefas";
+      const leaves = `${run.released.length} ${run.released.length === 1 ? "tarefa" : "tarefas"}`;
+      const summary = plan.releasePace.unit === "modulos" ? `A liberação diária liberou ${run.units} ${unit} (${leaves}) em ${quoteName(shorten(plan.title, 60))}` : `A liberação diária liberou ${leaves} em ${quoteName(shorten(plan.title, 60))}`;
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "liberacao-diaria", actor: ACTIVITY_SYSTEM, summary, refs: { planId: plan.id }, data: { refs: run.released, units: run.units, unit: plan.releasePace.unit } });
+      this.deps.log.info({ projectId: plan.id, released: run.released.length, units: run.units }, "liberação diária");
+    }
+    if (changed.length > 0) void this.save(changed);
+    return wakes;
   }
 
   // ---------- Sprints: o dono cria e conduz pela tela; as datas abrem e fecham no tick ----------
@@ -823,7 +1089,7 @@ export class ProjectService {
       // Cartão decidido que já foi para o arquivo: o cartão existiu e foi decidido, não se cria outro (cartão de sprint cancelado nunca é arquivado: veja dueForArchive).
       if (!existing && sprint.forYouId && this.deps.forYou.isArchived(sprint.forYouId)) continue;
       const state = this.deps.state.read();
-      const request = state.tasks.find((task) => task.id === project.id);
+      const request = state.tasks.find((task) => task.id === requestIdOf(project));
       const verdict = this.autoReserve({ work: { projectId: project.id, ref: "", step: 0 } }, { type: "sprint" });
       const item = this.deps.forYou.openSpecial({
         kind: "sprint",
@@ -886,9 +1152,12 @@ export class ProjectService {
     }
   }
 
-  /** `POST /projects/:id/sprints`: nova sprint no fim (sem datas, uma semana depois da anterior). */
+  /** `POST /projects/:id/sprints`: nova sprint no fim (só em projeto que já tem sprints; projetos novos não usam sprints). */
   async createSprint(projectId: string, body: SprintCreateBody, by?: "maestro"): Promise<{ project: Project; sprintId: string }> {
     const project = this.sprintable(projectId);
+    if (!hasSprints(project)) {
+      throw new HttpError(409, by === "maestro" ? "Sprints are retired for new projects: use modules and release_work/set_release_pace" : "Projetos novos não usam sprints: use módulos e a liberação.");
+    }
     const before = structuredClone(project);
     let sprintId: string;
     try {
@@ -908,6 +1177,9 @@ export class ProjectService {
   /** `PATCH /projects/:id/sprints/:sid`: nome, objetivo e datas (inclusive estender o fim da ativa). */
   async updateSprint(projectId: string, sprintId: string, patch: SprintPatchBody, by?: "maestro"): Promise<Project> {
     const project = this.sprintable(projectId);
+    if (!hasSprints(project)) {
+      throw new HttpError(409, by === "maestro" ? "This project does not use sprints (sprints are retired for new projects: use modules and release_work/set_release_pace)" : "Este projeto não usa sprints");
+    }
     const before = structuredClone(project);
     try {
       editSprint(project, sprintId, patch);
@@ -967,6 +1239,9 @@ export class ProjectService {
   /** `POST .../sprints/:sid/close`: "Fechar agora" (a sobra vai para a seguinte, por código). */
   async closeSprint(projectId: string, sprintId: string, by?: "maestro"): Promise<Project> {
     const project = this.sprintable(projectId);
+    if (!hasSprints(project)) {
+      throw new HttpError(409, by === "maestro" ? "This project does not use sprints (sprints are retired for new projects: use modules and release_work/set_release_pace)" : "Este projeto não usa sprints");
+    }
     const before = structuredClone(project);
     let events: SprintEvent[];
     try {
@@ -983,6 +1258,9 @@ export class ProjectService {
   /** O id da sprint pelo id ("S2"), pelo número ou pelo nome (as ferramentas do Maestro aceitam qualquer um). */
   sprintIdOf(projectId: string, wanted: string): string {
     const project = this.require(projectId);
+    if (!hasSprints(project)) {
+      throw new Error("This project does not use sprints (sprints are retired for new projects: use modules and release_work/set_release_pace)");
+    }
     const key = wanted.trim().toLowerCase();
     const found = (project.sprints ?? []).find((sprint) => sprint.id.toLowerCase() === key || sprint.id.slice(1) === key || sprint.name.trim().toLowerCase() === key);
     if (!found) throw new Error(`Sprint "${wanted}" does not exist in this project (sprints: ${(project.sprints ?? []).map((sprint) => `${sprint.id} ${sprint.name}`).join(", ") || "none"})`);
@@ -1003,7 +1281,7 @@ export class ProjectService {
     const ids = [...new Set(assignees.map((assignee) => this.assignable(assignee).id))];
     try {
       if (ids.length === 0) throw new HttpError(400, "Diga ao menos um responsável");
-      if (ids.length > PROJECT_LIMITS.subtasksPerTask) throw new HttpError(400, `No máximo ${PROJECT_LIMITS.subtasksPerTask} subtarefas por tarefa`);
+      if (ids.length > PROJECT_SAFETY.perCall) throw new HttpError(400, `No máximo ${PROJECT_SAFETY.perCall} responsáveis por vez (rede de segurança)`);
       if (task.group || project.tasks.some((candidate) => candidate.parent === task.ref)) throw new HttpError(400, "Task has subtasks: assign the subtasks (the parent's assignees come from them)");
       if (hasStarted(task)) throw new HttpError(409, "Task already started: its assignees can no longer change");
       if (ids.length === 1) this.assign(project, task, ids[0]!, at);
@@ -1018,9 +1296,10 @@ export class ProjectService {
         task.updatedAt = at;
       } else {
         const { sprintId, dependsOn, doneWhen, briefing, title } = task;
+        const inheritedReleased = isReleased(task);
         let previous: string | undefined;
         for (const agentId of ids) {
-          const child = addNode(project, { title: `${title} · ${this.deps.state.read().agents.find((agent) => agent.id === agentId)?.name ?? agentId}`, parent: ref, briefing, assignee: agentId, priority: task.priority }, at);
+          const child = addNode(project, { title: `${title} · ${this.deps.state.read().agents.find((agent) => agent.id === agentId)?.name ?? agentId}`, parent: ref, briefing, assignee: agentId, priority: task.priority, released: inheritedReleased }, at);
           if (sprintId) child.sprintId = sprintId;
           // Em cadeia, cada subtarefa espera a anterior (e herda o que a mãe esperava só na primeira).
           child.dependsOn = mode === "chain" && previous ? [previous] : [...dependsOn];
@@ -1095,11 +1374,116 @@ export class ProjectService {
     return { deleted: done.live.length, archivedDeleted: done.archived.length };
   }
 
-  /** `DELETE /projects/:id/tasks/:ref`: apaga UMA folha do Avulsas já terminada (no arquivo vivo ou no mensal). */
-  async deleteAvulsasTask(projectId: string, ref: string): Promise<Project> {
+  /**
+   * `DELETE /projects/:id/tasks/:ref` (e `delete_task` do Maestro): apaga o item e toda a subárvore (tarefa, subtarefa ou módulo) de
+   * qualquer projeto. No Avulsas mantém o comportamento das folhas terminadas (`deleteAvulsasTask`). Recusa se alguma folha da subárvore
+   * está `em_andamento` ou `esperando_voce`; limpa Tasks das etapas, itens do "Para você", logs e referências em `dependsOn` dos outros;
+   * recalcula o estado ocioso e grava snapshot na Atividade.
+   */
+  async deleteTask(projectId: string, ref: string, options: { by?: "usuario" | "maestro"; reason?: string } = {}): Promise<TaskDeleteResult> {
+    if (projectId === AVULSAS_ID) {
+      const project = await this.deleteAvulsasTask(projectId, ref, options.by);
+      return { project, deleted: [ref], cleanedDependsOn: [] };
+    }
+    const project = this.editable(projectId);
+    const target = requireTask(project, ref);
+    const removedRefs = subtreeRefs(project, ref);
+    const removedSet = new Set(removedRefs);
+    const removedNodes = project.tasks.filter((task) => removedSet.has(task.ref));
+    const removedLeaves = leavesOf(project, ref);
+    const state = this.deps.state.read();
+    const stepIds = new Set(removedNodes.flatMap((task) => task.steps.flatMap((step) => (step.taskId ? [step.taskId] : []))));
+    const owned = state.tasks.filter((task) => task.role !== "request" && ((task.work?.projectId === projectId && removedSet.has(task.work.ref)) || stepIds.has(task.id)));
+    const busyLeaf =
+      removedLeaves.find((leaf) => leaf.status === "em_andamento" || leaf.status === "esperando_voce") ??
+      removedNodes.find((node) => node.status === "em_andamento" || node.status === "esperando_voce");
+    const busyTask = owned.find((task) => task.status === "in_progress" || task.status === "waiting_approval");
+    if (busyLeaf || busyTask) {
+      throw new HttpError(
+        409,
+        options.by === "maestro"
+          ? `Cannot delete ${ref}: "${busyLeaf?.title ?? ref}" is currently running or waiting for the owner. Cancel it or wait for it to finish first.`
+          : "Não dá para apagar enquanto houver tarefa em andamento ou esperando você: cancele ou espere terminar antes",
+      );
+    }
+    const before = structuredClone(project);
+    const at = this.at();
+    const cleanedDependsOn: { ref: string; removed: string[] }[] = [];
+    try {
+      project.tasks = project.tasks.filter((task) => !removedSet.has(task.ref));
+      if (target.parent && !removedSet.has(target.parent)) restoreEmptyParent(project, target.parent, at);
+      for (const task of project.tasks) {
+        const dropped = task.dependsOn.filter((dep) => removedSet.has(dep));
+        if (dropped.length === 0) continue;
+        task.dependsOn = task.dependsOn.filter((dep) => !removedSet.has(dep));
+        task.updatedAt = at;
+        cleanedDependsOn.push({ ref: task.ref, removed: dropped });
+      }
+      refreshIdle(project, at);
+      project.updatedAt = at;
+      assertValidTree(project);
+    } catch (error) {
+      this.restore(project, before);
+      throw error;
+    }
+    const cancelReason = options.by === "maestro" ? "Tarefa apagada pelo Maestro" : "Tarefa apagada pelo usuário";
+    for (const task of owned) if (task.status === "queued") this.deps.orchestrator.cancelTask(task.id, cancelReason);
+    const fresh = this.deps.state.read();
+    const ownedIds = new Set(owned.map((task) => task.id));
+    const tasks = fresh.tasks.filter((task) => !ownedIds.has(task.id));
+    const removedTaskIds = fresh.tasks.filter((task) => ownedIds.has(task.id)).map((task) => task.id);
+    const items = this.deps.state.readForYou();
+    const forYou = dropForYouItems(items, (item) => (item.projectId === projectId && item.taskRef !== undefined && removedSet.has(item.taskRef)) || (item.taskId !== undefined && ownedIds.has(item.taskId)));
+    const copies = this.copies([project]);
+    const events: ServerEvent[] = [
+      ...forYou.events,
+      ...(removedTaskIds.length > 0 ? [{ type: "office:snapshot" as const, office: { ...fresh, tasks } }] : []),
+      { type: "project:upserted", project: structuredClone(copies[0]!) },
+    ];
+    try {
+      await persistOrThrow(
+        (attempt) => this.deps.state.commit({ projects: copies, ...(removedTaskIds.length > 0 ? { tasks } : {}), ...(forYou.forYou ? { forYou: forYou.forYou } : {}), events: attempt === 0 ? events : [] }),
+        { ...this.persistOptions("a exclusão do item"), fail: (error) => new HttpError(500, `Não consegui gravar no disco: ${error instanceof Error ? error.message : String(error)}`) },
+      );
+    } catch (error) {
+      this.restore(project, before);
+      void this.deps.state.commit({ projects: [structuredClone(before)], tasks: fresh.tasks, forYou: items, events: [{ type: "project:upserted", project: structuredClone(before) }] }).catch(() => undefined);
+      throw error;
+    }
+    if (removedTaskIds.length > 0) await this.deps.cleanup?.removeLeftovers({ taskIds: removedTaskIds });
+    const who = options.by === "maestro" ? "O Maestro" : "Você";
+    const actor = options.by === "maestro" ? ACTIVITY_MAESTRO : ACTIVITY_USER;
+    const itemsNote = removedRefs.length > 1 ? ` (${removedRefs.length} itens)` : "";
+    activeActivity()?.record({
+      workspaceId: this.deps.workspaceId,
+      category: "plano",
+      action: "tarefa-apagada",
+      actor,
+      summary: `${who} apagou ${quoteName(shorten(target.title, 60))}${itemsNote} em ${quoteName(shorten(project.title, 60))}`,
+      refs: { planId: project.id },
+      data: {
+        ref: target.ref,
+        title: target.title,
+        briefing: target.briefing,
+        ...(target.parent ? { parent: target.parent } : {}),
+        deletedRefs: removedRefs,
+        ...(cleanedDependsOn.length > 0 ? { cleanedDependsOn } : {}),
+        ...(options.reason ? { reason: options.reason } : {}),
+      },
+    });
+    this.deps.log.info({ projectId, ref, deleted: removedRefs.length, cleanedDeps: cleanedDependsOn.length }, "item do projeto apagado");
+    if (project.status === "ativo") {
+      this.pump();
+      this.deps.orchestrator.retryWaiting();
+    }
+    return { project: structuredClone(project), deleted: removedRefs, cleanedDependsOn };
+  }
+
+  /** `DELETE /projects/avulsas/tasks/:ref`: apaga UMA folha do Avulsas já terminada (no arquivo vivo ou no mensal). */
+  async deleteAvulsasTask(projectId: string, ref: string, by: "usuario" | "maestro" = "usuario"): Promise<Project> {
     if (projectId !== AVULSAS_ID) {
       if (!this.plans.some((candidate) => candidate.id === projectId)) throw new HttpError(404, `Projeto "${projectId}" não encontrado`);
-      throw new HttpError(409, "Só dá para apagar tarefas do projeto Avulsas: apagar uma tarefa no meio de um projeto quebraria os “Depois de”");
+      throw new HttpError(409, "Só dá para apagar tarefas do projeto Avulsas por este método");
     }
     const live = this.avulsas()?.tasks.find((candidate) => candidate.ref === ref);
     const leaf = live ?? (await this.deps.archive?.find(ref));
@@ -1109,7 +1493,8 @@ export class ProjectService {
     if (this.leafBusy(state, leaf, this.activeTaskIds(state))) throw new HttpError(409, "A tarefa ainda tem uma execução em andamento: pare antes de apagar");
     const done = await this.dropLeaves(new Set(live ? [ref] : []), new Set(live ? [] : [ref]));
     if (done.live.length + done.archived.length > 0) {
-      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "avulsa-apagada", actor: ACTIVITY_USER, summary: `Você apagou a tarefa avulsa ${quoteName(shorten(leaf.title, 60))}`, refs: { planId: AVULSAS_ID }, data: { ref } });
+      const who = by === "maestro" ? "O Maestro" : "Você";
+      activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "avulsa-apagada", actor: by === "maestro" ? ACTIVITY_MAESTRO : ACTIVITY_USER, summary: `${who} apagou a tarefa avulsa ${quoteName(shorten(leaf.title, 60))}`, refs: { planId: AVULSAS_ID }, data: { ref } });
     }
     return structuredClone(this.avulsas() ?? emptyAvulsas(this.at()));
   }
@@ -1209,7 +1594,8 @@ export class ProjectService {
     const taskIds = [...ownedIds];
     const logs = (await this.deps.cleanup?.countTaskLogs(taskIds)) ?? 0;
     await this.deps.cleanup?.removeLeftovers({ taskIds });
-    if (wasOpen) this.deps.host(id)?.close(id, "Projeto apagado pelo usuário");
+    const reqId = requestIdOf(project);
+    if (wasOpen && !this.holds(reqId)) this.deps.host(reqId)?.close(reqId, "Projeto apagado pelo usuário");
     activeActivity()?.record({ workspaceId: this.deps.workspaceId, category: "plano", action: "projeto-apagado", actor: ACTIVITY_USER, summary: `Você apagou o projeto ${quoteName(shorten(project.title, 60))}`, refs: { planId: id }, data: { tasks: project.tasks.length, logs } });
     this.deps.log.info({ projectId: id, tasks: project.tasks.length, logs }, "projeto apagado");
     this.pump();
@@ -1337,6 +1723,8 @@ export class ProjectService {
     if (leaf.priority === "normal") leaf.priority = project.priority;
     if (leaf.doneWhen.length === 0 && project.doneWhen?.length) leaf.doneWhen = structuredClone(project.doneWhen);
     leaf.meta = { requestId: project.id, origin: "usuario", ...(project.brief ? { brief: project.brief } : {}), createdAt: project.createdAt };
+    // A tarefa avulsa nasce liberada, sempre (o Avulsas não tem Planejada).
+    delete leaf.released;
     const step = leaf.steps[0]!;
     if (!step.taskId) {
       // Nunca foi entregue: a folha do Avulsas só anda com uma Task na fila do agente (como o delegate_task cria).
@@ -1477,10 +1865,11 @@ export class ProjectService {
 
   // ---------- Agendador: ordem e admissão das tarefas na fila dos agentes ----------
 
-  /** Entrada da ordem de urgência de uma Task de projeto (prioridade, prazo, aprovado há mais tempo); undefined = não é de projeto. */
+  /** Entrada da ordem de urgência de uma Task de projeto (prioridade, prazo, aprovado há mais tempo); undefined = não é de projeto ou ainda Planejada. */
   rankOf(task: Task): RankInput | undefined {
     const found = this.locateAny(task);
-    return found ? taskRankInput(found.plan, found.planTask, found.plan.tasks.indexOf(found.planTask)) : undefined;
+    if (!found || releaseHold(found.planTask)) return undefined;
+    return taskRankInput(found.plan, found.planTask, found.plan.tasks.indexOf(found.planTask));
   }
 
   /**
@@ -1526,36 +1915,118 @@ export class ProjectService {
     return count >= 3 ? total / count : undefined;
   }
 
-  /** Quantos projetos abertos têm prazo atrasado ou em menos de 24 h (o dado do resumo da Gestão). */
+  /** Quantos projetos abertos (com trabalho liberado) têm prazo atrasado ou em menos de 24 h (o dado do resumo da Gestão). */
   atRiskCount(): number {
     const now = this.deps.now().getTime();
-    return expandAvulsas(this.plans).filter((project) => isDeadlineAtRisk(project, now)).length;
+    return expandAvulsas(this.plans).filter((project) => {
+      if (!isDeadlineAtRisk(project, now)) return false;
+      const open = leavesOf(project).filter((leaf) => !isProjectTaskFinished(leaf) && !leaf.archived);
+      return open.length === 0 || open.some((leaf) => !releaseHold(leaf));
+    }).length;
   }
 
   // ---------- Maestro ----------
 
+  /** Resolve se o plano novo pede aprovação ou começa direto: a regra do workspace vence sobre a escolha do Maestro. */
+  private resolvePlanApproval(requested: ProjectInputApproval | undefined): { effective: ProjectInputApproval; rule: PlanApprovalRule; by?: "regra" | "maestro"; quote?: string } {
+    const settings = this.deps.planApproval?.() ?? { rule: DEFAULT_PLAN_APPROVAL };
+    if (settings.rule === "always") return { effective: "ask", rule: "always" };
+    if (settings.rule === "never") return { effective: "skip", rule: "never", by: "regra", ...(settings.note?.quote ? { quote: settings.note.quote } : {}) };
+    const effective = requested ?? "ask";
+    return effective === "skip" ? { effective: "skip", rule: "maestro", by: "maestro" } : { effective: "ask", rule: "maestro" };
+  }
+
+  /**
+   * Aplica a ativação de um plano aprovado (seja pelo dono no cartão, pela regra "never" do workspace
+   * ou pela escolha "skip" do Maestro): muda status para `ativo`, grava `approvedAt`/`approval`, ajusta
+   * `released` (preservando o do Maestro quando `releaseOverride` é omitido), marca `waitingSince` e
+   * avança sprints se o projeto legado tiver.
+   */
+  private applyApprovalState(plan: Project, at: string, approval: ProjectApproval, releaseOverride?: "all" | "none"): { sprintEvents: SprintEvent[]; effectiveRelease: "all" | "none" | "mixed"; count: number; releasedCount: number; plannedCount: number } {
+    Object.assign(plan, { status: "ativo", approvedAt: at, approval, updatedAt: at });
+    if (releaseOverride === "all") {
+      for (const task of plan.tasks) task.released = true;
+    } else if (releaseOverride === "none") {
+      for (const task of plan.tasks) task.released = false;
+    } else {
+      // Sem escolha explícita do dono: mantém o `released` do Maestro (plano legado sem o campo nasce liberado).
+      for (const task of plan.tasks) if (task.released === undefined) task.released = true;
+    }
+    for (const task of plan.tasks) if (task.status === "a_fazer" && task.released !== false) task.waitingSince = at;
+    // A primeira sprint começa na data dela, ou agora se a data já passou (as datas andam juntas, na mesma duração).
+    const firstSprint = sprintsInOrder(plan).find((sprint) => sprint.status === "planejada");
+    if (firstSprint && Date.parse(firstSprint.endAt) <= Date.parse(at)) shiftSprints(plan, Date.parse(at) - Date.parse(firstSprint.startAt));
+    const sprintEvents = advanceSprints(plan, Date.parse(at));
+    const leaves = leafTasks(plan.tasks);
+    const count = leaves.length;
+    const plannedCount = leaves.filter((leaf) => leaf.released === false).length;
+    const releasedCount = count - plannedCount;
+    const effectiveRelease: "all" | "none" | "mixed" = releaseOverride ?? (plannedCount === 0 ? "all" : releasedCount === 0 ? "none" : "mixed");
+    return { sprintEvents, effectiveRelease, count, releasedCount, plannedCount };
+  }
+
   /**
    * `create_project` (`create_plan`): projeto novo para o pedido (ou a versão nova de um que ainda
-   * não foi aprovado). Nada roda: o usuário aprova primeiro. Ordem: monta, GRAVA, e só então fecha o
-   * item antigo do "Para você" e abre o novo; se a gravação falhar, nada muda (o item antigo continua
-   * aberto) e o erro volta ao Maestro.
+   * não foi aprovado). Com `new_project: true`, cria um projeto ADICIONAL no mesmo pedido (UUID próprio
+   * e `requestId` apontando para o pedido). Dependendo de `approval` e da regra do workspace, ou abre
+   * o cartão em "Para você" (caminho "ask") ou já nasce aprovado e começa a distribuir as folhas
+   * liberadas sem abrir cartão (caminho "skip"). Ordem: monta, GRAVA, e só então fecha item antigo /
+   * abre cartão / dispara fila; se a gravação falhar, nada muda.
    */
   async propose(requestId: string, input: ProposeInput): Promise<Project> {
     const state = this.deps.state.read();
     const request = this.requireRequest(state, requestId);
-    const current = this.openPlan(requestId);
-    if (current?.status === "ativo") {
-      throw new Error("This request already has an approved project running. To add work, use add_project_tasks; to redo it, resolve_task(action: \"cancel_project\") first.");
+    const sameIdIndex = this.plans.findIndex((candidate) => candidate.id === requestId && !isAvulsas(candidate));
+    const sameId = sameIdIndex >= 0 ? this.plans[sameIdIndex] : undefined;
+    let current: Project | undefined;
+    let planId: string;
+    let extraRequestId: string | undefined;
+    if (input.new_project === true) {
+      // Primeiro projeto do pedido mantém o id do pedido (compatibilidade); os extras ganham UUID próprio + `requestId`.
+      if (!sameId) {
+        planId = requestId;
+      } else {
+        planId = randomUUID();
+        extraRequestId = requestId;
+      }
+    } else {
+      // Se há um projeto do pedido em "ajustando" (inclusive um extra), a nova versão vai nele.
+      const adjusting = this.plansForRequest(requestId).find((candidate) => candidate.status === "ajustando");
+      const target = adjusting ?? sameId;
+      if (target) {
+        const isCynoShell = target.origin === "cyno" && !hasLifecycle(target) && target.tasks.length === 0;
+        if (target.status === "proposto" || target.status === "ajustando") {
+          current = target;
+          planId = target.id;
+        } else if (isCynoShell) {
+          planId = target.id;
+        } else if (target.status === "concluido" || target.status === "cancelado") {
+          const stateLabel = target.status === "concluido" ? "completed" : "canceled";
+          throw new Error(
+            `This request already has a ${stateLabel} project (${target.id}). Do not overwrite it: use add_project_tasks or set_project_status(project_id: "${target.id}", status: "active") to reopen it, or call create_project with new_project: true to create another project.`,
+          );
+        } else {
+          throw new Error(
+            `This request already has an open project (${target.id}). To add work, use add_project_tasks; to create another project in this request, call create_project with new_project: true; to stop it, use set_project_status(project_id: "${target.id}", status: "canceled").`,
+          );
+        }
+      } else {
+        planId = requestId;
+      }
+    }
+    if (input.tasks.some((task) => task.sprint?.trim())) {
+      throw new Error("Sprints are retired for new projects: use modules and release_work/set_release_pace");
     }
     const at = this.at();
     const fields = this.projectFields(input, at);
-    const built = buildProjectPlan({ tasks: input.tasks, sprints: input.sprints, labels: input.labels }, this.pool(state), at, this.deps.now().getTime(), fields.set.startAt);
+    const built = buildProjectPlan({ tasks: input.tasks, labels: input.labels }, this.pool(state), at, this.deps.now().getTime(), fields.set.startAt);
     if (!built.ok) throw new Error(`Project rejected (fix these and call create_project again):\n- ${built.errors.join("\n- ")}`);
+    applyInputRelease(built.tasks, input.tasks, input.release);
     const treeFields = { tasks: built.tasks, sprints: built.sprints, labels: built.labels };
     const title = input.title?.trim() || requestTitle(request) || "Plano";
     const summary = input.summary?.trim() || undefined;
     const oldItemId = current?.forYouId;
-    const index = this.plans.findIndex((candidate) => candidate.id === requestId);
+    const index = current ? this.plans.indexOf(current) : extraRequestId ? -1 : sameIdIndex;
     const previous = index >= 0 ? structuredClone(this.plans[index]!) : undefined;
     let plan: Project;
     if (current) {
@@ -1565,12 +2036,55 @@ export class ProjectService {
       else delete current.summary;
       plan = current;
     } else {
-      // O projeto tem o id do pedido. Um que já terminou (plano anterior concluído ou cancelado) é refeito no lugar.
       // Um projeto-casca (pedido do Cyno: briefing, prioridade e prazos já gravados) passa o que tem para o projeto de verdade.
-      const carried = previous?.origin === "cyno" ? carriedFromShell(previous) : {};
-      plan = { ...projectDefaults(), ...carried, id: requestId, title, ...(summary ? { summary } : {}), status: "proposto", version: 1, ...treeFields, createdAt: previous?.createdAt ?? at, updatedAt: at, ...fields.set };
+      const carried = !extraRequestId && previous?.origin === "cyno" ? carriedFromShell(previous) : {};
+      plan = {
+        ...projectDefaults(),
+        ...carried,
+        id: planId,
+        ...(extraRequestId ? { requestId: extraRequestId } : {}),
+        title,
+        ...(summary ? { summary } : {}),
+        status: "proposto",
+        version: 1,
+        ...treeFields,
+        createdAt: previous?.createdAt ?? at,
+        updatedAt: at,
+        ...fields.set,
+      };
       if (index >= 0) this.plans[index] = plan;
       else this.plans.push(plan);
+    }
+    const decision = this.resolvePlanApproval(input.approval);
+    if (decision.effective === "skip") {
+      delete plan.forYouId;
+      const approval: ProjectApproval = { by: decision.by!, at, ...(decision.quote ? { quote: decision.quote } : {}) };
+      const { sprintEvents, effectiveRelease } = this.applyApprovalState(plan, at, approval);
+      try {
+        await this.saveStrict([plan]);
+      } catch (error) {
+        if (previous && index >= 0) this.plans[index] = previous;
+        else this.plans.splice(this.plans.indexOf(plan), 1);
+        if (previous) void this.deps.state.commit({ projects: [previous], events: [] }).catch(() => undefined);
+        throw error;
+      }
+      if (oldItemId) await this.deps.forYou.close(oldItemId, "respondido", `Substituído pela versão ${plan.version}`).catch((error: unknown) => this.deps.log.error({ err: error }, "falha ao fechar o item antigo do plano"));
+      this.recordSprintEvents(plan, sprintEvents, ACTIVITY_SYSTEM);
+      const whyLabel = decision.by === "regra" ? "regra do workspace" : "escolha do Maestro";
+      activeActivity()?.record({
+        workspaceId: this.deps.workspaceId,
+        category: "plano",
+        action: "plano-aprovado",
+        actor: decision.by === "regra" ? ACTIVITY_SYSTEM : ACTIVITY_MAESTRO,
+        summary: `Plano de «${shorten(plan.title, 60)}» começou sem pedir aprovação (${whyLabel})`,
+        refs: { planId: plan.id },
+        data: { release: effectiveRelease, approvalBy: decision.by },
+      });
+      this.logRequest(request, { kind: "status", status: "resumed", message: `Plano começou sem pedir aprovação (${whyLabel}): o servidor distribui as tarefas` });
+      this.progress(plan);
+      this.deps.log.info({ requestId, planId: plan.id, tasks: plan.tasks.length, version: plan.version, approvalBy: decision.by }, "plano aprovado sem pedir confirmação");
+      this.pump();
+      return structuredClone(plan);
     }
     try {
       // Sem evento ainda: o projeto só aparece para os clientes quando o item do "Para você" já existe (a gravação abaixo publica).
@@ -1641,44 +2155,87 @@ export class ProjectService {
     return { set, clear };
   }
 
+  /** Localiza o projeto para ferramentas do Maestro (`project_id` direto ou `request_id` do pedido; erro se o pedido tem vários). */
+  private resolveTarget(target: ProjectTarget, options: { allowCompleted?: boolean; actionName: string }): Project {
+    if (typeof target === "object" && "projectId" in target) {
+      const plan = this.plans.find((candidate) => candidate.id === target.projectId && !isAvulsas(candidate));
+      if (!plan) throw new Error(`Project "${target.projectId}" not found. Use list_projects.`);
+      if (plan.status === "ajustando") throw new Error(`Project ${plan.id} is waiting for adjustments: send the new version with create_project.`);
+      if (plan.status === "cancelado") throw new Error(`Project ${plan.id} is canceled: reopen it first with set_project_status(project_id: "${plan.id}", status: "active").`);
+      if (plan.status === "concluido" && !options.allowCompleted) throw new Error(`Project ${plan.id} is completed: reopen it first with set_project_status(project_id: "${plan.id}", status: "active").`);
+      return plan;
+    }
+    const id = typeof target === "string" ? target : target.requestId;
+    const all = this.plansForRequest(id).filter((plan) => hasLifecycle(plan));
+    const candidates = options.allowCompleted ? all.filter((plan) => isProjectOpen(plan) || plan.status === "concluido") : all.filter(isProjectOpen);
+    if (candidates.length > 1) {
+      const list = candidates.map((plan) => `${plan.id} («${plan.title}», ${plan.status})`).join("; ");
+      throw new Error(`Request "${id}" has ${candidates.length} projects (${list}). Pass project_id instead of request_id to ${options.actionName}.`);
+    }
+    if (candidates.length === 1) return candidates[0]!;
+    // Compatibilidade: chamadas internas que passam diretamente o `project.id` de um projeto manual (sem request).
+    if (typeof target === "string") {
+      const direct = this.plans.find((candidate) => candidate.id === id && !isAvulsas(candidate));
+      if (direct && (isProjectOpen(direct) || (options.allowCompleted && direct.status === "concluido"))) return direct;
+    }
+    const canceled = all.find((plan) => plan.status === "cancelado");
+    if (canceled) throw new Error(`Project ${canceled.id} is canceled: reopen it first with set_project_status(project_id: "${canceled.id}", status: "active").`);
+    throw new Error(options.actionName === "add_project_tasks" ? "This request has no open project: use create_project" : "This request has no open project");
+  }
+
   /**
-   * `add_project_tasks`: mais tarefas num plano aprovado (sem nova aprovação), na árvore (`parent`, `kind: "group"`) e nas
-   * sprints que já existem (`sprint`; sem ele a tarefa herda a sprint ativa). Dar filhas a uma folha que ainda não começou a
-   * transforma em tarefa-mãe.
+   * `add_project_tasks`: mais tarefas num projeto (por `project_id` ou `request_id`, sem nova aprovação), na árvore
+   * (`parent`, `kind: "module" | "group"`) e nas sprints que já existem (`sprint`; sem ele a tarefa herda a sprint ativa).
+   * Dar filhas a uma folha que ainda não começou a transforma em tarefa-mãe. Em projeto `concluido`, reabre-o sozinho.
    */
-  addTasks(requestId: string, tasks: ProjectTaskInput[]): Project {
+  addTasks(target: ProjectTarget, tasks: ProjectTaskInput[], options: { release?: ProjectInputRelease } = {}): Project {
     const state = this.deps.state.read();
-    this.requireRequest(state, requestId);
-    const plan = this.openPlan(requestId);
-    if (!plan) throw new Error("This request has no open project: use create_project");
+    if (typeof target === "object" && "requestId" in target) this.requireRequest(state, target.requestId);
+    const plan = this.resolveTarget(target, { allowCompleted: true, actionName: "add_project_tasks" });
     const at = this.at();
     const base = structuredClone(plan.tasks);
     for (const parentRef of new Set(tasks.flatMap((task) => (task.parent?.trim() ? [task.parent.trim()] : [])))) {
       const parent = base.find((candidate) => candidate.ref === parentRef);
       if (!parent || parent.group || base.some((candidate) => candidate.parent === parentRef)) continue;
-      if (hasStarted(parent)) throw new Error(`Tasks rejected:\n- Task ${parentRef} already started, so it cannot become a parent. Put the new tasks beside it or under a deliverable`);
+      if (hasStarted(parent)) throw new Error(`Tasks rejected:\n- Task ${parentRef} already started, so it cannot become a parent. Put the new tasks beside it or under a module`);
       becomeMother(parent, at);
     }
     const built = buildProjectPlan({ tasks }, this.pool(state), at, this.deps.now().getTime(), undefined, { tasks: base, sprints: plan.sprints, labels: plan.labels });
     if (!built.ok) throw new Error(`Tasks rejected (fix these and call add_project_tasks again):\n- ${built.errors.join("\n- ")}`);
     plan.tasks = [...base, ...built.tasks];
     plan.labels = built.labels;
+    applyInputRelease(built.tasks, tasks, options.release ?? "now", base);
     // Tarefa nova num projeto com sprint ativa herda essa sprint (sem sprint ativa, fica "sem sprint").
     const inherited = inheritSprint(plan);
     if (inherited) for (const task of built.tasks) if (isLeaf(plan, task) && !task.sprintId) task.sprintId = inherited;
+    const reopened = plan.status === "concluido";
+    if (reopened) {
+      plan.status = "ativo";
+      delete plan.finishedAt;
+      delete plan.doneNotified;
+    }
     plan.updatedAt = this.at();
-    if (plan.status === "ativo") for (const task of built.tasks) if (task.status === "a_fazer") task.waitingSince = this.at();
+    if (plan.status === "ativo") for (const task of built.tasks) if (task.status === "a_fazer" && !releaseHold(task)) task.waitingSince = this.at();
     this.save([plan]);
-    const request = state.tasks.find((task) => task.id === requestId);
+    if (reopened) {
+      activeActivity()?.record({
+        workspaceId: this.deps.workspaceId,
+        category: "plano",
+        action: "projeto-reaberto",
+        actor: ACTIVITY_MAESTRO,
+        summary: `O Maestro reabriu o projeto ${quoteName(shorten(plan.title, 60))} ao adicionar tarefas`,
+        refs: { planId: plan.id },
+      });
+    }
+    const request = state.tasks.find((task) => task.id === requestIdOf(plan));
     if (request) this.logRequest(request, { kind: "text", text: `O Maestro incluiu ${built.tasks.length} tarefa(s) no plano: ${built.tasks.map((task) => `${task.ref} «${task.title}»`).join(", ")}` });
     this.pump();
     return structuredClone(plan);
   }
 
   /** `resolve_task` (`resolve_plan_task`): o Maestro resolve uma tarefa que falhou (retry, skip) ou cancela o projeto (`cancel_plan` é o nome antigo). */
-  decideTask(requestId: string, ref: string, action: "retry" | "skip" | "cancel_project" | "cancel_plan", instruction?: string): string {
-    const plan = this.openPlan(requestId);
-    if (!plan) throw new Error("This request has no open project");
+  decideTask(target: ProjectTarget, ref: string, action: "retry" | "skip" | "cancel_project" | "cancel_plan", instruction?: string): string {
+    const plan = this.resolveTarget(target, { allowCompleted: false, actionName: "resolve_task" });
     if (action === "cancel_project" || action === "cancel_plan") {
       this.cancelPlan(plan, `Cancelado pelo Maestro${instruction ? `: ${instruction}` : ""}`);
       return "Project canceled (the running tasks stopped). Close the request with complete_request explaining to the user what was done.";
@@ -1714,7 +2271,7 @@ export class ProjectService {
     for (const key of ["taskId", "result", "startedAt", "finishedAt"] as const) delete step[key];
     if (instruction?.trim()) step.what = `${step.what}\n\nInstrução do Maestro para a nova tentativa: ${instruction.trim()}`;
     task.status = task.current > 0 ? "em_andamento" : "a_fazer";
-    if (task.status === "a_fazer") task.queuedAt = at;
+    if (task.status === "a_fazer" && !releaseHold(task)) task.queuedAt = at;
     delete task.failure;
     Object.assign(task, { waitingSince: at, stallWarned: false, updatedAt: at });
   }
@@ -1759,7 +2316,7 @@ export class ProjectService {
         clearBlocked(task, at);
         delete task.note;
         if (task.status === "backlog" || task.status === "a_fazer") task.status = idleStatus(project, task);
-        if (task.status === "a_fazer") task.queuedAt = at;
+        if (task.status === "a_fazer" && !releaseHold(task)) task.queuedAt = at;
         if (task.status === "a_fazer" || task.status === "em_andamento") task.waitingSince = at;
         Object.assign(task, { stallWarned: false, updatedAt: at });
       }
@@ -1774,17 +2331,42 @@ export class ProjectService {
   }
 
   /**
-   * `get_project` (`get_plan`): o quadro do projeto em texto para o Maestro: dados, sprints com estado, o que espera o dono e a
-   * árvore compacta (entregável > tarefa > subtarefa) com estado, responsáveis e sprint. Sem árvore nem sprints, a lista plana de sempre.
+   * `get_project` (`get_plan`): o quadro do projeto em texto para o Maestro. Aceita `project_id` ou `request_id` (se o pedido
+   * tem vários projetos, lista todos e pede `project_id`). Projetos pequenos (<= 40 itens) saem inteiros; árvores grandes mostram
+   * o cabeçalho + módulos de primeiro nível + só folhas abertas até o teto (40 por módulo, 300 no total). `ref` expande a subárvore
+   * inteira daquele item (com o mesmo teto de 300 linhas por chamada).
    */
-  describe(requestId: string): string {
-    const plan = this.forRequest(requestId);
-    if (!plan) return "This request has no plan.";
+  describe(target: ProjectTarget, options: { ref?: string } = {}): string {
+    let plan: Project | undefined;
+    if (typeof target === "object" && "projectId" in target) {
+      plan = this.plans.find((candidate) => candidate.id === target.projectId && !isAvulsas(candidate)) ?? this.leavesView(target.projectId);
+      if (!plan) throw new Error(`Project "${target.projectId}" not found. Use list_projects.`);
+    } else {
+      const reqId = typeof target === "string" ? target : target.requestId;
+      const matching = this.plansForRequest(reqId).filter(isPlanProject);
+      if (matching.length > 1) {
+        return [
+          `Request ${reqId} has ${matching.length} projects. Call get_project with project_id to see details:`,
+          ...matching.map((candidate) => `- ${candidate.id} «${candidate.title}» [${candidate.status}] — ${progressLabel(projectUnitProgress(candidate))}`),
+        ].join("\n");
+      }
+      plan = matching[0] ?? this.forRequest(reqId);
+      if (!plan) return "This request has no plan.";
+    }
     const state = this.deps.state.read();
     const name = (id: string) => this.agentName(state, id);
-    const lines = [`Projeto ${plan.id} «${plan.title}» (versão ${plan.version}) — ${plan.status}; ${progressLabel(projectProgress(plan))}.`];
+    const lines = [`Projeto ${plan.id}${plan.requestId ? ` (pedido ${plan.requestId})` : ""} «${plan.title}» (versão ${plan.version}) — ${plan.status}; ${progressLabel(projectUnitProgress(plan))}.`];
     const meta = [plan.priority !== "normal" ? `prioridade ${plan.priority}` : "", plan.startAt ? `começa ${plan.startAt}` : "", plan.dueAt ? `prazo ${plan.dueAt}` : "", plan.pace?.hoursPerDay ? `${plan.pace.hoursPerDay} h/dia` : ""].filter(Boolean);
     if (meta.length > 0) lines.push(meta.join(" · "));
+    // Liberação: "X planned, Y released" e o ritmo diário (só aparece com algo Planejado ou com ritmo ligado; sem isso o texto é o de sempre).
+    const plannedCount = plannedLeafCount(plan);
+    if (plannedCount > 0 || plan.releasePace) {
+      const open = leavesOf(plan).filter((leaf) => !isProjectTaskFinished(leaf) && !leaf.archived).length;
+      const pace = plan.releasePace;
+      const today = pace?.given?.day === workClock(this.deps.now().getTime()).day ? pace.given.count : 0;
+      const paceText = pace ? `; daily release: ${pace.perDay} ${pace.unit === "modulos" ? "modules" : "tasks"}/day${pace.startsOn ? ` from ${pace.startsOn}` : ""} (${today} of ${pace.perDay} released today)` : "";
+      lines.push(`Release: ${plannedCount} planned, ${Math.max(0, open - plannedCount)} released${paceText}.`);
+    }
     if (plan.summary) lines.push(`Summary: ${shorten(plan.summary, 300)}`);
     const nested = plan.tasks.some((task) => task.parent || task.group);
     const sprints = sprintsInOrder(plan);
@@ -1806,55 +2388,142 @@ export class ProjectService {
     for (const leaf of leavesOf(plan)) if (leaf.status === "esperando_voce") waiting.push(`${leaf.ref} «${shorten(leaf.title, 50)}» waits for the owner`);
     for (const leaf of blockedLeaves(plan)) waiting.push(`${leaf.ref} «${shorten(leaf.title, 50)}» is blocked by a cancelled or failed dependency`);
     if (waiting.length > 0) lines.push(`Waiting for the owner: ${waiting.join("; ")}.`);
+    const blockedSet = new Set(blockedLeaves(plan).map((leaf) => leaf.ref));
     const line = (task: ProjectTask, pad: string) => {
       const kids = plan.tasks.filter((candidate) => candidate.parent === task.ref);
-      const status = task.skipped ? "pulada" : statusOf(plan, task);
+      const rState = plannedCount > 0 ? releaseState(plan, task.ref) : undefined;
+      const released = rState ? ({ planejada: "planned", liberada: "released", mista: "mixed" } as const)[rState] : undefined;
+      const status = `${task.skipped ? "pulada" : statusOf(plan, task)}${released ? `, ${released}` : ""}`;
       if (task.group || kids.length > 0) {
-        const progress = treeProgress(plan, task.ref);
+        const progress = moduleProgress(plan, task.ref);
         const who = assigneesOf(plan, task).map(name).join(", ");
-        return `${pad}- ${task.ref} «${task.title}» [${status}]${task.group ? " (deliverable)" : ""} ${progress.done}/${progress.total}${who ? `; ${who}` : ""}`;
+        const waits = task.dependsOn.length > 0 ? `; depends on ${task.dependsOn.join(", ")}` : "";
+        return `${pad}- ${task.ref} «${task.title}» [${status}]${task.group ? " (module)" : ""} ${progress.done}/${progress.total}${who ? `; ${who}` : ""}${waits}`;
       }
       const chain = task.steps.map((step, index) => `${name(step.agentId)}${step.status === "feita" ? " ✓" : step.status === "falhou" ? " ✗" : index === task.current && step.status === "em_andamento" ? " …" : ""}`).join(" → ");
       const deps = task.dependsOn.length > 0 ? `; depende de ${task.dependsOn.join(", ")}` : "";
       const sprint = task.sprintId ? `; ${task.sprintId}` : sprints.length > 0 ? "; no sprint" : "";
-      const stuck = deadDependencies(plan, task).filter(() => blockedLeaves(plan).some((leaf) => leaf.ref === task.ref));
+      const stuck = blockedSet.has(task.ref) ? deadDependencies(plan, task) : [];
       const blocked = stuck.length > 0 ? ` — BLOCKED: ${stuck.map((dep) => `${dep.ref} was ${dep.status === "falhou" ? "failed" : "cancelled"}`).join(", ")} (it does not run on its own; retry that task, remove the dependency or cancel this one)` : "";
       const extra = task.failure ? ` — falha: ${shorten(task.failure, 200)}` : task.note ? ` — ${task.note}` : "";
       return `${pad}- ${task.ref} «${task.title}» [${status}] ${chain}${deps}${sprint}${extra}${blocked}`;
     };
-    const walk = (task: ProjectTask, depth: number) => {
-      lines.push(line(task, "  ".repeat(depth)));
-      for (const child of plan.tasks.filter((candidate) => candidate.parent === task.ref)) walk(child, depth + 1);
-    };
-    if (nested) for (const top of plan.tasks.filter((task) => !task.parent)) walk(top, 0);
-    else for (const task of plan.tasks) lines.push(line(task, ""));
+    // Expansão de um item específico (`ref`): mostra toda a subárvore dele (inclusive concluídas) até o teto por chamada.
+    if (options.ref) {
+      const root = plan.tasks.find((task) => task.ref === options.ref);
+      if (!root) throw new Error(`Item "${options.ref}" does not exist in project ${plan.id}.`);
+      let emitted = 0;
+      let hidden = 0;
+      let nextExpandRef: string | undefined;
+      const walkSub = (task: ProjectTask, depth: number) => {
+        if (emitted >= DESCRIBE_TOTAL_MAX) {
+          hidden += 1;
+          if (!nextExpandRef && !isLeaf(plan, task)) nextExpandRef = task.ref;
+          return;
+        }
+        lines.push(line(task, "  ".repeat(depth)));
+        emitted += 1;
+        for (const child of childrenOf(plan, task.ref)) walkSub(child, depth + 1);
+      };
+      walkSub(root, 0);
+      if (hidden > 0) lines.push(`${hidden} more items hidden: call get_project with ref=${nextExpandRef ?? root.ref} to expand`);
+      return lines.join("\n");
+    }
+    // Projeto pequeno (até 40 itens): mostra a árvore inteira como sempre.
+    if (plan.tasks.length <= DESCRIBE_SMALL_MAX) {
+      const walk = (task: ProjectTask, depth: number) => {
+        lines.push(line(task, "  ".repeat(depth)));
+        for (const child of plan.tasks.filter((candidate) => candidate.parent === task.ref)) walk(child, depth + 1);
+      };
+      if (nested) for (const top of plan.tasks.filter((task) => !task.parent)) walk(top, 0);
+      else for (const task of plan.tasks) lines.push(line(task, ""));
+      return lines.join("\n");
+    }
+    // Árvore grande (> 40 itens): cabeçalho dos módulos de primeiro nível + só folhas abertas até o teto (40 por módulo, 300 no total).
+    let totalEmitted = 0;
+    let totalHidden = 0;
+    let firstTruncatedRef: string | undefined;
+    const roots = childrenOf(plan).filter((task) => !task.archived);
+    for (const top of roots) {
+      if (isLeaf(plan, top)) {
+        if (isProjectTaskFinished(top)) {
+          totalHidden += 1;
+          continue;
+        }
+        if (totalEmitted < DESCRIBE_TOTAL_MAX) {
+          lines.push(line(top, ""));
+          totalEmitted += 1;
+        } else {
+          totalHidden += 1;
+        }
+        continue;
+      }
+      const descendants = subtreeRefs(plan, top.ref).slice(1);
+      const openLeaves = leavesOf(plan, top.ref).filter((leaf) => !isProjectTaskFinished(leaf) && !leaf.archived);
+      if (totalEmitted >= DESCRIBE_TOTAL_MAX) {
+        totalHidden += 1 + descendants.length;
+        firstTruncatedRef ??= top.ref;
+        continue;
+      }
+      lines.push(line(top, ""));
+      totalEmitted += 1;
+      const room = Math.min(DESCRIBE_MODULE_MAX, Math.max(0, DESCRIBE_TOTAL_MAX - totalEmitted));
+      const shown = openLeaves.slice(0, room);
+      for (const leaf of shown) {
+        lines.push(line(leaf, "  "));
+        totalEmitted += 1;
+      }
+      const hiddenHere = descendants.length - shown.length;
+      if (hiddenHere > 0) {
+        totalHidden += hiddenHere;
+        firstTruncatedRef ??= top.ref;
+        lines.push(`  (${hiddenHere} more items hidden: call get_project with ref=${top.ref} to expand)`);
+      }
+    }
+    if (totalHidden > 0) {
+      lines.push(`${totalHidden} more items hidden: call get_project with ref=${firstTruncatedRef ?? roots[0]?.ref ?? "T1"} to expand`);
+    }
     return lines.join("\n");
   }
 
   // ---------- Usuário ----------
 
-  /** Aprovar o plano: a distribuição começa. */
-  async approve(planId: string): Promise<Project> {
+  /**
+   * Aprovar o plano: a distribuição começa. Se `options.release` vier explícito ("all" ou "none"), ele vence; sem ele, mantém o
+   * `released` que o Maestro definiu item a item (plano legado sem o campo => liberado).
+   */
+  async approve(planId: string, options: { release?: "all" | "none" } = {}): Promise<Project> {
     const plan = this.require(planId);
     if (plan.status !== "proposto") throw new HttpError(409, "O plano não está esperando aprovação");
     const state = this.deps.state.read();
-    const request = state.tasks.find((task) => task.id === plan.id);
+    const reqId = requestIdOf(plan);
+    const request = state.tasks.find((task) => task.id === reqId);
     if (!request || !isActiveTaskStatus(request.status)) throw new HttpError(409, "O pedido deste plano já foi fechado");
     const at = this.at();
     const previous = structuredClone(plan);
-    Object.assign(plan, { status: "ativo", approvedAt: at, updatedAt: at });
-    for (const task of plan.tasks) if (task.status === "a_fazer") task.waitingSince = at;
-    // A primeira sprint começa na data dela, ou agora se a data já passou (as datas andam juntas, na mesma duração).
-    const firstSprint = sprintsInOrder(plan).find((sprint) => sprint.status === "planejada");
-    if (firstSprint && Date.parse(firstSprint.endAt) <= Date.parse(at)) shiftSprints(plan, Date.parse(at) - Date.parse(firstSprint.startAt));
-    const sprintEvents = advanceSprints(plan, Date.parse(at));
+    const { sprintEvents, effectiveRelease, count, releasedCount, plannedCount } = this.applyApprovalState(plan, at, { by: "dono", at }, options.release);
     // Disparado pelo usuário: espera a gravação e devolve o erro de verdade (nada anda sem ela).
     await this.saveUser(plan, previous);
     this.recordSprintEvents(plan, sprintEvents, ACTIVITY_SYSTEM);
+    const summary =
+      effectiveRelease === "all"
+        ? `Você aprovou o plano ${quoteName(shorten(plan.title, 60))} e liberou ${count === 1 ? "a tarefa" : `as ${count} tarefas`}`
+        : effectiveRelease === "none"
+          ? `Você aprovou o plano ${quoteName(shorten(plan.title, 60))} e deixou ${count === 1 ? "a tarefa" : `as ${count} tarefas`} Planejada${count === 1 ? "" : "s"}, para liberar depois`
+          : `Você aprovou o plano ${quoteName(shorten(plan.title, 60))} (${releasedCount} liberada${releasedCount === 1 ? "" : "s"}, ${plannedCount} Planejada${plannedCount === 1 ? "" : "s"})`;
+    activeActivity()?.record({
+      workspaceId: this.deps.workspaceId,
+      category: "plano",
+      action: "plano-aprovado",
+      actor: ACTIVITY_USER,
+      summary,
+      refs: { planId: plan.id },
+      data: { release: effectiveRelease, approvalBy: "dono" },
+    });
     if (plan.forYouId) await this.deps.forYou.close(plan.forYouId, "aprovado");
     this.logRequest(request, { kind: "status", status: "resumed", message: "Plano aprovado: o servidor distribui as tarefas" });
     this.progress(plan);
-    this.deps.log.info({ planId, requestId: plan.id }, "plano aprovado");
+    this.deps.log.info({ planId, requestId: reqId }, "plano aprovado");
     this.pump();
     return structuredClone(plan);
   }
@@ -1870,26 +2539,28 @@ export class ProjectService {
     await this.saveUser(plan, previous);
     if (plan.forYouId) await this.deps.forYou.close(plan.forYouId, "respondido", text);
     const version = plan.version;
+    const reqId = requestIdOf(plan);
     // Texto montado quando o Maestro consome a mensagem (o plano de então, não o de agora).
     const message = () =>
       [
-        `Pedido ${plan.id}: o usuário pediu ajustes no plano (versão ${version}) antes de aprovar:`,
+        `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id})` : ""}: o usuário pediu ajustes no plano (versão ${version}) antes de aprovar:`,
         `“${text}”`,
-        `Plano atual:\n${this.describe(plan.id)}`,
+        `Plano atual:\n${this.describe({ projectId: plan.id })}`,
         "Mande o plano corrigido com create_project (ele volta para a aprovação) e termine o turno.",
       ].join("\n\n");
-    this.deps.host(plan.id)?.wake(plan.id, "adjust", message, () => this.forRequest(plan.id));
+    this.deps.host(reqId)?.wake(reqId, "adjust", message, () => this.get(plan.id));
     return structuredClone(plan);
   }
 
-  /** Cancelar o plano (o usuário): as tarefas param e o pedido fecha. */
+  /** Cancelar o plano (o usuário): as tarefas param e o pedido fecha se não houver outro projeto aberto nele. */
   async cancel(planId: string, reason = "Plano cancelado pelo usuário"): Promise<Project> {
     if (!this.plans.some((candidate) => candidate.id === planId) && this.leavesOfRequest(planId).length > 0) return this.cancelRequestLeaves(planId, reason);
     const plan = this.require(planId);
     if (isAvulsas(plan)) throw new HttpError(409, "O projeto Avulsas não se cancela: cancele a tarefa");
     if (!isProjectOpen(plan)) throw new HttpError(409, "O plano já terminou");
+    const reqId = requestIdOf(plan);
     await this.cancelPlan(plan, reason, true);
-    this.deps.host(plan.id)?.close(plan.id, reason);
+    if (!this.holds(reqId)) this.deps.host(reqId)?.close(reqId, reason);
     return structuredClone(plan);
   }
 
@@ -1916,13 +2587,13 @@ export class ProjectService {
   }
 
   /** Decisão pelo card do "Para você" (aprovado / rejeitado = cancelar / respondido = ajustar). */
-  async decideItem(item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; response?: string }): Promise<void> {
+  async decideItem(item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; response?: string; release?: "all" | "none" }): Promise<void> {
     const plan = item.kind === "plano" && item.projectId ? this.plans.find((candidate) => candidate.id === item.projectId) : undefined;
     if (!plan) {
       await this.deps.forYou.close(item.id, decision.status, decision.response);
       return;
     }
-    if (decision.status === "aprovado") await this.approve(plan.id);
+    if (decision.status === "aprovado") await this.approve(plan.id, decision.release ? { release: decision.release } : {});
     else if (decision.status === "respondido") await this.adjust(plan.id, decision.response ?? "");
     else {
       if (plan.forYouId) await this.deps.forYou.close(plan.forYouId, "rejeitado", decision.response);
@@ -1938,7 +2609,7 @@ export class ProjectService {
     if (!found) return [`Tarefa ${task.id} — status: ${task.status}`, "", task.prompt].join("\n");
     const { plan, planTask } = found;
     const state = this.deps.state.read();
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const request = state.tasks.find((candidate) => candidate.id === requestIdOf(plan));
     const index = task.work!.step;
     const lines = [
       `Pedido: ${requestTitle(request)}`,
@@ -1970,13 +2641,13 @@ export class ProjectService {
    */
   help(task: Task, what: string, suggestion?: string, kind: HelpKind = "skill"): string {
     const state = this.deps.state.read();
-    const requestId = task.projectId;
+    const found = this.locateAny(task);
+    const requestId = found ? requestIdOf(found.plan) : task.projectId;
     const host = requestId ? this.deps.host(requestId) : undefined;
     const request = requestId ? state.tasks.find((candidate) => candidate.id === requestId) : undefined;
     if (!requestId || !host || !request || !isActiveTaskStatus(request.status)) throw new Error("This task did not come from a Maestro request: there is no one to ask for help. Do what you can and explain it in submit_result.");
     const who = this.agentName(state, task.agentId);
     const suggested = suggestion ? (state.agents.find((agent) => agent.id === suggestion || agent.name.toLowerCase() === suggestion.toLowerCase())?.name ?? suggestion) : undefined;
-    const found = this.locateAny(task);
     const where = found ? `na tarefa ${found.planTask.ref} («${found.planTask.title}», etapa ${task.work!.step + 1}/${found.planTask.steps.length})` : `na tarefa ${task.id}`;
     if (found) {
       const at = this.at();
@@ -1991,11 +2662,11 @@ export class ProjectService {
     this.logRequest(request, { kind: "text", text: `${who} pediu ${kind === "access" ? "acesso" : "ajuda"} ${where}: “${shorten(what, 300)}”${suggested ? ` (sugere ${suggested})` : ""}` });
     const message = () =>
       [
-        `Pedido ${requestId}: ${who} (agent id: ${task.agentId}) pediu ${kind === "access" ? "um ACESSO que não tem" : "ajuda"} ${where}:`,
+        `Pedido ${requestId}${found?.plan.requestId ? ` (projeto ${found.plan.id})` : ""}: ${who} (agent id: ${task.agentId}) pediu ${kind === "access" ? "um ACESSO que não tem" : "ajuda"} ${where}:`,
         `“${what.trim()}”${suggested ? `\nSugestão de quem pode ajudar: ${suggested}.` : ""}`,
         `A tarefa dele está ESPERANDO você. Responda com message_agent(agent: "${task.agentId}", text): a resposta chega a ele como nota e ele segue. ${kind === "access" ? "Acesso você não concede sozinho (só o usuário, em Configurações): diga a ele o que fazer sem isso, ou fale com o usuário." : found ? "Se fizer sentido, inclua também uma tarefa com add_project_tasks (ou fale com o usuário)." : "Se fizer sentido, delegue a alguém (delegate_task) ou fale com o usuário."}`,
       ].join("\n\n");
-    host.wake(requestId, "help", message, found ? () => this.forRequest(requestId) : undefined);
+    host.wake(requestId, "help", message, found ? () => this.get(found.plan.id) : undefined);
     return "Your help request went to the Maestro and your task now WAITS for the answer. End this turn now: the reply arrives in a later message (if it takes too long you are told to go on without it).";
   }
 
@@ -2122,7 +2793,7 @@ export class ProjectService {
     if (avulsas) this.attachAvulsasHandoff(plan, state, created, target, sender, at);
     plan.tasks.push(created);
     plan.updatedAt = at;
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const request = state.tasks.find((candidate) => candidate.id === requestIdOf(plan));
     if (request) this.logRequest(request, { kind: "text", text: `${handoffLabel(origin, fromName, target.name)} (${sender.ref} → ${ref} «${shorten(created.title, 100)}»).` });
     return created;
   }
@@ -2158,17 +2829,18 @@ export class ProjectService {
 
   /** Repasse barrado: o Maestro é acordado UMA vez por projeto (o motivo vai na mensagem). */
   private warnHandoff(plan: Project, state: OfficeState, who: string, reason: string): void {
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const reqId = requestIdOf(plan);
+    const request = state.tasks.find((candidate) => candidate.id === reqId);
     if (request) this.logRequest(request, { kind: "text", text: `Repasse barrado (${who}): ${shorten(reason, 300)}` });
     if (this.handoffWarned.has(plan.id)) return;
     this.handoffWarned.add(plan.id);
     const message = () =>
       [
-        `Pedido ${plan.id}: um repasse entre agentes foi barrado pelo servidor (${who}):`,
+        `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id})` : ""}: um repasse entre agentes foi barrado pelo servidor (${who}):`,
         reason,
         "Provável laço ou excesso de repasses. Confira com get_project; se precisar, ajuste (resolve_task, add_project_tasks) ou fale com o usuário. Senão, só termine o turno. Você não será avisado de novo sobre isto neste projeto.",
       ].join("\n\n");
-    this.deps.host(plan.id)?.wake(plan.id, "handoff", message, () => this.forRequest(plan.id));
+    this.deps.host(reqId)?.wake(reqId, "handoff", message, () => this.get(plan.id));
   }
 
   // ---------- Agendador (ProjectScheduler) ----------
@@ -2561,7 +3233,7 @@ export class ProjectService {
         }
         continue;
       }
-      const request = state.tasks.find((task) => task.id === plan.id);
+      const request = state.tasks.find((task) => task.id === requestIdOf(plan));
       if (request && !isActiveTaskStatus(request.status)) this.closeMirror(plan, request);
     }
   }
@@ -2628,7 +3300,7 @@ export class ProjectService {
     if (!step || step.taskId !== sub.id || (plan.status !== "ativo" && plan.status !== "pausado") || isProjectTaskFinished(planTask)) return;
     const at = this.at();
     const state = this.deps.state.read();
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const request = state.tasks.find((candidate) => candidate.id === requestIdOf(plan));
     switch (sub.status) {
       case "queued":
       case "in_progress":
@@ -2699,12 +3371,13 @@ export class ProjectService {
   private warnBlocked(plan: Project, cancelled: ProjectTask): void {
     const stuck = blockedLeaves(plan).filter((leaf) => deadDependencies(plan, leaf).some((dep) => dep.ref === cancelled.ref));
     if (stuck.length === 0) return;
+    const reqId = requestIdOf(plan);
     const message = () =>
       [
-        `Pedido ${plan.id}: o dono cancelou a tarefa ${cancelled.ref} («${cancelled.title}»). Ficaram TRAVADAS (não rodam sozinhas, o resultado de que precisam não existe): ${stuck.map((leaf) => `${leaf.ref} («${leaf.title}»)`).join(", ")}.`,
+        `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id})` : ""}: o dono cancelou a tarefa ${cancelled.ref} («${cancelled.title}»). Ficaram TRAVADAS (não rodam sozinhas, o resultado de que precisam não existe): ${stuck.map((leaf) => `${leaf.ref} («${leaf.title}»)`).join(", ")}.`,
         "O dono também foi avisado. Replaneje se fizer sentido: tire a dependência, ponha outra tarefa no lugar (add_project_tasks) ou cancele as que não valem mais. Depois termine o turno.",
       ].join("\n\n");
-    queueMicrotask(() => this.deps.host(plan.id)?.wake(plan.id, "failed", message, () => this.forRequest(plan.id)));
+    queueMicrotask(() => this.deps.host(reqId)?.wake(reqId, "failed", message, () => this.get(plan.id)));
   }
 
   private failTask(plan: Project, task: ProjectTask, reason: string): void {
@@ -2714,17 +3387,18 @@ export class ProjectService {
     clearBlocked(task, at);
     const state = this.deps.state.read();
     const step = task.steps[task.current];
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const reqId = requestIdOf(plan);
+    const request = state.tasks.find((candidate) => candidate.id === reqId);
     if (request) this.logRequest(request, { kind: "text", text: `${task.ref} «${task.title}» falhou na etapa ${task.current + 1}: ${shorten(reason, 300)}` });
     const stepNumber = task.current + 1;
     // Montado quando o Maestro consome a mensagem: o estado de então (a tarefa pode ter sido refeita ou resolvida).
     const message = () => [
-      `Pedido ${plan.id}: a tarefa ${task.ref} («${task.title}») falhou na etapa ${stepNumber}/${task.steps.length}${step ? ` (${this.agentName(this.deps.state.read(), step.agentId)})` : ""}:`,
+      `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id})` : ""}: a tarefa ${task.ref} («${task.title}») falhou na etapa ${stepNumber}/${task.steps.length}${step ? ` (${this.agentName(this.deps.state.read(), step.agentId)})` : ""}:`,
       shorten2(task.failure ?? reason, 1500),
       task.status !== "falhou" ? `(Agora a tarefa está: ${task.skipped ? "pulada" : task.status}. Só confira com get_project antes de decidir.)` : "",
-      "As outras tarefas seguem; as que dependem desta esperam. Decida com resolve_task(request_id, ref, action: \"retry\" (com instruction), \"skip\" ou \"cancel_project\") ou inclua trabalho com add_project_tasks. Depois termine o turno.",
+      `As outras tarefas seguem; as que dependem desta esperam. Decida com resolve_task(project_id: "${plan.id}", ref: "${task.ref}", action: "retry" (com instruction), "skip" ou "cancel_project") ou inclua trabalho com add_project_tasks. Depois termine o turno.`,
     ].filter(Boolean).join("\n\n");
-    queueMicrotask(() => this.deps.host(plan.id)?.wake(plan.id, "failed", message, () => this.forRequest(plan.id)));
+    queueMicrotask(() => this.deps.host(reqId)?.wake(reqId, "failed", message, () => this.get(plan.id)));
   }
 
   /** Todas as tarefas terminaram: o plano fecha e o Maestro recebe UMA mensagem com o resumo. */
@@ -2735,13 +3409,14 @@ export class ProjectService {
     this.save([plan]);
     const state = this.deps.state.read();
     const notes = await this.notePaths(state, plan);
+    const reqId = requestIdOf(plan);
     // Montado quando o Maestro consome a mensagem (as notas de resultado já foram buscadas acima).
     const message = () => {
-      const { done, total, skipped } = projectProgress(plan);
+      const unit = projectUnitProgress(plan);
       const each = Math.max(300, Math.min(TEXT.summaryEach, Math.floor(TEXT.summaryTotal / Math.max(1, plan.tasks.length))));
       const sections = plan.tasks.map((task) => {
         const parentNode = !task.group && plan.tasks.some((candidate) => candidate.parent === task.ref);
-        if (task.group) return `## ${task.ref} · ${task.title} (entregável)`;
+        if (task.group) return `## ${task.ref} · ${task.title} (módulo)`;
         if (parentNode) {
           // Tarefa-mãe: a entrega é a da última subtarefa (ou o conjunto, se terminaram em paralelo): não repete o texto.
           const delivery = deliveryLeaves(plan, task.ref);
@@ -2754,14 +3429,17 @@ export class ProjectService {
         const checklist = task.doneWhen.length > 0 ? `Done when: ${task.doneWhen.map((item) => `${item.met === true ? "✓" : item.met === false ? "✗" : "?"} ${item.text}${item.note ? ` (${item.note})` : ""}`).join("; ")}` : "";
         return [heading, shorten2(task.result ?? "(sem resultado)", each), checklist, [last ? `get_task("${last}")` : "", note ? `nota: ${note}` : ""].filter(Boolean).join(" · ")].filter(Boolean).join("\n");
       });
+      const moreOpen = this.openPlansForRequest(reqId).filter((candidate) => !isParked(candidate)).length;
       return [
-        `Pedido ${plan.id}: o projeto terminou — ${progressLabel({ done, total, skipped })}.`,
+        `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id} «${plan.title}»)` : ""}: o projeto terminou — ${progressLabel(unit)}.`,
         ...sections,
-        `Agora sintetize o resultado para o usuário (a resposta aparece na conversa) e feche com complete_request(request_id: "${plan.id}", text).`,
+        moreOpen > 0
+          ? `Ainda há ${moreOpen} projeto(s) aberto(s) neste pedido: aguarde os demais ou continue trabalhando antes de chamar complete_request(request_id: "${reqId}", text).`
+          : `Agora sintetize o resultado para o usuário (a resposta aparece na conversa) e feche com complete_request(request_id: "${reqId}", text).`,
       ].join("\n\n");
     };
-    this.deps.log.info({ planId: plan.id, requestId: plan.id }, "plano concluído: Maestro avisado");
-    this.deps.host(plan.id)?.wake(plan.id, "done", message, () => this.forRequest(plan.id));
+    this.deps.log.info({ planId: plan.id, requestId: reqId }, "plano concluído: Maestro avisado");
+    this.deps.host(reqId)?.wake(reqId, "done", message, () => this.get(plan.id));
   }
 
   /** Caminho da nota de resultado (histórico do quarto) de cada subtarefa final (melhor esforço). */
@@ -2785,17 +3463,20 @@ export class ProjectService {
     return out;
   }
 
-  /** O pedido fechou (concluído, falhou, cancelado): o plano aberto dele é cancelado. */
+  /**
+   * O pedido fechou: se falhou/foi cancelado, todos os projetos abertos dele são cancelados;
+   * se concluiu (`done`), projetos estacionados (só Planejados) permanecem abertos no backlog
+   * para serem liberados depois pelo dono, pelo ritmo ou pelo Maestro. Como o pedido já está
+   * fechado, avisos futuros (`wake`) desse projeto ao Maestro são ignorados.
+   */
   private onRequestClosed(task: Task): void {
     this.closeLeaves(task.id, task);
     const loose = this.plans.find((candidate) => candidate.id === task.id && !isAvulsas(candidate));
-    if (loose && !hasLifecycle(loose)) {
-      this.closeMirror(loose, task);
-      return;
+    if (loose && !hasLifecycle(loose)) this.closeMirror(loose, task);
+    for (const plan of this.openPlansForRequest(task.id)) {
+      if (task.status === "done" && isParked(plan)) continue;
+      this.cancelPlan(plan, "O pedido foi fechado");
     }
-    const plan = this.openPlan(task.id);
-    if (!plan) return;
-    this.cancelPlan(plan, "O pedido foi fechado");
   }
 
   /** Cancela o projeto: as tarefas param. `strict` (caminho do usuário): espera a gravação e lança o erro de verdade. */
@@ -2820,12 +3501,12 @@ export class ProjectService {
 
   /** Backlog com as dependências prontas vira "a fazer". */
   private unlockDependents(plan: Project): void {
-    // Dependência em pai ou entregável = todas as folhas dele concluídas.
+    // Dependência em pai ou módulo = todas as folhas dele concluídas.
     const done = completedRefs(plan);
     const at = this.at();
     for (const task of plan.tasks) {
       if (task.status !== "backlog" || !isLeaf(plan, task) || !task.ownerId || !effectiveDeps(plan, task).every((ref) => done.has(ref))) continue;
-      Object.assign(task, { status: "a_fazer", waitingSince: at, queuedAt: at, updatedAt: at });
+      Object.assign(task, { status: "a_fazer", waitingSince: at, ...(releaseHold(task) ? {} : { queuedAt: at }), updatedAt: at });
     }
   }
 
@@ -2834,8 +3515,9 @@ export class ProjectService {
 
   private progress(plan: Project): void {
     if (plan.status !== "ativo") return;
-    const { done, total, skipped } = projectProgress(plan);
-    this.deps.host(plan.id)?.working(plan.id, `Projeto: ${progressLabel({ done, total, skipped })}`, 0.2 + (0.7 * done) / Math.max(1, total));
+    const { done, total } = projectProgress(plan);
+    const reqId = requestIdOf(plan);
+    this.deps.host(reqId)?.working(reqId, `Projeto: ${progressLabel(projectUnitProgress(plan))}`, 0.2 + (0.7 * done) / Math.max(1, total));
   }
 
   /** Tarefa e projeto (com ciclo de plano) a que a Task pertence; projeto de tarefa avulsa não conta (veja `mirror`). */
@@ -2849,10 +3531,6 @@ export class ProjectService {
     const plan = this.plans.find((candidate) => candidate.id === task.work!.projectId);
     const planTask = plan?.tasks.find((candidate) => candidate.ref === task.work!.ref);
     return plan && planTask ? { plan, planTask } : undefined;
-  }
-
-  private openPlan(requestId: string): Project | undefined {
-    return this.plans.find((plan) => plan.id === requestId && isProjectOpen(plan) && hasLifecycle(plan));
   }
 
   private require(id: string): Project {
@@ -2891,7 +3569,8 @@ export class ProjectService {
       for (const task of plan.tasks) {
         for (const step of task.steps) step.address ??= agentAddress(this.deps.workspaceId, step.agentId);
         // Entrou na fila e ninguém marcou (tarefa nova): a hora da espera, ou agora. Quem volta à fila marca na hora (`queuedAt: at`).
-        if (task.status === "a_fazer" && task.queuedAt === undefined) task.queuedAt = task.waitingSince ?? this.at();
+        // A folha Planejada ainda não está na fila: a espera dela só começa quando for liberada (`releaseNodes`).
+        if (task.status === "a_fazer" && task.queuedAt === undefined && !releaseHold(task)) task.queuedAt = task.waitingSince ?? this.at();
       }
       return structuredClone(plan);
     });
@@ -2964,6 +3643,52 @@ export class ProjectService {
     found.plan.updatedAt = at;
     void this.save([found.plan]);
     return unknown.length > 0 ? `checklist index ${unknown.join(", ")} does not exist (Done when has ${found.planTask.doneWhen.length} item(s), numbered from 1)` : undefined;
+  }
+}
+
+/**
+ * Aplica `release` ("now" | "later") nas tarefas recém-montadas (`create_project` e `add_project_tasks`):
+ * 1. `item.release` explícito sempre vence (inclusive filho "now" dentro de pai Planejado).
+ * 2. Sem `item.release`, herda do pai recém-criado na mesma chamada (módulo/mãe propaga aos filhos).
+ * 3. Se o pai já existe no projeto (`existing`) e está Planejado (`released === false`), herda `false`.
+ * 4. Caso contrário, usa o `callRelease` da chamada (`undefined` em chamadas legadas = não preenche o campo).
+ */
+function applyInputRelease(built: readonly ProjectTask[], inputs: readonly ProjectTaskInput[], callRelease: ProjectInputRelease | undefined, existing: readonly ProjectTask[] = []): void {
+  const inputByRef = new Map<string, ProjectTaskInput>();
+  built.forEach((task, index) => inputByRef.set(task.ref, inputs[index]!));
+  const freshByRef = new Map(built.map((task) => [task.ref, task]));
+  const existingByRef = new Map(existing.map((task) => [task.ref, task]));
+  const memo = new Map<string, boolean | undefined>();
+  const compute = (ref: string, seen: Set<string>): boolean | undefined => {
+    if (memo.has(ref)) return memo.get(ref);
+    const input = inputByRef.get(ref);
+    if (input?.release !== undefined) {
+      const value = input.release === "now";
+      memo.set(ref, value);
+      return value;
+    }
+    const task = freshByRef.get(ref);
+    if (!task || seen.has(ref)) return callRelease === undefined ? undefined : callRelease === "now";
+    seen.add(ref);
+    if (task.parent) {
+      if (freshByRef.has(task.parent)) {
+        const value = compute(task.parent, seen);
+        memo.set(ref, value);
+        return value;
+      }
+      const parent = existingByRef.get(task.parent);
+      if (parent && parent.released === false) {
+        memo.set(ref, false);
+        return false;
+      }
+    }
+    const value = callRelease === undefined ? undefined : callRelease === "now";
+    memo.set(ref, value);
+    return value;
+  };
+  for (const task of built) {
+    const value = compute(task.ref, new Set());
+    if (value !== undefined) task.released = value;
   }
 }
 

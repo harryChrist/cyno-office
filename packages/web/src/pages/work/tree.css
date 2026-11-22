@@ -23,7 +23,7 @@
 .ph-head,
 .ph-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 96px 96px 104px 132px;
+  grid-template-columns: minmax(0, 1fr) 204px 96px 96px 104px 132px;
   align-items: center;
   column-gap: 12px;
 }
@@ -196,6 +196,12 @@
 .ph-state--fixed {
   color: var(--ui-info);
   background: var(--ui-info-bg);
+}
+
+.ph-state--planned {
+  color: var(--ui-text-3);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ui-border);
 }
 
 .ph-progress {
@@ -549,6 +555,23 @@
   font-size: 13px;
 }
 
+.pt-activity {
+  display: grid;
+  gap: 12px;
+}
+
+.pt-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.w-kind--approval {
+  color: var(--ui-text-2);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--ui-border);
+}
+
 .pt-timeline {
   margin: 0;
 }
@@ -585,7 +608,7 @@
 }
 
 .tt-head {
-  grid-template-columns: minmax(0, 1fr) 118px 96px 104px 36px;
+  grid-template-columns: minmax(0, 1fr) 118px 96px 104px 124px 36px;
   min-height: 30px;
 }
 
@@ -638,17 +661,56 @@
   background: transparent;
 }
 
-/* Hierarquia por recuo e peso do texto, sem caixas aninhadas. */
-.tt-row--d1 .tt-name {
-  padding-left: 0;
+/* Hierarquia por recuo (sem limite de níveis; `--tt-level` vem da linha) e peso do texto, sem caixas aninhadas. */
+.tt-row .tt-name {
+  padding-left: calc(var(--tt-indent) * var(--tt-level, 0));
 }
 
-.tt-row--d2 .tt-name {
-  padding-left: var(--tt-indent);
+.tt-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 8px;
 }
 
-.tt-row--d3 .tt-name {
-  padding-left: calc(var(--tt-indent) * 2);
+.tt-search__input {
+  flex: 1;
+  max-width: 340px;
+}
+
+.tt-search__count {
+  font-size: 12px;
+  color: var(--ui-text-3);
+}
+
+.tt-row--more:hover {
+  background: transparent;
+}
+
+.tt-row--more {
+  cursor: default;
+  border-bottom-color: transparent;
+}
+
+.tt-morebtn {
+  font-variant-numeric: tabular-nums;
+}
+
+.tt-targets__more {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+/* Caminho de ancestrais: só no celular, em linhas muito fundas (o recuo pára no 4º nível). */
+.tt-path {
+  flex: 1 0 100%;
+  min-width: 0;
+  padding-left: 12px;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ui-text-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tt-row--group {
@@ -824,6 +886,32 @@
   opacity: 1;
 }
 
+/* "+ subtarefa": aparece ao passar o mouse na linha (no celular fica no menu). */
+.tt-subbtn {
+  flex: none;
+  min-height: 22px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--ui-text-3);
+  background: transparent;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tt-row:hover .tt-subbtn,
+.tt-subbtn:focus-visible {
+  opacity: 1;
+}
+
+.tt-subbtn:hover {
+  color: var(--ui-text);
+  background: var(--ui-hover);
+}
+
 .tt-labelbtn__add {
   padding: 0 7px;
   font-size: 11px;
@@ -869,14 +957,15 @@
 
 .tt-row .tt-cells,
 .tt-row {
-  grid-template-columns: minmax(0, 1fr) 118px 96px 104px 36px;
+  grid-template-columns: minmax(0, 1fr) 118px 96px 104px 124px 36px;
 }
 
 .tt--sprints .tt-row {
   grid-template-columns: minmax(0, 1fr) 118px 96px 104px 74px 36px;
 }
 
-.tt-row--add {
+.tt-row--add,
+.tt-row--more {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -1589,19 +1678,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 4px 12px;
-    padding-left: calc(var(--tt-indent) * (var(--depth, 0)) + 50px);
-  }
-
-  .tt-row--d2 .tt-cells {
-    padding-left: calc(var(--tt-indent) + 50px);
-  }
-
-  .tt-row--d3 .tt-cells {
-    padding-left: calc(var(--tt-indent) * 2 + 50px);
-  }
-
-  .tt-row--d1 .tt-cells {
-    padding-left: 50px;
+    padding-left: calc(var(--tt-indent) * var(--tt-level, 0) + 50px);
   }
 
   .tt-cell {
@@ -1637,7 +1714,8 @@
     margin-right: 0;
   }
 
-  .tt-row--add {
+  .tt-row--add,
+  .tt-row--more {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "name";
     min-height: 48px;
@@ -2271,10 +2349,6 @@
     gap: 4px;
   }
 
-  .ps-head--compact .ps-head__top {
-    align-items: center;
-  }
-
   .ps-head--compact .ps-head__title {
     font-size: 17px;
   }
@@ -2301,7 +2375,7 @@
 @media (min-width: 1100px) {
   .ps--panel .tt-head,
   .ps--panel .tt-row {
-    grid-template-columns: minmax(0, 1fr) 96px 62px 52px 36px;
+    grid-template-columns: minmax(0, 1fr) 96px 62px 52px 104px 36px;
   }
 
   .ps--panel .tt--sprints .tt-head,
@@ -2309,7 +2383,8 @@
     grid-template-columns: minmax(0, 1fr) 96px 62px 52px 64px 36px;
   }
 
-  .ps--panel .tt-row--add {
+  .ps--panel .tt-row--add,
+  .ps--panel .tt-row--more {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2442,7 +2517,7 @@ body.dnd-active * {
   user-select: none !important;
 }
 
-.tt-row:not(.tt-row--add) {
+.tt-row:not(.tt-row--add):not(.tt-row--more) {
   user-select: none;
 }
 
@@ -2580,6 +2655,10 @@ body.dnd-active * {
   margin-top: 8px;
 }
 
+.w-del__warn {
+  color: var(--ui-warn);
+}
+
 .w-clean__count {
   margin: 0;
   font-size: 15px;
@@ -2588,12 +2667,439 @@ body.dnd-active * {
 }
 
 @media (max-width: 760px) {
-  .tp__delete,
-  .ps-head__actions .ui-button {
+  .tp__delete {
     min-height: 40px;
   }
 
   .w-clean .ui-input {
     min-height: 44px;
   }
+}
+
+/* Cabeçalho do projeto no celular: título e chip numa linha própria; ações embaixo, ocupando a largura. */
+@media (max-width: 767px) {
+  .ps-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ps-head__top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .ps-head__titles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ps-head__title {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .ps-head__titleinput {
+    flex: 1 1 100%;
+    width: 100%;
+    min-height: 40px;
+  }
+
+  .ps-head__tags {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .ps-head__actions {
+    flex: none;
+    justify-content: flex-start;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .ps-head__actions:empty {
+    display: none;
+  }
+
+  .ps-head__actions .ui-button {
+    min-height: 40px;
+    max-width: 100%;
+  }
+
+  .ps-head__actions .ui-button--secondary {
+    flex: 1 1 auto;
+  }
+
+  .ps-head__actions .ps-head__delete {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0 6px;
+    font-weight: 500;
+    color: var(--ui-text-3);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .ps-head__actions .ps-head__delete:hover:not(:disabled),
+  .ps-head__actions .ps-head__delete:active:not(:disabled) {
+    color: var(--ui-danger);
+    background: transparent;
+  }
+
+  .ps-compact__progress {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .ps-compact__progress .ui-progress {
+    min-width: 48px;
+  }
+}
+
+/* ================= Liberação ("criar não executa") ================= */
+
+/* Cabeçalho: contagem de liberadas/planejadas e ritmo diário */
+.ps-fact__sub {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-3);
+}
+
+.ps-pace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.ps-pace__text {
+  font-size: 13px;
+  color: var(--ui-text-2);
+}
+
+/* Diálogo do ritmo de liberação */
+.rp-form {
+  display: grid;
+  gap: 14px;
+}
+
+.rp-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.rp-form__field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ui-text-2);
+}
+
+.rp-form__start {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rp-form__start legend {
+  padding: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-2);
+}
+
+.rp-form__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.rp-form__radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ui-text);
+  cursor: pointer;
+}
+
+.rp-form__radio input {
+  accent-color: var(--ui-accent);
+}
+
+.rp-form__date {
+  max-width: 180px;
+}
+
+.rp-form__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ui-text-3);
+}
+
+/* Barra de busca + filtro "Mostrar: Tudo | Liberadas | Planejadas" */
+.tt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 0 0 8px;
+}
+
+.tt-toolbar .tt-search {
+  flex: 1 1 220px;
+  padding: 0;
+}
+
+.tt-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tt-filter__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-3);
+}
+
+.tt-filter__seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Caixa de seleção por linha e barra fixa da seleção em lote */
+.tt-check {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.tt-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--ui-accent);
+  cursor: pointer;
+}
+
+.tt-check input:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.tt-row:hover .tt-check,
+.tt-row:focus-within .tt-check,
+.tt-row.is-picked .tt-check,
+.tt--picking .tt-check {
+  opacity: 1;
+}
+
+.tt-row.is-picked {
+  background: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+}
+
+.tt-batch {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 6px;
+  padding: 8px 12px;
+  background: var(--ui-surface-solid);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow-lg);
+}
+
+.tt-batch__count {
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+
+.tt-batch__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* Chip de Estado: discreto, escuro, pouca cor; só "Em andamento" com destaque; Planejada com ponto vazio cinza */
+.tt-status--planned {
+  color: var(--ui-text-3);
+}
+
+.tt-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--ui-text-2);
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+}
+
+.tt-state__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tt-state__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  background: var(--ui-text-3);
+  border-radius: 50%;
+}
+
+.tt-state--compact {
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.tt-state--planned {
+  color: var(--ui-text-3);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tt-state--planned .tt-state__dot {
+  background: transparent;
+  border: 1.5px solid var(--ui-text-3);
+  box-sizing: border-box;
+}
+
+.tt-state--running {
+  color: var(--ui-info);
+  background: var(--ui-info-bg);
+  border-color: color-mix(in srgb, var(--ui-info) 32%, transparent);
+}
+
+.tt-state--running .tt-state__dot {
+  background: var(--ui-info);
+}
+
+.tt-state--done .tt-state__dot {
+  background: var(--ui-ok);
+  opacity: 0.75;
+}
+
+.tt-state--waiting .tt-state__dot {
+  background: var(--ui-warn);
+  opacity: 0.8;
+}
+
+.tt-state--blocked .tt-state__dot,
+.tt-state--failed .tt-state__dot {
+  background: var(--ui-danger);
+  opacity: 0.8;
+}
+
+.tt-state--off {
+  color: var(--ui-text-3);
+}
+
+/* Painel da tarefa: ações de liberação e aviso de dependência Planejada */
+.tp__release-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tp__planned-wait {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+}
+
+@media (max-width: 640px) {
+  .rp-form__row {
+    grid-template-columns: 1fr;
+  }
+
+  .tt-batch__actions {
+    margin-left: 0;
+  }
+
+  .tt-check {
+    width: 32px;
+    height: 32px;
+  }
+
+  .tt-check input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .tt-selectbtn {
+    margin-left: auto;
+  }
+}
+
+/* Tarefa-mãe e módulo: barrinha de progresso e o "Tudo pronto" quando todas as filhas terminaram. */
+.tt-meter {
+  flex: none;
+  width: 56px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--ui-border-strong);
+  border-radius: 999px;
+}
+
+.tt-meter__fill {
+  display: block;
+  height: 100%;
+  background: var(--ui-accent);
+  border-radius: inherit;
+}
+
+.tt-flow--done .tt-meter__fill {
+  background: var(--ui-success, #3fb97f);
+}
+
+.tt-flow--done .tt-flow__text,
+.tt-flow__check,
+.tt-flow__text--done {
+  color: var(--ui-success, #3fb97f);
+}
+
+.tt-flow__check {
+  flex: none;
+}
+
+.tt-count--done {
+  color: var(--ui-success, #3fb97f);
 }

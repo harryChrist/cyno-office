@@ -13,6 +13,7 @@ import { ConnectorsSettings } from "./ConnectorsSettings";
 import { CynoSettings } from "./CynoSettings";
 import { LocalConnectorsSettings } from "./LocalConnectorsSettings";
 import { DispatchSettings } from "./DispatchSettings";
+import { PlanApprovalSettings } from "./PlanApprovalSettings";
 import { GestaoSettings } from "./GestaoSettings";
 import { EnginesPanel } from "./EnginesPanel";
 import { EngineStorageSettings } from "./EngineStorageSettings";
@@ -458,6 +459,7 @@ export function SettingsPage() {
                 <SectionBlock id="distribuicao" mode={mode("distribuicao")}>
                   <div className="settings__groups">
                     <DispatchSettings key={workspace.id} workspace={workspace} />
+                    <PlanApprovalSettings key={`plan-approval-${workspace.id}`} workspace={workspace} />
                   </div>
                 </SectionBlock>
                 <SectionBlock id="acesso" mode={mode("acesso")}>

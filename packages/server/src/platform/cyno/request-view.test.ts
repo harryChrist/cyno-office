@@ -67,3 +67,29 @@ describe("o estado de um pedido do Cyno mostra a sprint e a entrega esperando o 
     expect(requestLine(view)).not.toContain("Sprint");
   });
 });
+
+describe("progresso do pedido por unidade (módulos ou tarefas)", () => {
+  it("projeto com módulos conta módulos, mostra a dependência do módulo e informa a unidade", () => {
+    const plan = project();
+    plan.tasks.push(
+      { ...plan.tasks[0]!, ref: "D2", title: "Back", dependsOn: ["D1"], order: 2000 },
+      { ...plan.tasks[1]!, ref: "T3", title: "API", parent: "D2", ownerId: "eco", dependsOn: [], sprintId: undefined, status: "backlog" },
+    );
+    Object.assign(plan.tasks.find((task) => task.ref === "T1")!, { status: "concluida" });
+    Object.assign(plan.tasks.find((task) => task.ref === "T2")!, { status: "concluida" });
+    const view = requestView(record, snap(plan), NOW);
+    expect(view).toMatchObject({ tasksDone: 1, tasksTotal: 2, unit: "modulos" });
+    expect(requestLine(view)).toContain("1/2 modules");
+    const detail = requestDetail(view, snap(plan));
+    expect(detail).toContain(", 1/2 modules done.");
+    expect(detail).toContain("- D2 «Back» (deliverable) [backlog] 0/1; Eco; depends on D1");
+  });
+
+  it("projeto só com tarefas continua contando tarefas", () => {
+    const plan = project();
+    plan.tasks = plan.tasks.filter((task) => task.ref !== "D1").map((task) => ({ ...task, parent: undefined }));
+    const view = requestView(record, snap(plan), NOW);
+    expect(view).toMatchObject({ tasksDone: 0, tasksTotal: 2, unit: "tarefas" });
+    expect(requestLine(view)).toContain("0/2 tasks");
+  });
+});

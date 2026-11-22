@@ -217,6 +217,8 @@ async function turn(received) {
     const extra = /\[etapa:([a-z]+)\]/.exec(text)?.[1];
     const planned = await mcpTool("create_plan", {
       request_id: pedidoId,
+      release: "now",
+      approval: "ask",
       summary: "Plano do fake",
       tasks: [
         { ref: "T1", title: "Pesquisa", briefing: "Pesquisar o tema", owner: a, steps: [{ agent: a, does: `[entregar] ${extra ? `[${extra}] ` : ""}pesquisar` }] },

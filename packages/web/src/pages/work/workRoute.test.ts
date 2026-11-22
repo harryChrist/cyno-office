@@ -1,6 +1,6 @@
-import { emptyAvulsas, projectDefaults, type Project, type ProjectTask } from "@cyno/shared";
+import { emptyAvulsas, projectDefaults, type Project, type ProjectTask, type Sprint } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { parseWorkRoute, routeForProjectId, routeForTaskId, workSub } from "./workRoute";
+import { parseWorkRoute, projectTabsFor, resolveProjectTab, routeForProjectId, routeForTaskId, showSprintsTab, workSub } from "./workRoute";
 
 const AT = "2026-11-10T12:00:00.000Z";
 const leaf = (ref: string, requestId: string, taskId: string): ProjectTask => ({
@@ -57,5 +57,34 @@ describe("Todas as tarefas no endereço", () => {
 
   it("escreve de volta o mesmo endereço", () => {
     for (const sub of ["tarefas", "tarefas?sprint=ativa", "tarefas/p1/T3", "tarefas/p1/T3?q=login"]) expect(workSub(parseWorkRoute(sub))).toBe(sub);
+  });
+});
+
+describe("aba Sprints e rota tab=sprints", () => {
+  const sprint: Sprint = { id: "S1", name: "Sprint 1", startAt: AT, endAt: AT, order: 1, status: "ativa" };
+  const withoutSprints = project("p1");
+  const withSprints = { ...project("p2"), sprints: [sprint] };
+
+  it("só mostra a aba Sprints quando o projeto tem sprints", () => {
+    expect(showSprintsTab(withoutSprints)).toBe(false);
+    expect(showSprintsTab({ ...withoutSprints, sprints: [] })).toBe(false);
+    expect(showSprintsTab(withSprints)).toBe(true);
+    expect(projectTabsFor(withoutSprints)).toEqual(["tarefas", "entregas", "atividade"]);
+    expect(projectTabsFor(withSprints)).toEqual(["tarefas", "sprints", "entregas", "atividade"]);
+  });
+
+  it("rota ?tab=sprints ou /sprints em projeto sem sprints cai em Tarefas", () => {
+    expect(parseWorkRoute("p/p1?tab=sprints")).toEqual({ view: "project", projectId: "p1", tab: "sprints" });
+    expect(parseWorkRoute("p/p1?tab=entregas")).toEqual({ view: "project", projectId: "p1", tab: "entregas" });
+    expect(parseWorkRoute("p/p1?tab=desconhecida")).toEqual({ view: "project", projectId: "p1", tab: "tarefas" });
+    const parsed = parseWorkRoute("p/p1?tab=sprints");
+    expect(parsed.view).toBe("project");
+    if (parsed.view === "project") {
+      expect(resolveProjectTab(parsed.tab, withoutSprints)).toBe("tarefas");
+      expect(resolveProjectTab(parsed.tab, withSprints)).toBe("sprints");
+    }
+    expect(resolveProjectTab("sprints", withoutSprints)).toBe("tarefas");
+    expect(resolveProjectTab("entregas", withoutSprints)).toBe("entregas");
+    expect(resolveProjectTab("atividade", withoutSprints)).toBe("atividade");
   });
 });

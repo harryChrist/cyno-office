@@ -15,7 +15,10 @@ const find = (project: Project, ref: string) => project.tasks.find((task) => tas
 async function add(ctx: TestApp, projectId: string, body: object): Promise<string> {
   const response = await post(ctx, `/projects/${projectId}/tasks`, body);
   expect(response.statusCode, response.body).toBe(201);
-  return (response.json() as Reply).ref!;
+  const ref = (response.json() as Reply).ref!;
+  // Criar não executa: estes testes querem a tarefa rodando, então liberam logo (a regra nova tem os testes dela em release.test.ts).
+  expect((await post(ctx, `/projects/${projectId}/release`, { refs: [ref] })).statusCode).toBe(200);
+  return ref;
 }
 
 /** Mãe com a cadeia A > B (a primeira ainda sem dono: nada roda sozinho durante o teste). */

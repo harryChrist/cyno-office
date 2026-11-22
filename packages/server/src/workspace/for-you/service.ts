@@ -67,7 +67,7 @@ export type ForYouDeps = {
   /** Decide a aprovação pendente da tarefa (orquestrador): a tarefa segue ou falha. */
   decideTask: (taskId: string, decision: ApprovalDecision) => Promise<Task>;
   /** Decisão num item de plano (aprovar, ajustar com a nota, cancelar): quem decide é o ProjectService. */
-  decidePlan?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; response?: string }) => Promise<void>;
+  decidePlan?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; response?: string; release?: "all" | "none" }) => Promise<void>;
   /** Decisão num cartão "sprint" (aprovar a entrega ou devolver com o motivo e as tarefas de retrabalho): quem decide é o ProjectService, que fecha o item. */
   decideSprint?: (item: ForYouItem, decision: { status: "aprovado" | "rejeitado" | "respondido"; reason?: string; returnRefs?: string[] }) => Promise<void>;
   /**
@@ -606,7 +606,7 @@ export class ForYouService implements ApprovalInbox {
     const kind = forYouKind(item);
     if (kind === "plano" && this.deps.decidePlan) {
       if (item.status !== "pendente") throw new HttpError(409, `O item ${id} já foi decidido`);
-      await this.deps.decidePlan(item, { status: input.status, response: input.response?.trim() || undefined });
+      await this.deps.decidePlan(item, { status: input.status, response: input.response?.trim() || undefined, ...(input.release ? { release: input.release } : {}) });
       return this.require(this.deps.state.readForYou(), id);
     }
     if (kind === "sprint") {

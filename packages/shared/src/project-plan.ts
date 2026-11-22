@@ -132,7 +132,7 @@ export function buildProjectPlan(input: ProjectPlanInput, pool: ProjectAgentPool
     if (item.sprint?.trim() && !task.group) {
       const sprint = findSprint(allSprints, aliases, item.sprint);
       if (sprint) task.sprintId = sprint.id;
-      else errors.push(`${where}: sprint "${item.sprint}" does not exist (sprints: ${allSprints.map((candidate) => candidate.id).join(", ") || "none: send sprints[] in create_project or use add_sprint"})`);
+      else errors.push(`${where}: sprint "${item.sprint}" does not exist (sprints: ${allSprints.map((candidate) => candidate.id).join(", ") || "none; sprints are retired for new projects: use modules and release_work/set_release_pace"})`);
     }
     if (item.labels?.length) {
       const ids = [...new Set(item.labels.flatMap((name) => ensureLabel(name)?.id ?? []))];
@@ -152,7 +152,7 @@ export function buildProjectPlan(input: ProjectPlanInput, pool: ProjectAgentPool
   return { ok: true, tasks: built.tasks, sprints, labels, warnings };
 }
 
-/** O plano em markdown para o dono (o texto do item em Aprovações): sprints, entregáveis, tarefas, subtarefas e responsáveis. Lista plana sem sprints = o formato de sempre. */
+/** O plano em markdown para o dono (o texto do item em Aprovações): sprints, módulos, tarefas, subtarefas e responsáveis. Lista plana sem sprints = o formato de sempre. */
 export function projectTreeMarkdown(plan: Pick<Project, "title" | "summary" | "tasks" | "sprints">, agentName: (id: string) => string): string {
   const nested = plan.tasks.some((task) => task.parent || task.group);
   const sprints = sprintsInOrder(plan);
@@ -166,8 +166,9 @@ export function projectTreeMarkdown(plan: Pick<Project, "title" | "summary" | "t
   const walk = (task: ProjectTask, depth: number) => {
     const kids = childrenOf(plan, task.ref);
     const pad = "  ".repeat(depth);
-    if (task.group) lines.push(`${pad}- **${task.title}** (entregável)`);
-    else if (kids.length > 0) lines.push(`${pad}- **${task.ref} · ${task.title}**`);
+    const after = task.dependsOn.length > 0 ? ` (depois de ${task.dependsOn.join(", ")})` : "";
+    if (task.group) lines.push(`${pad}- **${task.title}** (módulo)${after}`);
+    else if (kids.length > 0) lines.push(`${pad}- **${task.ref} · ${task.title}**${after}`);
     else {
       const chain = task.steps.map((step) => agentName(step.agentId)).join(" → ");
       const deps = task.dependsOn.length > 0 ? ` (depois de ${task.dependsOn.join(", ")})` : "";

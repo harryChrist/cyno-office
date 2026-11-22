@@ -1,4 +1,4 @@
-import { describeModelChoice, isCliEngine, type AgentStatus, type RoomDeletionPreview, type Task, type TaskStatus } from "@cyno/shared";
+import { describeModelChoice, isActiveTaskStatus, isChatQuestion, isCliEngine, type AgentStatus, type RoomDeletionPreview, type Task, type TaskStatus } from "@cyno/shared";
 
 export const AGENT_STATUS_LABELS: Record<AgentStatus, string> = {
   idle: "ocioso",
@@ -14,6 +14,23 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   done: "concluída",
   failed: "falhou",
 };
+
+/** Pedido que só espera uma resposta sua na conversa: não há nada para aprovar. */
+export const AWAITING_REPLY_LABEL = "esperando sua resposta";
+
+/** Rótulo da tarefa: pergunta na conversa não é "aguardando aprovação". */
+export function taskStatusLabel(task: Pick<Task, "status" | "waiting">): string {
+  return isChatQuestion(task) ? AWAITING_REPLY_LABEL : TASK_STATUS_LABELS[task.status];
+}
+
+/** Rótulo do agente: "aguardando aprovação" só quando alguma tarefa dele pede aprovação de verdade. */
+export function agentStatusLabel(agent: Pick<AgentStatusHolder, "id" | "status">, tasks: readonly Task[]): string {
+  if (agent.status !== "waiting_approval") return AGENT_STATUS_LABELS[agent.status];
+  const waiting = tasks.filter((task) => task.agentId === agent.id && isActiveTaskStatus(task.status) && task.status === "waiting_approval");
+  return waiting.length > 0 && waiting.every(isChatQuestion) ? AWAITING_REPLY_LABEL : AGENT_STATUS_LABELS.waiting_approval;
+}
+
+type AgentStatusHolder = { id: string; status: AgentStatus };
 
 export type StatusTone = "neutral" | "busy" | "attention" | "success" | "danger";
 

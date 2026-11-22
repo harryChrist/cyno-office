@@ -1,4 +1,4 @@
-import { isAvulsas, isProjectOpen, type Agent, type ForYouItem, type Project } from "@cyno/shared";
+import { isAvulsas, type Agent, type ForYouItem, type Project } from "@cyno/shared";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { api, describeError } from "../../api/client";
 import { useNavStore } from "../../store/navStore";
@@ -30,7 +30,8 @@ import {
   type TaskEntry,
   type TaskFilters,
 } from "./allTasksView";
-import { DeleteAvulsaTaskDialog } from "./DeleteDialogs";
+import { DeleteAvulsaTaskDialog, DeleteTaskNodeDialog } from "./DeleteDialogs";
+import { isProjectEditable } from "./projectLifecycleView";
 import { TaskPanel, itemsOfTask } from "./TaskPanel";
 import { AssigneeCell, DueCell, PrioCell, SprintCell, type CellActions } from "./TaskTree";
 import { TREE_STATUS_LABEL } from "./taskTreeView";
@@ -79,7 +80,7 @@ export function AllTasks({ projects, forYou, agents, workers, now, query, panel 
   const items = useMemo(() => flatten(groups), [groups]);
   const options = useMemo(() => Object.fromEntries(FILTER_KEYS.map((key) => [key, facetOptions(entries, filters, key, nameOf)])) as Record<FilterKey, Option[]>, [entries, filters, nameOf]);
 
-  const editable = useCallback((entry: TaskEntry) => isProjectOpen(entry.project) && entry.project.status !== "ajustando", []);
+  const editable = useCallback((entry: TaskEntry) => isProjectEditable(entry.project), []);
   const cellActions = useCallback(
     (projectId: string): CellActions => ({
       update: async (ref, body) => {
@@ -545,15 +546,21 @@ function PanelBody({ project, task, forYou, agents, workers, now, query }: { pro
         works={office?.tasks ?? []}
         progress={progress}
         now={now}
-        editable={isProjectOpen(project) && project.status !== "ajustando"}
+        editable={isProjectEditable(project)}
         avulsa={isAvulsas(project)}
         actions={actions}
         onSelect={select}
         onClose={close}
         onConvert={(ref) => setConverting(ref)}
-        {...(isAvulsas(project) ? { onDelete: () => setDeleting(true) } : {})}
+        onDelete={() => setDeleting(true)}
       />
-      {deleting && <DeleteAvulsaTaskDialog projectId={project.id} taskRef={task.ref} title={task.title} onClose={() => setDeleting(false)} onDeleted={close} />}
+      {deleting && (
+        isAvulsas(project) ? (
+          <DeleteAvulsaTaskDialog projectId={project.id} taskRef={task.ref} title={task.title} onClose={() => setDeleting(false)} onDeleted={close} />
+        ) : (
+          <DeleteTaskNodeDialog project={project} taskRef={task.ref} onClose={() => setDeleting(false)} onDeleted={close} />
+        )
+      )}
       {converting && (
         <ConfirmDialog
           title="Transformar em projeto?"

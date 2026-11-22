@@ -1,5 +1,6 @@
 import type { Project, ProjectTask, ProjectTaskStatus } from "./projects";
-import { childrenOf, isLeaf, leavesOf, pathOf, rollupStatus, statusOf } from "./task-tree";
+import { releaseHold } from "./release";
+import { childrenOf, completedRefs, isLeaf, leavesOf, pathOf, rollupStatus } from "./task-tree";
 
 /**
  * Fluxo entre subtarefas: quem entrega para quem. Funções puras sobre `Project.tasks`. Uma tarefa que passa
@@ -9,6 +10,47 @@ import { childrenOf, isLeaf, leavesOf, pathOf, rollupStatus, statusOf } from "./
 
 type Tasks = Pick<Project, "tasks">;
 
+/** O contexto de uma consulta dentro da subárvore de `ref`: o mapa por `ref`, os refs de dentro e as folhas de cada dependência (lazy). */
+type Scope = { byRef: Map<string, ProjectTask>; inside: Set<string>; ref: string; project: Tasks; leavesOfDep: Map<string, string[]> };
+
+function scopeOf(project: Tasks, ref: string): Scope {
+  const byRef = new Map(project.tasks.map((task) => [task.ref, task]));
+  const kids = new Map<string, string[]>();
+  for (const task of project.tasks) if (task.parent) kids.set(task.parent, [...(kids.get(task.parent) ?? []), task.ref]);
+  const inside = new Set<string>([ref]);
+  const stack = [ref];
+  while (stack.length > 0) {
+    for (const child of kids.get(stack.pop()!) ?? []) {
+      if (inside.has(child)) continue;
+      inside.add(child);
+      stack.push(child);
+    }
+  }
+  return { byRef, inside, ref, project, leavesOfDep: new Map() };
+}
+
+/**
+ * As folhas que `leaf` espera DENTRO do escopo (as dela e as do módulo ou mãe, abaixo de `ref`, de que ela faz parte); uma dependência em
+ * módulo ou mãe vale as folhas dele. Serve para achar as folhas de entrada e as finais de um contêiner.
+ */
+function waitsInside(scope: Scope, leaf: ProjectTask): Set<string> {
+  const refs = [...leaf.dependsOn];
+  const seen = new Set<string>([leaf.ref]);
+  for (let up = leaf.parent ? scope.byRef.get(leaf.parent) : undefined; up && up.ref !== scope.ref && !seen.has(up.ref); up = up.parent ? scope.byRef.get(up.parent) : undefined) {
+    seen.add(up.ref);
+    refs.push(...up.dependsOn);
+  }
+  const out = new Set<string>();
+  for (const dep of refs) {
+    if (!scope.inside.has(dep)) continue;
+    out.add(dep);
+    let found = scope.leavesOfDep.get(dep);
+    if (!found) scope.leavesOfDep.set(dep, (found = leavesOf(scope.project, dep).map((candidate) => candidate.ref)));
+    for (const ref of found) out.add(ref);
+  }
+  return out;
+}
+
 /**
  * As folhas "finais" de um nó: as da subárvore que nenhuma outra folha da mesma subárvore espera. Numa cadeia
  * é a última subtarefa; em paralelo são todas as pontas. Uma folha devolve ela mesma.
@@ -16,8 +58,9 @@ type Tasks = Pick<Project, "tasks">;
 export function finalLeaves(project: Tasks, ref: string): ProjectTask[] {
   const leaves = leavesOf(project, ref);
   if (leaves.length <= 1) return leaves;
+  const scope = scopeOf(project, ref);
   const waited = new Set<string>();
-  for (const leaf of leaves) for (const dep of leaf.dependsOn) waited.add(dep);
+  for (const leaf of leaves) for (const dep of waitsInside(scope, leaf)) waited.add(dep);
   const finals = leaves.filter((leaf) => !waited.has(leaf.ref));
   return finals.length > 0 ? finals : leaves.slice(-1);
 }
@@ -41,19 +84,20 @@ export function receivedBy(project: Tasks, task: Pick<ProjectTask, "ref" | "depe
 /** As folhas de entrada de um nó: as que não esperam nenhuma outra da mesma subárvore (começam primeiro). */
 function entryLeaves(project: Tasks, ref: string): ProjectTask[] {
   const leaves = leavesOf(project, ref);
-  const inside = new Set(leaves.map((leaf) => leaf.ref));
-  const entries = leaves.filter((leaf) => !leaf.dependsOn.some((dep) => inside.has(dep)));
+  const scope = scopeOf(project, ref);
+  const entries = leaves.filter((leaf) => waitsInside(scope, leaf).size === 0);
   return entries.length > 0 ? entries : leaves.slice(0, 1);
 }
 
 /**
- * As dependências que valem para uma folha: as dela e as das tarefas-mãe de que ela é subtarefa de entrada
- * (quem não espera ninguém dentro da mãe). Assim "a mãe depende de X" faz as primeiras subtarefas esperarem X.
+ * As dependências que valem para uma folha: as dela e as dos contêineres (módulo ou tarefa-mãe) de que ela é folha de entrada
+ * (quem não espera ninguém dentro dele). Assim "o módulo B depende do módulo A" faz as primeiras tarefas de B esperarem A, e vale também
+ * para "a mãe depende de X".
  */
 export function effectiveDeps(project: Tasks, task: Pick<ProjectTask, "ref" | "dependsOn">): string[] {
   const out = [...task.dependsOn];
   for (const node of pathOf(project, task.ref)) {
-    if (node.ref === task.ref || node.group || node.dependsOn.length === 0) continue;
+    if (node.ref === task.ref || node.dependsOn.length === 0) continue;
     if (!entryLeaves(project, node.ref).some((leaf) => leaf.ref === task.ref)) continue;
     for (const dep of node.dependsOn) if (!out.includes(dep)) out.push(dep);
   }
@@ -160,6 +204,7 @@ export function pendencySummary(project: Tasks, mother: ProjectTask): { text: st
  * - concluída/cancelada/falhou: nada (null);
  * - rodando: "fazendo agora";
  * - esperando você: "esperando você";
+ * - Planejada (`released === false`, ainda não liberada): "planejada, ainda não liberada" (não espera vaga nem agente);
  * - travada (dependência cancelada ou que falhou): "travada: “Criar os textos” foi cancelada" / "falhou";
  * - parada por dependência não concluída: "espera a Sônia terminar “Criar os textos”" (uma) ou "espera Sônia e Davi" (várias);
  * - na fila do próprio agente: "na fila do Hugo (2ª)";
@@ -170,12 +215,15 @@ export function waitingText({ task, project, agentName, queuePosition }: Waiting
   if (task.status === "concluida" || task.status === "cancelada" || task.status === "falhou") return null;
   if (task.status === "em_andamento") return "fazendo agora";
   if (task.status === "esperando_voce") return "esperando você";
+  // Planejada (ainda não liberada): não espera vaga nem agente, espera ser liberada.
+  if (isLeaf(project, task) && releaseHold(task)) return "planejada, ainda não liberada";
   const stuck = blockedText(project, task);
   if (stuck) return stuck;
   const pending: ProjectTask[] = [];
+  const done = completedRefs(project);
   for (const ref of effectiveDeps(project, task)) {
     const dep = project.tasks.find((candidate) => candidate.ref === ref);
-    if (!dep || statusOf(project, dep) === "concluida") continue;
+    if (!dep || done.has(dep.ref)) continue;
     // Dependência numa mãe: quem falta são as folhas dela que ainda não terminaram.
     const open = isLeaf(project, dep) ? [dep] : leavesOf(project, dep.ref).filter((leaf) => leaf.status !== "concluida" && leaf.status !== "cancelada");
     for (const leaf of open.length > 0 ? open : [dep]) if (!pending.some((seen) => seen.ref === leaf.ref)) pending.push(leaf);

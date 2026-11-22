@@ -74,11 +74,15 @@ export function FlowBlock({ project, mother, agents, onSelect }: { project: Proj
   );
 }
 
+/** Quantas opções a lista completa desenha de uma vez (a busca afunila o resto). */
+const DEPENDS_SHOWN = 80;
+
 /**
  * "Depois de": por padrão só o que a tarefa realmente espera (o que falta primeiro, o que já foi feito apagado).
  * "Escolher tarefas" abre a lista completa com caixas de marcar e busca. Só antes de a tarefa começar.
  */
 export function DependsField({ project, task, agents, actions, locked }: { project: Project; task: ProjectTask; agents: ReadonlyMap<string, Agent>; actions: TaskActions; locked: boolean }) {
+  const container = task.group === true || project.tasks.some((candidate) => candidate.parent === task.ref);
   const choices = useMemo(() => dependsChoices(project, task), [project, task]);
   const overview = useMemo(() => dependsOverview(project, task), [project, task]);
   const legend = useId();
@@ -109,7 +113,7 @@ export function DependsField({ project, task, agents, actions, locked }: { proje
       {!open && (
         <>
           {overview.rows.length === 0 ? (
-            <p className="fl-dep-none">Não espera nenhuma tarefa</p>
+            <p className="fl-dep-none">{container ? "Não espera nenhum módulo nem tarefa" : "Não espera nenhuma tarefa"}</p>
           ) : (
             <>
               <p className={`fl-dep-sum${overview.pending > 0 ? " fl-dep-sum--wait" : ""}`} data-testid="task-panel-depends-summary">
@@ -118,7 +122,7 @@ export function DependsField({ project, task, agents, actions, locked }: { proje
               <ul className="fl-dep-list">
                 {overview.rows.map((row) => (
                   <li key={row.ref} className={`fl-dep-row${row.done ? " fl-dep-row--done" : ""}`} data-testid={`task-panel-depends-row-${row.ref}`}>
-                    <AgentAvatar agent={agents.get(row.ownerId)} size={18} />
+                    {row.ownerId ? <AgentAvatar agent={agents.get(row.ownerId)} size={18} /> : null}
                     <span className="fl-dep-name">
                       {row.ownerId ? <b>{name(row.ownerId)} · </b> : null}
                       {row.title}
@@ -136,7 +140,7 @@ export function DependsField({ project, task, agents, actions, locked }: { proje
           )}
           {!locked && choices.length > 0 && (
             <button type="button" className="ui-button ui-button--secondary ui-button--small fl-dep-edit" onClick={() => { toggled.current = true; setEditing(true); }} aria-expanded={false} data-testid="task-panel-depends-edit">
-              {task.dependsOn.length > 0 ? "Editar" : "Escolher tarefas"}
+              {task.dependsOn.length > 0 ? "Editar" : container ? "Escolher módulos e tarefas" : "Escolher tarefas"}
             </button>
           )}
         </>
@@ -146,27 +150,33 @@ export function DependsField({ project, task, agents, actions, locked }: { proje
           {choices.length > 6 && (
             <>
               <label htmlFor={searchId} className="sr-only">
-                Buscar tarefa pelo nome
+                Buscar módulo ou tarefa pelo nome
               </label>
-              <input id={searchId} className="ui-input" type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Buscar tarefa pelo nome" data-testid="task-panel-depends-search" />
+              <input id={searchId} className="ui-input" type="search" value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Buscar módulo ou tarefa pelo nome" data-testid="task-panel-depends-search" />
             </>
           )}
-          {shown.length === 0 && <small className="tp__hint">Nenhuma tarefa com esse nome.</small>}
-          {shown.map((choice) => (
-            <label key={choice.ref} className="fl-check">
-              <input type="checkbox" checked={choice.checked} onChange={(event) => toggle(choice.ref, event.currentTarget.checked)} data-testid={`task-panel-depends-${choice.ref}`} />
-              <AgentAvatar agent={agents.get(choice.ownerId)} size={18} />
-              <span>
-                {choice.ownerId ? <b>{name(choice.ownerId)} · </b> : null}{choice.title}
-              </span>
-            </label>
+          {shown.length === 0 && <small className="tp__hint">Nada com esse nome.</small>}
+          {shown.slice(0, DEPENDS_SHOWN).map((choice, position) => (
+            <div key={choice.ref} className="fl-check-wrap">
+              {choice.sibling === false && (position === 0 || shown[position - 1]!.sibling !== false) && <small className="tp__hint fl-check-sep">Em outros lugares do projeto</small>}
+              <label className="fl-check">
+                <input type="checkbox" checked={choice.checked} onChange={(event) => toggle(choice.ref, event.currentTarget.checked)} data-testid={`task-panel-depends-${choice.ref}`} />
+                {choice.ownerId ? <AgentAvatar agent={agents.get(choice.ownerId)} size={18} /> : null}
+                <span>
+                  {choice.ownerId ? <b>{name(choice.ownerId)} · </b> : null}{choice.title}
+                  {choice.container && <small className="ui-muted"> · módulo</small>}
+                  {choice.path && <small className="ui-muted"> · {choice.path}</small>}
+                </span>
+              </label>
+            </div>
           ))}
+          {shown.length > DEPENDS_SHOWN && <small className="tp__hint">Mostrando {DEPENDS_SHOWN} de {shown.length}: busque pelo nome para achar o resto.</small>}
           <button type="button" className="ui-button ui-button--secondary ui-button--small fl-dep-edit" onClick={() => { toggled.current = true; close(); }} aria-expanded={true} data-testid="task-panel-depends-done">
             Recolher
           </button>
         </>
       )}
-      <small className="tp__hint">{locked ? "A tarefa já começou: de quem ela espera não muda." : "Ela só começa quando todas as marcadas terminarem, e recebe a entrega delas."}</small>
+      <small className="tp__hint">{locked ? "A tarefa já começou: de quem ela espera não muda." : container ? "Só começa quando tudo o que está marcado terminar. Esperar um módulo é esperar todas as tarefas dele." : "Ela só começa quando todas as marcadas terminarem, e recebe a entrega delas."}</small>
     </fieldset>
   );
 }
@@ -174,7 +184,7 @@ export function DependsField({ project, task, agents, actions, locked }: { proje
 /** Janela "Nova subtarefa": título, o que fazer, responsável e "depois de" (uma ou mais irmãs). */
 export function AddSubtaskDialog({ project, parentRef, workers, actions, onClose, onCreated }: { project: Project; parentRef: string; workers: readonly Agent[]; actions: TaskActions; onClose: () => void; onCreated: (ref: string) => void }) {
   const parent = project.tasks.find((task) => task.ref === parentRef);
-  const siblings = useMemo(() => dependsChoices(project, { ref: "", parent: parentRef, dependsOn: [] }), [project, parentRef]);
+  const siblings = useMemo(() => dependsChoices(project, { ref: "", parent: parentRef, dependsOn: [] }, { siblingsOnly: true }), [project, parentRef]);
   const [title, setTitle] = useState("");
   const [briefing, setBriefing] = useState("");
   const [assignee, setAssignee] = useState("");

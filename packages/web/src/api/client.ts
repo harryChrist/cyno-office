@@ -56,8 +56,11 @@ import type {
   ForYouDecisionBody,
   ForYouItem,
   Plan,
+  PlanApprovalRule,
+  PlanApprovalSettings,
   Project,
   Pace,
+  ReleasePace,
   ProjectModeBody,
   ProjectPriority,
   MediaItem,
@@ -244,7 +247,12 @@ export type ProjectPatch = {
   /** Objetivo do projeto (`null` limpa) e "pronto quando…". */
   summary?: string | null;
   doneWhen?: string[];
+  /** Ritmo de liberação automática (`null` desliga). */
+  releasePace?: ReleasePace | null;
 };
+
+/** Corpo do `POST /projects/:id/release`: o que liberar (`all` = o projeto inteiro) e se leva os pré-requisitos junto. */
+export type ReleaseBody = { refs?: string[]; all?: boolean; withPrerequisites?: boolean };
 
 /** Resposta das rotas que criam um nó da árvore: o projeto inteiro e o `ref` criado. */
 export type ProjectTaskCreated = { project: Project; ref: string };
@@ -309,6 +317,10 @@ export const api = {
   /** Paralelismo da distribuição dos planos do workspace (tarefas rodando no workspace e por agente). */
   updateWorkspaceDispatch: (id: string, dispatch: { maxRunning?: number; perAgent?: number }) =>
     requestJson<Workspace>(`/api/workspaces/${segment(id)}`, { method: "PATCH", body: { dispatch } }),
+  /** Regra de aprovação de planos do workspace (e nota quando o Maestro mudou a pedido do dono). */
+  getPlanApproval: (workspaceId: string) => requestJson<PlanApprovalSettings>(`/api/w/${segment(workspaceId)}/settings/plan-approval`),
+  setPlanApproval: (workspaceId: string, rule: PlanApprovalRule) =>
+    requestJson<PlanApprovalSettings>(`/api/w/${segment(workspaceId)}/settings/plan-approval`, { method: "PUT", body: { rule } }),
   /** Cerimônias da Gestão do workspace: horário do resumo do dia e da revisão da semana e o parágrafo de IA (só o que vem muda). */
   updateWorkspaceGestao: (id: string, gestao: { dailyAt?: string | null; weekly?: string; ai?: { daily?: boolean; weekly?: boolean } }) =>
     requestJson<Workspace>(`/api/workspaces/${segment(id)}`, { method: "PATCH", body: { gestao } }),
@@ -403,7 +415,8 @@ export const api = {
 
   /** Planos dos pedidos: aprovar (a distribuição começa), pedir ajuste (vai para o Maestro) ou cancelar (o pedido fecha). */
   listPlans: () => requestJson<Plan[]>(`${ws()}/plans`),
-  approvePlan: (id: string) => requestJson<Plan>(`${ws()}/plans/${segment(id)}/approve`, { method: "POST" }),
+  /** `release`: "all" (padrão) libera tudo ao aprovar; "none" deixa tudo Planejado. */
+  approvePlan: (id: string, release: "all" | "none" = "all") => requestJson<Plan>(`${ws()}/plans/${segment(id)}/approve`, { method: "POST", body: { release } }),
   adjustPlan: (id: string, feedback: string) => requestJson<Plan>(`${ws()}/plans/${segment(id)}/adjust`, { method: "POST", body: { feedback } }),
   cancelPlan: (id: string) => requestJson<Plan>(`${ws()}/plans/${segment(id)}/cancel`, { method: "POST" }),
 
@@ -421,14 +434,22 @@ export const api = {
   reassignProjectTask: (projectId: string, ref: string, body: TaskReassignBody) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/reassign`, { method: "POST", body }),
   moveProjectTask: (projectId: string, ref: string, body: TaskMoveBody) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/move`, { method: "POST", body }),
   duplicateProjectTask: (projectId: string, ref: string) => requestJson<ProjectTaskCreated>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/duplicate`, { method: "POST" }),
+  /** Libera itens Planejados (módulo = tudo dentro; `withPrerequisites` leva o que eles esperam; `all` = o projeto inteiro). */
+  releaseWork: (projectId: string, body: ReleaseBody) => requestJson<{ project: Project } | Project>(`${ws()}/projects/${segment(projectId)}/release`, { method: "POST", body }),
+  /** Segura de volta (Planejada) o que ainda não começou. */
+  holdWork: (projectId: string, refs: string[]) => requestJson<{ project: Project } | Project>(`${ws()}/projects/${segment(projectId)}/hold`, { method: "POST", body: { refs } }),
   archiveProjectTask: (projectId: string, ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/archive`, { method: "POST" }),
   labelProjectTask: (projectId: string, ref: string, name: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}/label`, { method: "POST", body: { name } }),
   /** Quantas avulsas terminadas dariam para apagar (só leitura); 0 dias = qualquer idade. */
   previewAvulsasCleanup: (olderThanDays: number) => requestJson<AvulsasCleanupPreview>(`${ws()}/projects/avulsas/cleanup${queryString({ olderThanDays })}`),
   /** Apaga de vez as avulsas terminadas mais velhas que `olderThanDays` (e as do arquivo, se pedido). */
   cleanupAvulsas: (body: AvulsasCleanupBody) => requestJson<AvulsasCleanupResult>(`${ws()}/projects/avulsas/cleanup`, { method: "POST", body }),
-  /** Apaga de vez uma avulsa terminada (409 com a mensagem do servidor nos outros casos). */
-  deleteAvulsaTask: (projectId: string, ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}`, { method: "DELETE" }),
+  /** Reabre um projeto concluído ou cancelado (volta para ativo). */
+  reopenProject: (id: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(id)}/reopen`, { method: "POST" }),
+  /** Conclui um projeto aberto (409 se houver tarefa em andamento ou esperando você). */
+  completeProject: (id: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(id)}/complete`, { method: "POST" }),
+  /** Apaga de vez um item (tarefa, subtarefa ou módulo com tudo dentro) de qualquer projeto (409 se houver algo em andamento ou esperando você). */
+  deleteTaskNode: (projectId: string, ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/${segment(projectId)}/tasks/${segment(ref)}`, { method: "DELETE" }),
   /** Apaga um projeto comum de vez, com as tarefas e os logs (409 para o Avulsas e com tarefa rodando). */
   deleteProject: (projectId: string) => requestJson<ProjectDeleteResult>(`${ws()}/projects/${segment(projectId)}`, { method: "DELETE" }),
   convertTaskToProject: (ref: string) => requestJson<{ project: Project }>(`${ws()}/projects/avulsas/tasks/${segment(ref)}/convert`, { method: "POST" }),

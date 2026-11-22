@@ -84,16 +84,8 @@ export function SprintsTab({ project, agents, editable, fixed, now, onOpenTask }
   if (lanes.length === 0) {
     return (
       <div className="pt-empty sp-empty" data-testid="sprints-empty">
-        <p className="pt-empty__title">Este projeto ainda não tem sprints</p>
-        <p className="pt-empty__text">
-          Uma sprint é uma fatia de tempo do projeto, em geral uma semana, com um objetivo de uma frase. Cada tarefa entra numa sprint e os agentes só trabalham nas tarefas da sprint que está ativa. O que não ficar pronto passa sozinho para a sprint seguinte. Sem sprints, o projeto anda como sempre: tudo o que está pronto pode começar.
-        </p>
-        {editable && (
-          <button type="button" className="ui-button" onClick={() => setDialog({ mode: "create" })} data-testid="sprint-create-first">
-            Criar a primeira sprint
-          </button>
-        )}
-        {dialog && <SprintDialog project={project} now={now} dialog={dialog} actions={actions} onClose={() => setDialog(null)} />}
+        <p className="pt-empty__title">Este projeto não usa sprints</p>
+        <p className="pt-empty__text">As tarefas liberadas entram na fila conforme a prioridade e as dependências.</p>
       </div>
     );
   }

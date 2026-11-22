@@ -1,22 +1,43 @@
 import { isProjectTaskFinished, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type Project, type ProjectPriority } from "@cyno/shared";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { ConfirmDialog, ErrorText, Modal } from "../../ui/widgets";
 import { AgentAvatar } from "./Agent";
+import { canDeleteTaskNode } from "./projectDeleteView";
+import {
+  impliedSelection,
+  normalizeSelection,
+  plannedWaitButton,
+  plannedWaitText,
+  RELEASE_FILTER_LABELS,
+  RELEASE_FILTERS,
+  releaseFilterRefs,
+  releaseMenu,
+  selectionCan,
+  selectionSummary,
+  type ReleaseFilter,
+} from "./releaseView";
 import {
   buildTreeRows,
   defaultClosed,
   hasSprintColumn,
+  indentLevel,
+  MOBILE_INDENT_LEVELS,
   moveTargets,
+  normalizeText,
+  pathText,
   readClosedRefs,
+  searchTree,
+  TREE_PAGE,
   treeClosedKey,
   writeClosedRefs,
   type FlowInfo,
   type TreeAddRow,
+  type TreeMoreRow,
   type TreeNodeRow,
   type TreeStepRow,
 } from "./taskTreeView";
 import { openSprints, shortSprintName, sprintRange } from "./sprintsView";
-import { AvatarStack, Popover, PriorityFlag, StatusIcon } from "./treeParts";
+import { AvatarStack, Popover, PriorityFlag, StateChip, StatusIcon } from "./treeParts";
 import { treeDrop, zoneAt, type TreeVerdict } from "./dragRules";
 import { DragGhost, usePointerDrag } from "./usePointerDrag";
 import { AddSubtaskDialog } from "./FlowBlock";
@@ -40,7 +61,7 @@ type TreeProps = {
   actions: TaskActions;
   /** Tarefa do Avulsas: ganha "Transformar em projeto" no menu. */
   onConvert?: (ref: string) => void;
-  /** Só no Avulsas: apaga de vez a folha terminada. */
+  /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
 
@@ -83,7 +104,7 @@ export type CellActions = Pick<TaskActions, "update" | "move">;
 const started = (row: Pick<TreeNodeRow, "node">): boolean => (row.node.status !== "backlog" && row.node.status !== "a_fazer") || row.node.steps.some((step) => step.status !== "pendente" || step.taskId !== undefined);
 
 /**
- * A árvore do projeto (a lista em árvore do print): entregáveis, tarefas e subtarefas com seta de abrir e fechar,
+ * A árvore do projeto (a lista em árvore do print): módulos, tarefas e subtarefas com seta de abrir e fechar,
  * contador, etiquetas e as colunas Responsáveis, Data e Prioridade (e Sprint, quando o projeto tiver sprints).
  * Clicar na linha abre o painel da tarefa; as colunas editam ali mesmo (no celular, a edição fica no painel).
  */
@@ -99,6 +120,17 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   const [cancelling, setCancelling] = useState<string | null>(null);
   const mobile = useIsMobile();
   const [notice, setNotice] = useState<string | null>(null);
+  /** Busca no topo da árvore; a lista usa o valor "atrasado" para a digitação não travar com centenas de linhas. */
+  const [query, setQuery] = useState("");
+  const search = useDeferredValue(query);
+  /** Filtro "Mostrar: Tudo | Liberadas | Planejadas". */
+  const [releaseFilter, setReleaseFilter] = useState<ReleaseFilter>("tudo");
+  /** Seleção em lote (refs marcados pelo usuário; selecionar um módulo vale por ele inteiro). */
+  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  /** No celular, liga/desliga o modo de seleção em lote. */
+  const [selectMode, setSelectMode] = useState(false);
+  /** Quantos filhos cada pai mostra ("ver mais" soma 30; chave "" é o projeto). */
+  const [shown, setShown] = useState<ReadonlyMap<string, number>>(new Map());
 
   // O que o dono fecha é lembrado por projeto (localStorage, com try/catch em writeClosedRefs); o resto nasce aberto.
   const toggle = (ref: string) => {
@@ -115,11 +147,66 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
     writeClosedRefs(storageKey, next);
   };
 
+  /** Mostra todos os filhos de um pai (depois de criar ou mover para ele: o item novo vai para o fim e não pode ficar escondido). */
+  const revealAll = (parentRef: string | null | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Number.MAX_SAFE_INTEGER));
+  const showMore = (parentRef: string | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Math.min(Number.MAX_SAFE_INTEGER, (current.get(parentRef ?? "") ?? TREE_PAGE) + TREE_PAGE)));
+
+  const canRelease = editable && canCreate;
   const addingParent = adding?.parentRef;
+  const searching = search.trim() !== "";
+  const filtering = releaseFilter !== "tudo";
+  const filterRefs = useMemo(() => releaseFilterRefs(project, releaseFilter), [project, releaseFilter]);
+  const selectedRefs = useMemo(() => (canRelease ? normalizeSelection(project, picked) : []), [canRelease, project, picked]);
+  const selectedSet = useMemo(() => new Set(selectedRefs), [selectedRefs]);
+  const impliedSet = useMemo(() => impliedSelection(project, selectedSet), [project, selectedSet]);
+  const hasPicked = selectedRefs.length > 0;
+  const canBatch = useMemo(() => selectionCan(project, selectedRefs), [project, selectedRefs]);
+  const clearPicked = useCallback(() => {
+    setPicked(new Set());
+    setSelectMode(false);
+  }, []);
+  const togglePick = (ref: string) => {
+    if (!canRelease || impliedSet.has(ref)) return;
+    setPicked((current) => {
+      const next = new Set(current);
+      if (!next.delete(ref)) next.add(ref);
+      return new Set(normalizeSelection(project, next));
+    });
+  };
+  useEffect(() => {
+    if (!hasPicked && !selectMode) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (document.querySelector("dialog[open]") || document.querySelector(".tt-pop")) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) return;
+      event.preventDefault();
+      clearPicked();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [hasPicked, selectMode, clearPicked]);
+
   const rows = useMemo(
-    () => buildTreeRows(project, closedRefs, { now, addRows: editable && canCreate, agentName: (id) => agents.get(id)?.name ?? id, ...(addingParent ? { forceAdd: addingParent } : {}) }),
-    [project, closedRefs, now, editable, canCreate, addingParent, agents],
+    () =>
+      buildTreeRows(project, closedRefs, {
+        now,
+        addRows: editable && canCreate,
+        shown,
+        ...(search.trim() ? { query: search } : {}),
+        ...(filterRefs ? { filter: filterRefs } : {}),
+        agentName: (id) => agents.get(id)?.name ?? id,
+        ...(addingParent ? { forceAdd: addingParent } : {}),
+      }),
+    [project, closedRefs, now, editable, canCreate, addingParent, agents, shown, search, filterRefs],
   );
+  const found = useMemo(() => {
+    if (!searching) return 0;
+    const matches = searchTree(project, search)?.matches;
+    if (!matches) return 0;
+    return filterRefs ? [...matches].filter((ref) => filterRefs.has(ref)).length : matches.size;
+  }, [project, search, searching, filterRefs]);
+  const liveCount = useMemo(() => project.tasks.filter((task) => !task.archived).length, [project.tasks]);
   const sprintColumn = hasSprintColumn(project);
   useEffect(() => {
     if (!notice) return;
@@ -128,14 +215,13 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   }, [notice]);
   // Arrastar uma linha: reordena entre irmãs ou muda de pai; a linha-guia mostra onde vai cair (regras em dragRules).
   const drag = usePointerDrag<TreeVerdict>({
-    enabled: editable && canCreate && !mobile,
+    enabled: editable && canCreate && !mobile && !searching && !filtering,
     hit: (point, id) => {
       const over = document.elementFromPoint(point.x, point.y)?.closest<HTMLElement>("li.tt-row[data-ref]");
       const overRef = over?.dataset.ref;
       if (!over || !overRef) return null;
       const rect = over.getBoundingClientRect();
-      const dragging = project.tasks.find((task) => task.ref === id);
-      return treeDrop(project, id, overRef, zoneAt(point.y, rect.top, rect.height, !dragging?.group));
+      return treeDrop(project, id, overRef, zoneAt(point.y, rect.top, rect.height, true));
     },
     accepts: (verdict) => verdict.ok,
     onDrop: (id, verdict) => {
@@ -144,7 +230,9 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
         return;
       }
       void actions.move(id, verdict.move).then((ok) => {
-        if (ok && verdict.move.parent) openRef(verdict.move.parent);
+        if (!ok) return;
+        if (verdict.move.parent) openRef(verdict.move.parent);
+        revealAll(verdict.move.parent);
       });
     },
   });
@@ -152,36 +240,132 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   const sprintRow = movingSprint ? rows.find((row): row is TreeNodeRow => row.kind === "node" && row.ref === movingSprint) : undefined;
   const cancelRow = cancelling ? rows.find((row): row is TreeNodeRow => row.kind === "node" && row.ref === cancelling) : undefined;
 
+  const runBatch = async (action: () => Promise<boolean>) => {
+    const ok = await action();
+    if (ok) clearPicked();
+  };
+
   return (
-    <div className={`tt${sprintColumn ? " tt--sprints" : ""}`} data-testid="task-tree">
+    <div className={`tt${sprintColumn ? " tt--sprints" : ""}${hasPicked || selectMode ? " tt--picking" : ""}`} data-testid="task-tree">
       <ErrorText testId="task-tree-error">{actions.error}</ErrorText>
       {notice && (
         <p className="tt-notice" role="status" data-testid="tree-drop-notice">
           {notice}
         </p>
       )}
+      {liveCount > 0 && (
+        <div className="tt-toolbar">
+          {liveCount >= SEARCH_FROM && (
+            <div className="tt-search" role="search">
+              <input
+                className="ui-input ui-input--compact tt-search__input"
+                type="search"
+                value={query}
+                placeholder="Buscar por nome ou código"
+                aria-label="Buscar na árvore por nome ou código"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setQuery("");
+                }}
+                data-testid="tree-search"
+              />
+              {searching && (
+                <span className="tt-search__count" role="status" data-testid="tree-search-count">
+                  {found === 0 ? "Nada encontrado" : found === 1 ? "1 item" : `${found} itens`}
+                </span>
+              )}
+            </div>
+          )}
+          <div className="tt-filter" role="group" aria-label="Mostrar">
+            <span className="tt-filter__label">Mostrar:</span>
+            <div className="w-seg tt-filter__seg">
+              {RELEASE_FILTERS.map((id) => (
+                <button key={id} type="button" aria-pressed={releaseFilter === id} onClick={() => setReleaseFilter(id)} data-testid={`tree-filter-${id}`}>
+                  {RELEASE_FILTER_LABELS[id]}
+                </button>
+              ))}
+            </div>
+          </div>
+          {canRelease && mobile && (
+            <button
+              type="button"
+              className="ui-button ui-button--secondary ui-button--small tt-selectbtn"
+              onClick={() => (selectMode || hasPicked ? clearPicked() : setSelectMode(true))}
+              data-testid="tree-select-toggle"
+            >
+              {selectMode || hasPicked ? "Cancelar seleção" : "Selecionar"}
+            </button>
+          )}
+        </div>
+      )}
+      {canRelease && hasPicked && (
+        <div className="tt-batch" role="region" aria-label="Ações da seleção" data-testid="tree-batch-bar">
+          <span className="tt-batch__count" data-testid="tree-batch-count">
+            {selectionSummary(project, selectedRefs)}
+          </span>
+          <div className="tt-batch__actions">
+            <button
+              type="button"
+              className="ui-button ui-button--small"
+              disabled={!canBatch.release || actions.busy}
+              onClick={() => void runBatch(() => actions.release({ refs: selectedRefs }))}
+              data-testid="tree-batch-release"
+            >
+              Liberar
+            </button>
+            <button
+              type="button"
+              className="ui-button ui-button--secondary ui-button--small"
+              disabled={!canBatch.releaseWith || actions.busy}
+              title={canBatch.releaseWith ? "Libera a seleção e os pré-requisitos Planejados" : "Nenhum pré-requisito Planejado fora da seleção"}
+              onClick={() => void runBatch(() => actions.release({ refs: selectedRefs, withPrerequisites: true }))}
+              data-testid="tree-batch-release-with"
+            >
+              Liberar com o que precisam
+            </button>
+            <button
+              type="button"
+              className="ui-button ui-button--secondary ui-button--small"
+              disabled={!canBatch.hold || actions.busy}
+              onClick={() => void runBatch(() => actions.hold(selectedRefs))}
+              data-testid="tree-batch-hold"
+            >
+              Segurar
+            </button>
+            <button type="button" className="ui-button ui-button--ghost ui-button--small" disabled={actions.busy} onClick={clearPicked} data-testid="tree-batch-clear">
+              Limpar
+            </button>
+          </div>
+        </div>
+      )}
       <div className="tt-head" aria-hidden="true">
         <span className="tt-head__name">Nome</span>
         <span>Responsáveis</span>
         <span>Data</span>
         <span>Prioridade</span>
-        {sprintColumn && <span>Sprint</span>}
+        <span>{sprintColumn ? "Sprint" : "Estado"}</span>
       </div>
       <ul className="tt-body" role="tree" aria-label="Tarefas do projeto">
         {rows.map((row) =>
           row.kind === "step" ? (
-            <StepRow key={row.key} row={row} agents={agents} />
+            <StepRow key={row.key} row={row} agents={agents} mobile={mobile} />
+          ) : row.kind === "more" ? (
+            <MoreRow key={row.key} row={row} mobile={mobile} onMore={() => showMore(row.parentRef)} />
           ) : row.kind === "add" ? (
             <AddRow
               key={row.key}
               row={row}
-              active={adding !== null && adding.parentRef === row.parentRef && (row.root || !adding.group)}
+              mobile={mobile}
+              active={adding !== null && adding.parentRef === row.parentRef && (row.both || !adding.group)}
               group={adding?.group ?? false}
               onStart={(group) => (row.parentRef && project.tasks.some((task) => task.ref === row.parentRef && !task.group) ? setSubDialog(row.parentRef) : setAdding({ ...(row.parentRef ? { parentRef: row.parentRef } : {}), ...(group ? { group: true } : {}) }))}
               onStop={() => setAdding(null)}
               onCreate={async (title, group) => {
                 const ref = await actions.create({ title, ...(row.parentRef ? { parent: row.parentRef } : {}), ...(group ? { group: true } : {}) });
-                if (ref && row.parentRef) openRef(row.parentRef);
+                if (ref) {
+                  if (row.parentRef) openRef(row.parentRef);
+                  revealAll(row.parentRef);
+                }
                 return ref !== undefined;
               }}
             />
@@ -193,6 +377,10 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
               agents={agents}
               workers={workers}
               selected={selectedRef === row.ref}
+              picked={selectedSet.has(row.ref)}
+              implied={impliedSet.has(row.ref)}
+              showCheck={canRelease && (!mobile || selectMode || hasPicked)}
+              onPick={() => togglePick(row.ref)}
               dragging={drag.session?.id === row.ref}
               dropVerdict={drag.session?.verdict && drag.session.verdict.overRef === row.ref ? drag.session.verdict : null}
               onDragStart={(event) => drag.start(row.ref, row.node.title, event)}
@@ -205,10 +393,10 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
               onSelect={onSelect}
               onToggle={toggle}
               onRename={(on) => setRenaming(on ? row.ref : null)}
-              onAddChild={() => {
+              onAddChild={(group) => {
                 openRef(row.ref);
                 if (!row.isGroup) setSubDialog(row.ref);
-                else setAdding({ parentRef: row.ref });
+                else setAdding({ parentRef: row.ref, ...(group ? { group: true } : {}) });
               }}
               onMove={() => setMoving(row.ref)}
               onMoveSprint={() => setMovingSprint(row.ref)}
@@ -220,9 +408,19 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
         )}
       </ul>
       <DragGhost session={drag.session} reason={drag.session?.verdict && !drag.session.verdict.ok ? drag.session.verdict.reason || null : null} />
-      {rows.every((row) => row.kind === "add") && <p className="tt-empty">Este projeto ainda não tem tarefas.{editable && canCreate ? " Crie um entregável ou uma tarefa abaixo." : ""}</p>}
-      {subDialog && <AddSubtaskDialog project={project} parentRef={subDialog} workers={workers} actions={actions} onClose={() => setSubDialog(null)} onCreated={(ref) => { openRef(subDialog); onSelect(ref); }} />}
-      {movingRow && <MoveDialog project={project} row={movingRow} actions={actions} onClose={() => setMoving(null)} />}
+      {searching && found === 0 && <p className="tt-empty">Nada encontrado para “{search.trim()}”. Busque pelo nome ou pelo código (T12).</p>}
+      {!searching && filtering && rows.length === 0 && (
+        <p className="tt-empty" data-testid="tree-filter-empty">
+          {releaseFilter === "planejadas" ? "Nenhuma tarefa Planejada neste projeto." : "Nenhuma tarefa liberada ainda."}
+        </p>
+      )}
+      {!searching && !filtering && rows.every((row) => row.kind === "add") && (
+        <p className="tt-empty" data-testid="tree-empty-hint">
+          {canCreate ? "Tudo que você cria aqui nasce Planejado. Libere quando quiser que as IAs comecem." : "Este projeto ainda não tem tarefas."}
+        </p>
+      )}
+      {subDialog && <AddSubtaskDialog project={project} parentRef={subDialog} workers={workers} actions={actions} onClose={() => setSubDialog(null)} onCreated={(ref) => { openRef(subDialog); revealAll(subDialog); onSelect(ref); }} />}
+      {movingRow && <MoveDialog project={project} row={movingRow} actions={actions} onClose={() => setMoving(null)} onMoved={(parent) => { if (parent) openRef(parent); revealAll(parent); }} />}
       {sprintRow && <MoveSprintDialog project={project} row={sprintRow} actions={actions} onClose={() => setMovingSprint(null)} />}
       {cancelRow && (
         <ConfirmDialog
@@ -242,12 +440,37 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   );
 }
 
+/** A busca só aparece quando a árvore tem itens que justifiquem. */
+const SEARCH_FROM = 8;
+
+/** O recuo da linha: um nível por ancestral (no celular pára no 4º; o caminho "A > B > C" diz onde ela está). */
+const levelStyle = (depth: number, mobile: boolean): CSSProperties => ({ "--tt-level": indentLevel(depth, mobile) }) as CSSProperties;
+
+/** "ver mais 70": mostra mais 30 filhos do nível. */
+function MoreRow({ row, mobile, onMore }: { row: TreeMoreRow; mobile: boolean; onMore: () => void }) {
+  const next = Math.min(TREE_PAGE, row.remaining);
+  return (
+    <li className="tt-row tt-row--more" role="none" style={levelStyle(row.depth, mobile)} data-testid={`tree-${row.key}`}>
+      <div className="tt-name">
+        <span className="tt-arrow tt-arrow--none" aria-hidden="true" />
+        <button type="button" className="tt-addbtn tt-morebtn" title={`Mostra mais ${next}`} onClick={onMore} data-testid={`tree-more-${row.parentRef ?? "root"}`}>
+          ver mais {row.remaining}
+        </button>
+      </div>
+    </li>
+  );
+}
+
 type NodeRowProps = {
   row: TreeNodeRow;
   project: Project;
   agents: ReadonlyMap<string, Agent>;
   workers: readonly Agent[];
   selected: boolean;
+  picked: boolean;
+  implied: boolean;
+  showCheck: boolean;
+  onPick: () => void;
   dragging: boolean;
   dropVerdict: TreeVerdict | null;
   onDragStart: (event: PointerEvent<HTMLLIElement>) => void;
@@ -260,23 +483,25 @@ type NodeRowProps = {
   onSelect: (ref: string) => void;
   onToggle: (ref: string) => void;
   onRename: (on: boolean) => void;
-  onAddChild: () => void;
+  /** `group`: o novo é um módulo (só dentro de módulo); sem ele, tarefa ou subtarefa. */
+  onAddChild: (group?: boolean) => void;
   onMove: () => void;
   onMoveSprint: () => void;
   onCancel: () => void;
   onConvert?: (ref: string) => void;
-  /** Só no Avulsas: apaga de vez a folha terminada. */
+  /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
 
-function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert, onDelete }: NodeRowProps) {
+function NodeRow({ row, project, agents, workers, selected, picked, implied, showCheck, onPick, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert, onDelete }: NodeRowProps) {
   const { node } = row;
   const leaf = !row.isGroup && !row.hasChildren;
   const editableCells = editable && leaf && !mobile;
-  const parentLike = row.isGroup || row.hasChildren;
+  const parentLike = row.isContainer;
   const foldable = row.hasChildren || (row.stepCount ?? 0) > 0;
   const finished = isProjectTaskFinished(node) && leaf;
   const stop = (event: MouseEvent) => event.stopPropagation();
+  const hasSub = Boolean(row.flow) || row.plannedWaits.length > 0 || (row.isContainer && Boolean(row.waits));
   const [nameRef, fitLevel] = useNameFit([node.title, row.labels.length, row.startsIn, row.carried, row.waiting, row.blocked, renaming], !mobile);
 
   const onKey = (event: KeyboardEvent<HTMLLIElement>) => {
@@ -290,8 +515,9 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
 
   return (
     <li
-      className={`tt-row tt-row--d${row.depth}${row.isGroup ? " tt-row--group" : parentLike ? " tt-row--parent" : ""}${row.flow ? " tt-row--flow" : ""}${selected ? " is-selected" : ""}${finished || row.status === "concluida" ? " is-done" : ""}${dragging ? " is-dragging" : ""}${dropVerdict ? ` tt-drop tt-drop--${dropVerdict.zone}${dropVerdict.ok ? "" : dropVerdict.reason ? " tt-drop--no" : " tt-drop--same"}` : ""}`}
+      className={`tt-row${row.isGroup ? " tt-row--group" : parentLike ? " tt-row--parent" : ""}${row.flow ? " tt-row--flow" : hasSub ? " tt-row--waits" : ""}${selected ? " is-selected" : ""}${picked || implied ? " is-picked" : ""}${finished || row.status === "concluida" ? " is-done" : ""}${dragging ? " is-dragging" : ""}${dropVerdict ? ` tt-drop tt-drop--${dropVerdict.zone}${dropVerdict.ok ? "" : dropVerdict.reason ? " tt-drop--no" : " tt-drop--same"}` : ""}`}
       role="treeitem"
+      style={levelStyle(row.depth, mobile)}
       aria-level={row.depth}
       aria-expanded={foldable ? row.open : undefined}
       aria-selected={selected}
@@ -299,12 +525,30 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
       data-testid={`tree-row-${row.ref}`}
       data-ref={row.ref}
       data-status={row.status}
+      data-state={row.state.tone}
       data-depth={row.depth}
       onClick={() => onSelect(row.ref)}
       onKeyDown={onKey}
       onPointerDown={onDragStart}
     >
       <div className="tt-name" ref={nameRef} data-fit={fitLevel}>
+        {mobile && row.depth > MOBILE_INDENT_LEVELS && row.trail.length > 0 && (
+          <span className="tt-path" title={pathText(row.trail)} data-testid={`tree-path-${row.ref}`}>
+            {pathText(row.trail)}
+          </span>
+        )}
+        {showCheck && (
+          <label className="tt-check" onClick={stop} onPointerDown={(event) => event.stopPropagation()} title={implied ? "Incluída no módulo selecionado" : `Selecionar ${node.title}`}>
+            <input
+              type="checkbox"
+              checked={picked || implied}
+              disabled={implied}
+              aria-label={`Selecionar ${node.title}`}
+              onChange={onPick}
+              data-testid={`tree-pick-${row.ref}`}
+            />
+          </label>
+        )}
         {foldable ? (
           <button
             type="button"
@@ -324,7 +568,8 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
         ) : (
           <span className="tt-arrow tt-arrow--none" aria-hidden="true" />
         )}
-        <StatusIcon status={row.status} />
+        <StatusIcon status={row.status} planned={row.state.planned} label={row.state.label} />
+        {sprintColumn && (row.state.planned || row.state.label === "Misto") && <StateChip state={row.state} compact testId={`tree-release-chip-${row.ref}`} />}
         {renaming ? (
           <RenameInput
             value={node.title}
@@ -339,7 +584,7 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
           </span>
         )}
         {parentLike && row.childCount > 0 && (
-          <span className="tt-count" title={row.progress && row.progress.total > 0 ? `${row.progress.done} de ${row.progress.total} tarefas concluídas` : `${row.childCount} dentro`} data-testid={`tree-count-${row.ref}`}>
+          <span className={`tt-count${row.progress && row.progress.total > 0 && row.progress.done >= row.progress.total ? " tt-count--done" : ""}`} title={row.progress && row.progress.total > 0 ? `${row.progress.done} de ${row.progress.total} ${row.progress.total === 1 ? "atividade concluída" : "atividades concluídas"}` : `${row.childCount} dentro`} data-testid={`tree-count-${row.ref}`}>
             {row.progress && row.progress.total > 0 ? `${row.progress.done}/${row.progress.total}` : row.childCount}
           </span>
         )}
@@ -354,6 +599,20 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
           </span>
         )}
         <LabelsCell row={row} project={project} actions={actions} interactive={editable && !mobile && !row.isGroup} level={fitLevel} />
+        {editable && canCreate && !mobile && !row.isGroup && row.canAddChild && (
+          <button
+            type="button"
+            className="tt-subbtn"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddChild();
+            }}
+            aria-label={`Adicionar subtarefa em ${row.node.title}`}
+            data-testid={`tree-quick-sub-${row.ref}`}
+          >
+            + subtarefa
+          </button>
+        )}
         {row.waiting > 0 && (
           <span className="tt-badge tt-badge--wait" title={`${row.waiting} esperando você`}>
             Espera você
@@ -388,7 +647,7 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
         <div className="tt-cell tt-cell--prio" data-testid={`tree-prio-${row.ref}`}>
           {editableCells ? <PrioCell row={row} actions={actions} /> : row.priority ? <PriorityFlag priority={row.priority} /> : <span className="tt-none">—</span>}
         </div>
-        {sprintColumn && (
+        {sprintColumn ? (
           <div className="tt-cell tt-cell--sprint" data-testid={`tree-sprint-${row.ref}`}>
             {editableCells ? (
               <SprintCell row={row} project={project} actions={actions} />
@@ -398,12 +657,17 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
               <span className="tt-none">—</span>
             )}
           </div>
+        ) : (
+          <div className="tt-cell tt-cell--state" data-testid={`tree-state-${row.ref}`}>
+            <StateChip state={row.state} />
+          </div>
         )}
       </div>
 
       <div className="tt-more" onClick={stop}>
         <RowMenu
           row={row}
+          project={project}
           editable={editable}
           canCreate={canCreate}
           actions={actions}
@@ -419,18 +683,61 @@ function NodeRow({ row, project, agents, workers, selected, dragging, dropVerdic
         />
       </div>
 
-      {row.flow && <FlowLine flow={row.flow} agents={agents} refId={row.ref} />}
+      {hasSub && (
+        <div className="tt-sub">
+          {row.flow && <FlowLine flow={row.flow} agents={agents} refId={row.ref} {...(row.isContainer && row.waits && row.plannedWaits.length === 0 ? { waits: row.waits } : {})} />}
+          {!row.flow && row.isContainer && row.waits && row.plannedWaits.length === 0 && (
+            <div className="tt-flow tt-flow--waits" data-testid={`tree-waits-${row.ref}`}>
+              <span className="tt-flow__text tt-flow__text--wait">{row.waits}</span>
+            </div>
+          )}
+          {row.plannedWaits.length > 0 && (
+            <div className="tt-flow tt-flow--planned" onClick={stop} onPointerDown={(event) => event.stopPropagation()} data-testid={`tree-planned-wait-${row.ref}`}>
+              <span className="tt-flow__text tt-flow__text--planned">{plannedWaitText(row.plannedWaits)}</span>
+              {editable && (
+                <button
+                  type="button"
+                  className="tt-release-inline"
+                  disabled={actions.busy}
+                  onClick={() => void actions.release({ refs: row.plannedWaits.map((item) => item.ref) })}
+                  data-testid={`tree-release-wait-${row.ref}`}
+                >
+                  {plannedWaitButton(row.plannedWaits)}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
 
 /** A linha de fluxo debaixo do nome: subtarefa = avatar, nome e o que espera; tarefa-mãe = todos os responsáveis e o resumo. */
-function FlowLine({ flow, agents, refId }: { flow: FlowInfo; agents: ReadonlyMap<string, Agent>; refId: string }) {
+function FlowLine({ flow, agents, refId, waits }: { flow: FlowInfo; agents: ReadonlyMap<string, Agent>; refId: string; waits?: string }) {
   if (flow.kind === "mother") {
+    const total = flow.total ?? 0;
+    const done = flow.done ?? 0;
+    const allDone = total > 0 && done >= total;
     return (
-      <div className="tt-flow tt-flow--mother" data-testid={`tree-flow-${refId}`}>
-        <AvatarStack ids={flow.everyone ?? []} more={0} agents={agents} />
-        <span className="tt-flow__text">{flow.summary}</span>
+      <div className={`tt-flow tt-flow--mother${allDone ? " tt-flow--done" : ""}`} data-testid={`tree-flow-${refId}`}>
+        {total > 0 && (
+          <span className="tt-meter" role="img" aria-label={`${done} de ${total} prontas`}>
+            <span className="tt-meter__fill" style={{ width: `${Math.round((done / total) * 100)}%` }} />
+          </span>
+        )}
+        {(flow.everyone?.length ?? 0) > 0 && <AvatarStack ids={flow.everyone ?? []} more={0} agents={agents} />}
+        {allDone && (
+          <svg className="tt-flow__check" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+        <span className="tt-flow__text">{allDone ? "Tudo pronto" : flow.summary}</span>
+        {waits && (
+          <span className="tt-flow__text tt-flow__text--wait" data-testid={`tree-waits-${refId}`}>
+            {waits}
+          </span>
+        )}
       </div>
     );
   }
@@ -444,16 +751,16 @@ function FlowLine({ flow, agents, refId }: { flow: FlowInfo; agents: ReadonlyMap
       ) : (
         <span className="tt-flow__who tt-flow__who--none">sem responsável</span>
       )}
-      {flow.text && <span className="tt-flow__text">{flow.text}</span>}
+      {flow.text && <span className={`tt-flow__text${flow.text === "entregou" ? " tt-flow__text--done" : ""}`}>{flow.text === "entregou" ? "✓ entregou" : flow.text}</span>}
     </div>
   );
 }
 
 /** Um passo de tarefa antiga (`steps`): só leitura, marcado como passo, com o agente, o que faz e o que espera. */
-function StepRow({ row, agents }: { row: TreeStepRow; agents: ReadonlyMap<string, Agent> }) {
+function StepRow({ row, agents, mobile }: { row: TreeStepRow; agents: ReadonlyMap<string, Agent>; mobile: boolean }) {
   const agent = agents.get(row.agentId);
   return (
-    <li className={`tt-row tt-row--step tt-row--d${row.depth}${row.status === "concluida" ? " is-done" : ""}`} role="treeitem" aria-level={row.depth} data-testid={`tree-step-${row.parentRef}-${row.index}`} data-status={row.status}>
+    <li className={`tt-row tt-row--step${row.status === "concluida" ? " is-done" : ""}`} style={levelStyle(row.depth, mobile)} role="treeitem" aria-level={row.depth} data-testid={`tree-step-${row.parentRef}-${row.index}`} data-status={row.status}>
       <div className="tt-name">
         <span className="tt-arrow tt-arrow--none" aria-hidden="true" />
         <StatusIcon status={row.status} />
@@ -708,23 +1015,25 @@ export function LabelsForm({ row, project, actions }: { row: Pick<TreeNodeRow, "
 
 type MenuProps = {
   row: TreeNodeRow;
+  project: Project;
   editable: boolean;
   canCreate: boolean;
   actions: TaskActions;
   onRename: () => void;
-  onAddChild: () => void;
+  onAddChild: (group?: boolean) => void;
   onMove: () => void;
   onMoveSprint: () => void;
   hasSprints: boolean;
   onCancel: () => void;
   onOpen: () => void;
   onConvert?: (ref: string) => void;
-  /** Só no Avulsas: apaga de vez a folha terminada. */
+  /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
 
-function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert, onDelete }: MenuProps) {
+function RowMenu({ row, project, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert, onDelete }: MenuProps) {
   const done = row.status === "concluida" || row.status === "cancelada";
+  const releaseItems = editable && canCreate ? releaseMenu(project, row.node) : [];
   const item = (label: string, run: () => void, close: () => void, testId?: string, danger = false) => (
     <li key={label} role="none">
       <button
@@ -759,7 +1068,20 @@ function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMo
       {(close) => (
         <ul className="tt-pop__list" role="menu">
           {item("Abrir detalhes", onOpen, close)}
-          {editable && canCreate && row.canAddChild && item(row.isGroup ? "Adicionar tarefa" : "Adicionar subtarefa", onAddChild, close, `tree-add-child-${row.ref}`)}
+          {releaseItems.map((entry) =>
+            item(
+              entry.label,
+              () => {
+                if (entry.id === "release") void actions.release({ refs: [row.ref] });
+                else if (entry.id === "release_with") void actions.release({ refs: [row.ref], withPrerequisites: true });
+                else void actions.hold([row.ref]);
+              },
+              close,
+              entry.id === "release" ? `tree-release-${row.ref}` : entry.id === "release_with" ? `tree-release-with-${row.ref}` : `tree-hold-${row.ref}`,
+            ),
+          )}
+          {editable && canCreate && row.canAddChild && item(row.isGroup ? "Adicionar tarefa" : "Adicionar subtarefa", () => onAddChild(), close, `tree-add-child-${row.ref}`)}
+          {editable && canCreate && row.canAddChild && row.isGroup && item("Adicionar módulo", () => onAddChild(true), close, `tree-add-module-${row.ref}`)}
           {editable && item("Renomear", onRename, close)}
           {editable && canCreate && item("Mover para…", onMove, close, `tree-move-${row.ref}`)}
           {editable && canCreate && hasSprints && !row.isGroup && !row.hasChildren && !done && item("Mover para sprint…", onMoveSprint, close, `tree-move-sprint-${row.ref}`)}
@@ -769,7 +1091,7 @@ function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMo
           {editable && onConvert && !row.isGroup && !row.hasChildren && !done && item("Transformar em projeto", () => onConvert(row.ref), close, `tree-convert-${row.ref}`)}
           {editable && !done && item("Cancelar", onCancel, close, `tree-cancel-${row.ref}`, true)}
           {done && item("Arquivar", () => void actions.archive(row.ref), close, `tree-archive-${row.ref}`)}
-          {done && onDelete && !row.isGroup && !row.hasChildren && item("Apagar", () => onDelete(row.ref), close, `tree-delete-${row.ref}`)}
+          {onDelete && canDeleteTaskNode(project, row.node) && item("Apagar", () => onDelete(row.ref), close, `tree-delete-${row.ref}`, true)}
         </ul>
       )}
     </Popover>
@@ -778,6 +1100,7 @@ function RowMenu({ row, editable, canCreate, actions, onRename, onAddChild, onMo
 
 type AddRowProps = {
   row: TreeAddRow;
+  mobile: boolean;
   active: boolean;
   group: boolean;
   onStart: (group: boolean) => void;
@@ -786,7 +1109,7 @@ type AddRowProps = {
 };
 
 /** "Adicionar tarefa" no fim de cada nível: Enter cria e deixa o campo pronto para a próxima; Esc fecha. */
-function AddRow({ row, active, group, onStart, onStop, onCreate }: AddRowProps) {
+function AddRow({ row, mobile, active, group, onStart, onStop, onCreate }: AddRowProps) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -804,9 +1127,10 @@ function AddRow({ row, active, group, onStart, onStop, onCreate }: AddRowProps) 
       input.current?.focus();
     }
   };
-  const noun = group ? "entregável" : row.parentRef ? (row.label === "Adicionar tarefa" ? "tarefa" : "subtarefa") : "tarefa";
+  const noun = group ? "módulo" : row.parentRef ? (row.label === "Adicionar tarefa" ? "tarefa" : "subtarefa") : "tarefa";
+  const article = noun === "módulo" ? "o" : "a";
   return (
-    <li className={`tt-row tt-row--add tt-row--d${row.depth}`} role="none" data-testid={`tree-${row.key}`}>
+    <li className="tt-row tt-row--add" style={levelStyle(row.depth, mobile)} role="none" data-testid={`tree-${row.key}`}>
       <div className="tt-name">
         <span className="tt-arrow tt-arrow--none" aria-hidden="true" />
         {active ? (
@@ -814,8 +1138,8 @@ function AddRow({ row, active, group, onStart, onStop, onCreate }: AddRowProps) 
             ref={input}
             className="tt-input tt-input--add"
             value={text}
-            placeholder={`Nome do ${noun} (Enter cria, Esc fecha)`}
-            aria-label={`Nome do novo ${noun}`}
+            placeholder={`Nome d${article} ${noun} (Enter cria, Esc fecha)`}
+            aria-label={`Nome d${article} nov${article} ${noun}`}
             maxLength={120}
             readOnly={saving}
             onChange={(event) => setText(event.currentTarget.value)}
@@ -830,12 +1154,12 @@ function AddRow({ row, active, group, onStart, onStop, onCreate }: AddRowProps) 
             }}
             data-testid={`tree-add-input-${row.parentRef ?? "root"}`}
           />
-        ) : row.root ? (
+        ) : row.both ? (
           <span className="tt-add">
-            <button type="button" className="tt-addbtn" onClick={() => onStart(true)} data-testid="tree-add-group">
-              + Entregável
+            <button type="button" className="tt-addbtn" onClick={() => onStart(true)} data-testid={row.root ? "tree-add-group" : `tree-add-module-${row.parentRef}`}>
+              + Módulo
             </button>
-            <button type="button" className="tt-addbtn" onClick={() => onStart(false)} data-testid="tree-add-task">
+            <button type="button" className="tt-addbtn" onClick={() => onStart(false)} data-testid={row.root ? "tree-add-task" : `tree-add-${row.parentRef}`}>
               + Tarefa
             </button>
           </span>
@@ -927,24 +1251,56 @@ function MoveSprintDialog({ project, row, actions, onClose }: { project: Project
   );
 }
 
-function MoveDialog({ project, row, actions, onClose }: { project: Project; row: TreeNodeRow; actions: TaskActions; onClose: () => void }) {
+/** Quantos destinos a janela "Mover para…" desenha de uma vez (a busca afunila o resto). */
+const MOVE_SHOWN = 60;
+
+/** "Mover para…": busca pelo nome ou pelo caminho. Sem busca só os módulos e itens que já têm filhas; buscando, qualquer destino. */
+function MoveDialog({ project, row, actions, onClose, onMoved }: { project: Project; row: TreeNodeRow; actions: TaskActions; onClose: () => void; onMoved: (parent: string | null) => void }) {
   const targets = useMemo(() => moveTargets(project, row.ref), [project, row.ref]);
   const [choice, setChoice] = useState<string | null | undefined>(undefined);
+  const [query, setQuery] = useState("");
+  const needle = normalizeText(query.trim());
+  const small = targets.length <= 8;
+  const listed = useMemo(() => (needle ? targets.filter((target) => normalizeText(`${target.label} ${target.path}`).includes(needle)) : small ? targets : targets.filter((target) => target.container)), [targets, needle, small]);
+  const visible = listed.slice(0, MOVE_SHOWN);
   return (
     <Modal title={`Mover “${row.node.title}” para…`} onClose={onClose} testId="tree-move-dialog">
       {targets.length === 0 ? (
-        <p>Não há outro lugar para mover: {row.isGroup ? "um entregável só fica direto no projeto." : "os destinos já estão cheios ou no limite de 3 níveis."}</p>
+        <p>Não há outro lugar para mover: os destinos que sobram estão dentro dela mesma, esperam o que ela contém ou já começaram.</p>
       ) : (
-        <ul className="tt-targets" role="radiogroup" aria-label="Destino">
-          {targets.map((target) => (
-            <li key={target.ref ?? "root"} style={{ paddingLeft: `${target.depth * 16}px` }}>
-              <label className="tt-target">
-                <input type="radio" name="move-target" checked={choice === target.ref} onChange={() => setChoice(target.ref)} data-testid={`tree-move-to-${target.ref ?? "root"}`} />
-                <span>{target.label}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
+        <>
+          {!small && (
+            <input
+              className="ui-input"
+              type="search"
+              value={query}
+              placeholder="Buscar módulo ou tarefa"
+              aria-label="Buscar o destino"
+              autoFocus
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              data-testid="tree-move-search"
+            />
+          )}
+          {visible.length === 0 ? (
+            <p className="ui-muted">Nenhum destino com esse nome.</p>
+          ) : (
+            <ul className="tt-targets" role="radiogroup" aria-label="Destino">
+              {visible.map((target) => (
+                <li key={target.ref ?? "root"} style={{ paddingLeft: needle ? 0 : `${Math.min(target.depth, 6) * 16}px` }}>
+                  <label className="tt-target">
+                    <input type="radio" name="move-target" checked={choice === target.ref} onChange={() => setChoice(target.ref)} data-testid={`tree-move-to-${target.ref ?? "root"}`} />
+                    <span>
+                      {target.label}
+                      {needle && target.path ? <small className="ui-muted"> · {target.path}</small> : null}
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {listed.length > visible.length && <p className="ui-muted tt-targets__more">Mostrando {visible.length} de {listed.length}: busque pelo nome para achar o resto.</p>}
+          {!needle && !small && targets.some((target) => !target.container) && <p className="ui-muted tt-targets__more">Só aparecem módulos e itens com subtarefas. Busque pelo nome para escolher uma tarefa.</p>}
+        </>
       )}
       <ErrorText>{actions.error}</ErrorText>
       <div className="ui-actions">
@@ -955,7 +1311,13 @@ function MoveDialog({ project, row, actions, onClose }: { project: Project; row:
           type="button"
           className="ui-button"
           disabled={choice === undefined || actions.busy}
-          onClick={() => void actions.move(row.ref, { parent: choice ?? null }).then((ok) => ok && onClose())}
+          onClick={() =>
+            void actions.move(row.ref, { parent: choice ?? null }).then((ok) => {
+              if (!ok) return;
+              onMoved(choice ?? null);
+              onClose();
+            })
+          }
           data-testid="tree-move-confirm"
         >
           {actions.busy ? "Movendo…" : "Mover"}
@@ -964,4 +1326,3 @@ function MoveDialog({ project, row, actions, onClose }: { project: Project; row:
     </Modal>
   );
 }
-

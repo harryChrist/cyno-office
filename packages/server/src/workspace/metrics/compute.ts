@@ -12,6 +12,7 @@ import {
   engineBlockLabel,
   periodBounds,
   periodKey,
+  releaseHold,
   ROUTINE_TIMEZONE,
   usageProviderLabel,
   usageWindowState,
@@ -375,7 +376,7 @@ export function computeMetrics(full: MetricsSnapshot, options: MetricsOptions): 
   for (const project of snapshot.projects) {
     if (project.status !== "ativo") continue;
     for (const task of project.tasks) {
-      if (!isLeaf(task) || task.archived || task.status === "concluida" || task.status === "cancelada" || task.status === "backlog") continue;
+      if (!isLeaf(task) || task.archived || task.status === "concluida" || task.status === "cancelada" || task.status === "backlog" || releaseHold(task)) continue;
       let type: MetricsReport["blockedNow"]["items"][number]["type"] | undefined;
       let since: string | undefined;
       if (task.status === "falhou") {

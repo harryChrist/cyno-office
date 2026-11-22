@@ -10,6 +10,7 @@ import {
   goalTone,
   hourLabel,
   isPlatformQuiet,
+  plannedLabel,
   routineTimeline,
   runningCount,
   sectionCounts,
@@ -87,9 +88,16 @@ describe("Agora", () => {
 });
 
 describe("textos das linhas", () => {
-  it("projeto: etapa, bloqueio e horas", () => {
+  it("projeto: etapa, planejadas, bloqueio e horas", () => {
     expect(stageLabel({ status: "ativo", stage: { index: 2, total: 4, title: "roteiro" } })).toBe("etapa 2/4: roteiro");
     expect(stageLabel({ status: "pausado" })).toBe("pausado");
+    expect(stageLabel({ status: "ativo" })).toBe("sem etapa em andamento");
+    expect(stageLabel({ status: "ativo", planned: 3 })).toBe("");
+    expect(stageLabel({ status: "ativo", stage: { index: 1, total: 2, title: "Home" }, planned: 4 })).toBe("etapa 1/2: Home");
+    expect(plannedLabel(undefined)).toBe("");
+    expect(plannedLabel(0)).toBe("");
+    expect(plannedLabel(1)).toBe("1 planejada aguardando liberação");
+    expect(plannedLabel(5)).toBe("5 planejadas aguardando liberação");
     expect(blockLabel({ type: "voce", note: "esperando você" })).toBe("esperando você");
     expect(blockLabel({ type: "voce", note: "Caio espera você" })).toBe("Caio espera você");
     expect(blockLabel({ type: "cota", note: "Beto sem cota" })).toBe("sem cota: Beto sem cota");

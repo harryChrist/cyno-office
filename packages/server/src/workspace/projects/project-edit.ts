@@ -12,7 +12,9 @@ import {
   LABEL_COLORS,
   nextTaskRef,
   PROJECT_LIMITS,
+  PROJECT_SAFETY,
   projectTaskDefaults,
+  releaseHold,
   subtreeRefs,
   validateTree,
   type Label,
@@ -76,25 +78,24 @@ function reindex(project: Project, parent: string | undefined, ordered: ProjectT
 
 /**
  * O erro do `validateTree` em português para o DONO (a tela). O texto em inglês é o que o Maestro recebe pelas ferramentas MCP e fica como está
- * lá; aqui ele não aparece misturado ("Não dá para fazer isso: Task T3: 13 subtasks (at most 12…").
+ * lá; aqui ele não aparece misturado ("Não dá para fazer isso: Task T3: depends on its own descendant…").
  */
 export function ownerTreeError(error: string): string {
   const rules: [RegExp, (match: RegExpExecArray) => string][] = [
-    [/^At most (\d+) nodes per project/, (m) => `o projeto aceita no máximo ${m[1]} itens (os entregáveis contam)`],
+    [/^The project would have (\d+) items \(safety net/, (m) => `o projeto ficaria com ${m[1]} itens (a rede de segurança é ${PROJECT_SAFETY.nodes}): divida em mais de um projeto`],
     [/^(Task \S+|\S+): parent "(.+)" does not exist$/, (m) => `${where(m[1]!)}: a tarefa-mãe "${m[2]}" não existe`],
     [/^(Task \S+|\S+): cannot be its own parent$/, (m) => `${where(m[1]!)}: não pode ser mãe de si mesma`],
     [/^(Task \S+|\S+): the parent chain forms a cycle$/, (m) => `${where(m[1]!)}: a cadeia de mães forma um ciclo`],
-    [/^(Task \S+|\S+): nested (\d+) levels deep \(at most (\d+)/, (m) => `${where(m[1]!)}: fica ${m[2]} níveis abaixo do projeto (o máximo é ${m[3]}: entregável > tarefa > subtarefa)`],
-    [/^(Task \S+|\S+): a deliverable \(group\) can only sit directly under the project$/, (m) => `${where(m[1]!)}: o entregável só fica direto no projeto`],
-    [/^(Task \S+|\S+): a deliverable \(group\) has no steps/, (m) => `${where(m[1]!)}: o entregável não tem passos, ele nunca executa`],
+    [/^(Task \S+|\S+): nested (\d+) levels deep \(safety net/, (m) => `${where(m[1]!)}: fica ${m[2]} níveis abaixo do projeto (a rede de segurança é ${PROJECT_SAFETY.depth}): simplifique a estrutura`],
+    [/^(Task \S+|\S+): a (?:deliverable|module) \(group\) has no steps/, (m) => `${where(m[1]!)}: o módulo não tem passos, ele nunca executa`],
     [/^(Task \S+|\S+): a leaf task needs at least one step$/, (m) => `${where(m[1]!)}: a tarefa precisa de pelo menos um passo`],
     [/^(Task \S+|\S+): only leaf tasks go in a sprint/, (m) => `${where(m[1]!)}: só as tarefas que executam entram numa sprint`],
     [/^(Task \S+|\S+): sprint "(.+)" does not exist$/, (m) => `${where(m[1]!)}: a sprint "${m[2]}" não existe`],
     [/^(Task \S+|\S+): at most (\d+) labels per task$/, (m) => `${where(m[1]!)}: no máximo ${m[2]} etiquetas por tarefa`],
     [/^(Task \S+|\S+): label "(.+)" does not exist in the project$/, (m) => `${where(m[1]!)}: a etiqueta "${m[2]}" não existe no projeto`],
-    [/^(?:The project|Task (\S+)) has (\d+) children \(at most (\d+)\)$/, (m) => `${m[1] ? `A tarefa ${m[1]}` : "O projeto"} tem ${m[2]} itens (o máximo é ${m[3]})`],
-    [/^Task (\S+): (\d+) subtasks \(at most (\d+) per task/, (m) => `A tarefa ${m[1]} ficaria com ${m[2]} subtarefas (o máximo é ${m[3]} por tarefa): agrupe o trabalho em menos subtarefas ou divida a tarefa`],
     [/^Task (\S+): depends on its own descendant "(.+)"$/, (m) => `A tarefa ${m[1]} não pode depender de uma subtarefa dela mesma ("${m[2]}")`],
+    [/^Task (\S+): depends on its own ancestor "(.+)"/, (m) => `A tarefa ${m[1]} não pode depender do módulo ou da tarefa de que faz parte ("${m[2]}")`],
+    [/^The dependencies form a cycle: (.+)\. Remove one of them$/, (m) => `as ligações de "depois de" formam um ciclo (${m[1]}): uma não poderia começar antes da outra`],
   ];
   const where = (label: string) => (label.startsWith("Task ") ? `A tarefa ${label.slice(5)}` : `A tarefa ${label}`);
   for (const [pattern, translate] of rules) {
@@ -123,10 +124,21 @@ export function becomeMother(parent: ProjectTask, at: string): void {
   parent.updatedAt = at;
 }
 
-/** Cria o nó (entregável, tarefa ou subtarefa) no fim dos irmãos e devolve a tarefa nova. */
+/**
+ * "Criar não executa": o item novo nasce Planejado (`released: false`), EXCETO dentro de um contêiner direto com `released === true`
+ * explícito (módulo já em execução), onde nasce liberado. Na raiz do projeto é sempre Planejado.
+ */
+export function newNodeReleased(parent: Pick<ProjectTask, "released"> | undefined): boolean {
+  return parent?.released === true;
+}
+
+/**
+ * Cria o nó (módulo, tarefa ou subtarefa) no fim dos irmãos e devolve a tarefa nova. Nasce Planejado (veja `newNodeReleased`), a menos que
+ * `input.released` diga outra coisa (o retrabalho da sprint e as subtarefas de uma tarefa já liberada passam o valor).
+ */
 export function addNode(
   project: Project,
-  input: { title: string; parent?: string; group?: boolean; briefing?: string; assignee?: string; priority?: ProjectPriority; startAt?: string; dueAt?: string; labels?: string[] },
+  input: { title: string; parent?: string; group?: boolean; briefing?: string; assignee?: string; priority?: ProjectPriority; startAt?: string; dueAt?: string; labels?: string[]; released?: boolean },
   at: string,
 ): ProjectTask {
   const title = input.title.trim().replace(/\s+/g, " ");
@@ -136,14 +148,11 @@ export function addNode(
     parent = requireTask(project, input.parent);
     if (isProjectTaskFinished(parent) && !parent.group && childrenOf(project, parent.ref).length === 0) throw new HttpError(409, "A tarefa já terminou: não dá para criar dentro dela");
   }
-  if (input.group) {
-    if (parent) throw new HttpError(400, "Entregável só fica direto no projeto");
-    if (input.assignee) throw new HttpError(400, "Entregável não tem responsável: o responsável vem das tarefas dentro dele");
-  }
+  if (input.group && input.assignee) throw new HttpError(400, "Módulo não tem responsável: o responsável vem das tarefas dentro dele");
+  // Só a rede de segurança (não há limite de itens, filhas nem níveis).
   const depth = parent ? depthOf(project, parent.ref) + 1 : 1;
-  if (depth > PROJECT_LIMITS.depth) throw new HttpError(400, `Só dá para aninhar ${PROJECT_LIMITS.depth} níveis (entregável, tarefa e subtarefa)`);
-  if (project.tasks.length >= PROJECT_LIMITS.nodes) throw new HttpError(400, `O projeto passou do limite de ${PROJECT_LIMITS.nodes} itens`);
-  if (childrenOf(project, parent?.ref).length >= PROJECT_LIMITS.children) throw new HttpError(400, `Cada nível aceita até ${PROJECT_LIMITS.children} itens`);
+  if (depth > PROJECT_SAFETY.depth) throw new HttpError(400, `Passou de ${PROJECT_SAFETY.depth} níveis de módulos dentro de módulos: simplifique a estrutura`);
+  if (project.tasks.length >= PROJECT_SAFETY.nodes) throw new HttpError(400, `O projeto chegou a ${PROJECT_SAFETY.nodes} itens (rede de segurança): divida em mais de um projeto`);
   // A sprint da tarefa nova: a da mãe (se for folha) ou a ativa do projeto (risco 4: nunca nasce "travada").
   const sprintId = input.group ? undefined : inheritSprint(project, parent?.sprintId);
   if (parent && !parent.group && childrenOf(project, parent.ref).length === 0) {
@@ -174,17 +183,19 @@ export function addNode(
     ...(parent ? { parent: parent.ref } : {}),
     order: lastOrder(project, parent?.ref),
     ...(input.group ? { group: true as const } : {}),
+    released: input.released ?? newNodeReleased(parent),
     ...(sprintId ? { sprintId } : {}),
     ...(input.startAt ? { startAt: input.startAt } : {}),
     ...(input.dueAt ? { dueAt: input.dueAt } : {}),
     ...(input.labels?.length ? { labels: [...new Set(input.labels)] } : {}),
     updatedAt: at,
   };
+  // Entra na lista antes de calcular o estado: assim as dependências do módulo ou da mãe (`effectiveDeps`) já valem para a tarefa nova.
+  project.tasks.push(task);
   if (!input.group) {
     task.status = idleStatus(project, task);
     if (task.status === "a_fazer") task.waitingSince = at;
   }
-  project.tasks.push(task);
   assertValidTree(project);
   return task;
 }
@@ -209,9 +220,8 @@ function resetRun(task: ProjectTask, project: Pick<Project, "tasks">, at: string
 export function duplicateNode(project: Project, ref: string, at: string): ProjectTask {
   const original = requireTask(project, ref);
   const refs = subtreeRefs(project, ref);
-  if (project.tasks.length + refs.length > PROJECT_LIMITS.nodes) throw new HttpError(400, `O projeto passou do limite de ${PROJECT_LIMITS.nodes} itens`);
+  if (project.tasks.length + refs.length > PROJECT_SAFETY.nodes) throw new HttpError(400, `O projeto passaria de ${PROJECT_SAFETY.nodes} itens (rede de segurança): divida em mais de um projeto`);
   const siblings = childrenOf(project, original.parent);
-  if (siblings.length >= PROJECT_LIMITS.children) throw new HttpError(400, `Cada nível aceita até ${PROJECT_LIMITS.children} itens`);
   const map = new Map<string, string>();
   const copies: ProjectTask[] = [];
   // Os refs novos saem um a um, vendo as cópias já criadas (nunca repete).
@@ -233,6 +243,11 @@ export function duplicateNode(project: Project, ref: string, at: string): Projec
   }
   const root = copies[0]!;
   root.title = `${original.title} (cópia)`.slice(0, PROJECT_LIMITS.title);
+  // A cópia nasce Planejada (criar não executa); só vira liberada se o contêiner onde entra já está liberado. Cada filha segue a mãe da cópia.
+  const parentOfRoot = original.parent ? project.tasks.find((task) => task.ref === original.parent) : undefined;
+  root.released = newNodeReleased(parentOfRoot);
+  const copyByRef = new Map(copies.map((copy) => [copy.ref, copy]));
+  for (const copy of copies.slice(1)) copy.released = newNodeReleased(copy.parent ? copyByRef.get(copy.parent) : undefined);
   // A cópia entra logo depois do original.
   const at2 = siblings.indexOf(original);
   const ordered = [...siblings.slice(0, at2 + 1), root, ...siblings.slice(at2 + 1)];
@@ -264,7 +279,6 @@ export function moveNode(project: Project, ref: string, move: { parent?: string 
   if (newParentRef !== undefined) {
     const parent = requireTask(project, newParentRef);
     if (subtreeRefs(project, ref).includes(newParentRef)) throw new HttpError(400, "Não dá para mover uma tarefa para dentro dela mesma");
-    if (task.group) throw new HttpError(400, "Entregável só fica direto no projeto");
     if (parent.group === undefined && childrenOf(project, parent.ref).length === 0 && newParentRef !== task.parent) {
       if (hasStarted(parent)) throw new HttpError(409, "A tarefa de destino já começou: não dá para dividir em subtarefas");
       delete parent.sprintId;
@@ -279,7 +293,6 @@ export function moveNode(project: Project, ref: string, move: { parent?: string 
     }
   }
   const siblings = childrenOf(project, newParentRef).filter((candidate) => candidate.ref !== ref);
-  if (siblings.length >= PROJECT_LIMITS.children) throw new HttpError(400, `Cada nível aceita até ${PROJECT_LIMITS.children} itens`);
   let index = siblings.length;
   if (move.before) {
     const found = siblings.findIndex((candidate) => candidate.ref === move.before);
@@ -338,9 +351,9 @@ export function moveToSprint(project: Project, ref: string, sprintId: string | n
 }
 
 /**
- * Troca a lista "depois de" de uma tarefa (a lista inteira: acrescentar ou tirar é mandar a nova). Recusa, em português:
- * tarefa que não existe, ela mesma, a mãe dela ou uma de dentro dela, e ciclo (A espera B que espera A, também por
- * tarefa-mãe). Só antes de começar: depois que o agente começou, a ordem já foi decidida.
+ * Troca a lista "depois de" de uma tarefa ou módulo (a lista inteira: acrescentar ou tirar é mandar a nova). Pode citar tarefa, módulo ou
+ * tarefa-mãe. Recusa, em português: item que não existe, ele mesmo, o módulo/mãe de que faz parte ou um de dentro dele, e ciclo (A espera B que
+ * espera A, também por módulo ou tarefa-mãe). Só antes de começar: depois que o agente começou, a ordem já foi decidida.
  */
 export function setDependsOn(project: Project, task: ProjectTask, refs: readonly string[], at: string): void {
   const wanted = [...new Set(refs.map((ref) => ref.trim()).filter(Boolean))];
@@ -354,7 +367,6 @@ export function setDependsOn(project: Project, task: ProjectTask, refs: readonly
     if (ref === task.ref) throw new HttpError(400, "Uma tarefa não pode esperar por ela mesma");
     if (ancestors.has(ref)) throw new HttpError(400, `${title(ref)} é a tarefa de que esta faz parte: ela só termina depois desta. Escolha uma irmã`);
     if (below.has(ref)) throw new HttpError(400, `${title(ref)} está dentro desta tarefa: ela não pode esperar o que faz parte dela`);
-    if (dep.group) throw new HttpError(400, `${title(ref)} é um entregável: escolha uma tarefa ou subtarefa`);
   }
   const before = task.dependsOn;
   task.dependsOn = wanted;
@@ -376,8 +388,11 @@ export function refreshIdle(project: Project, at: string): void {
     const next = idleStatus(project, leaf);
     if (next === leaf.status) continue;
     leaf.status = next;
-    if (next === "a_fazer") Object.assign(leaf, { waitingSince: at, queuedAt: at });
-    else {
+    if (next === "a_fazer") {
+      leaf.waitingSince = at;
+      if (releaseHold(leaf)) delete leaf.queuedAt;
+      else leaf.queuedAt = at;
+    } else {
       delete leaf.waitingSince;
       delete leaf.queuedAt;
     }

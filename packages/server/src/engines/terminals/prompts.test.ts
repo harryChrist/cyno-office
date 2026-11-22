@@ -17,20 +17,23 @@ const OFFICE = {
 const clara = { id: "clara", teamId: "t-cont", name: "Clara", role: "Redatora", instructions: "", engine: "claude" } as unknown as Agent;
 const maestro = { id: "maestro", teamId: "t-ger", name: "Maestro", role: "Maestro", instructions: "", engine: "claude" } as unknown as Agent;
 
-describe("prompt do Maestro: entregáveis, sprints e responsáveis", () => {
-  it("ensina quando dividir em sprints, os responsáveis por folha e as ferramentas da sprint", () => {
+describe("prompt do Maestro: módulos, liberação e poderes de gestão", () => {
+  it("ensina módulos, a decisão agora ou depois, os responsáveis por folha e as ferramentas de gestão", () => {
     const prompt = agentPrompt(maestro, OFFICE, "Principal", undefined, {});
-    expect(prompt).toContain("ENTREGÁVEIS E SPRINTS");
-    expect(prompt).toContain("`kind: \"group\"`");
-    expect(prompt).toContain("Projeto curto (poucos dias) fica SEM sprint");
+    expect(prompt).toContain("MÓDULOS E DEPENDÊNCIAS");
+    expect(prompt).toContain("`kind: \"module\"`");
+    expect(prompt).toContain("LIBERAÇÃO");
+    expect(prompt).toContain("OBRIGATÓRIO");
     expect(prompt).toContain("UM `owner`");
-    expect(prompt).toContain("Não existe limite de agentes por tarefa");
-    expect(prompt).toContain("UMA SUBTAREFA POR AGENTE");
-    expect(prompt).toContain("SÓ QUEM A TAREFA REALMENTE PRECISA");
+    expect(prompt).toContain("UMA subtarefa por agente");
+    expect(prompt).toContain("NUNCA apague projeto");
     expect(prompt).not.toContain("Até 3 agentes");
-    for (const tool of ["close_sprint", "move_task", "assign_task", "add_sprint", "update_sprint"]) expect(prompt).toContain(tool);
+    for (const tool of ["release_work", "hold_work", "set_release_pace", "set_project_status", "set_plan_approval_rule", "update_task", "delete_task", "move_task", "assign_task"]) expect(prompt).toContain(tool);
+    expect(prompt).toContain("aprovação NUNCA é obrigatória");
+    expect(prompt).toContain("Projeto que já tem sprint: as ferramentas de sprint continuam valendo.");
+    expect(prompt).not.toContain("add_sprint");
     // Os agentes comuns não recebem esse trecho
-    expect(agentPrompt(clara, OFFICE, "Principal", undefined, {})).not.toContain("ENTREGÁVEIS E SPRINTS");
+    expect(agentPrompt(clara, OFFICE, "Principal", undefined, {})).not.toContain("MÓDULOS E DEPENDÊNCIAS");
   });
 });
 

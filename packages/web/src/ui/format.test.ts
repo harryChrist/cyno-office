@@ -1,6 +1,6 @@
-import { AGENT_STATUSES, TASK_STATUSES } from "@cyno/shared";
+import { AGENT_STATUSES, CHAT_QUESTION_WAITING, TASK_STATUSES, type Task } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { AGENT_STATUS_LABELS, countLabel, formatAgo, formatDateTime, formatTime, percent, ranWithLabel, roomDeletionParts, statusTone, TASK_STATUS_LABELS, truncate } from "./format";
+import { agentStatusLabel, AGENT_STATUS_LABELS, AWAITING_REPLY_LABEL, countLabel, formatAgo, formatDateTime, formatTime, percent, ranWithLabel, roomDeletionParts, statusTone, TASK_STATUS_LABELS, taskStatusLabel, truncate } from "./format";
 
 describe("ranWithLabel", () => {
   it("motor de CLI mostra motor · modelo · esforço; simulado ou sem registro, nada", () => {
@@ -82,5 +82,22 @@ describe("roomDeletionParts", () => {
       "1 log de trabalho",
     ]);
     expect(roomDeletionParts({ ...empty, tasks: 1, forYouItems: 1, calendarEvents: 1 })).toEqual(["1 tarefa", "1 aprovação em Aprovações", "1 evento do calendário"]);
+  });
+});
+
+describe("pedido que só espera resposta na conversa", () => {
+  const question = { id: "t1", agentId: "maestro", status: "waiting_approval", waiting: CHAT_QUESTION_WAITING } as Task;
+  const approval = { id: "t2", agentId: "maestro", status: "waiting_approval" } as Task;
+
+  it("não se chama aprovação", () => {
+    expect(taskStatusLabel(question)).toBe(AWAITING_REPLY_LABEL);
+    expect(taskStatusLabel(approval)).toBe("aguardando aprovação");
+  });
+
+  it("o agente só diz 'aguardando aprovação' quando alguma tarefa pede aprovação de verdade", () => {
+    const agent = { id: "maestro", status: "waiting_approval" as const };
+    expect(agentStatusLabel(agent, [question, { ...question, id: "t3" }])).toBe(AWAITING_REPLY_LABEL);
+    expect(agentStatusLabel(agent, [question, approval])).toBe("aguardando aprovação");
+    expect(agentStatusLabel({ id: "maestro", status: "working" }, [question])).toBe("trabalhando");
   });
 });

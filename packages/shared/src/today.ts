@@ -38,6 +38,8 @@ export type TodayProject = {
   stage?: { index: number; total: number; title: string; agent?: string };
   /** O próximo passo (outro passo da mesma tarefa ou a próxima tarefa). */
   next?: string;
+  /** Quantas folhas Planejadas ainda abertas aguardam liberação (omitido quando 0). */
+  planned?: number;
   blocked?: { type: BlockedType | "falha"; note: string };
   /** Prazo atrasado ou em menos de 24 h. */
   atRisk?: boolean;

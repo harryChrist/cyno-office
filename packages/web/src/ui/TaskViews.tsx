@@ -1,12 +1,13 @@
-import type { Task } from "@cyno/shared";
+import { isChatQuestion, type Task } from "@cyno/shared";
 import { useId, useState } from "react";
 import { api } from "../api/client";
+import { useWorkPanelStore } from "../agentWork/workPanelStore";
 import { useForYouFocus } from "../store/forYouFocus";
 import { pendingItemForTask } from "../store/forYouItems";
 import { useOfficeStore } from "../store/officeStore";
 import type { TaskProgress } from "../store/taskProgress";
 import { TaskCostChip } from "./AgentUsageChips";
-import { formatDateTime, percent, ranWithLabel, TASK_STATUS_LABELS } from "./format";
+import { formatDateTime, percent, ranWithLabel, taskStatusLabel, TASK_STATUS_LABELS } from "./format";
 import { useAsyncAction } from "./useAsyncAction";
 import { Markdown } from "../ui/markdown/Markdown";
 import { ErrorText, ProgressBar, StatusBadge } from "./widgets";
@@ -52,6 +53,34 @@ export function ApprovalButtons({ taskId, describedBy }: { taskId: string; descr
   );
 }
 
+/**
+ * Pedido do Maestro que só espera uma resposta na conversa (nada para aprovar): leva ao campo do
+ * Maestro ou fecha o pedido (com um segundo toque para confirmar).
+ */
+export function QuestionActions({ taskId }: { taskId: string }) {
+  const openMaestro = useWorkPanelStore((state) => state.openMaestro);
+  const { pending, error, run } = useAsyncAction();
+  const [confirming, setConfirming] = useState(false);
+  const close = async () => {
+    if (!confirming) return setConfirming(true);
+    await run(async () => {
+      await api.closeRequest(taskId, "cancelar", "Dispensado: o Maestro só tinha feito perguntas");
+      return true;
+    });
+  };
+  return (
+    <div className="approval" role="group" aria-label="Pergunta do Maestro">
+      <button type="button" className="ui-button ui-button--primary" onClick={openMaestro} data-testid="task-reply">
+        Responder ao Maestro
+      </button>
+      <button type="button" className="ui-button" onClick={() => void close()} disabled={pending} data-testid="task-close-question">
+        {confirming ? "Confirmar: fechar pedido" : "Fechar pedido"}
+      </button>
+      <ErrorText>{error}</ErrorText>
+    </div>
+  );
+}
+
 type CurrentTaskProps = { task: Task; progress?: TaskProgress; queued: number };
 
 /** Tarefa atual do agente: pedido, status, barra de progresso, última mensagem e aprovação. */
@@ -61,7 +90,7 @@ export function CurrentTask({ task, progress, queued }: CurrentTaskProps) {
   return (
     <div className={`current-task${waiting ? " current-task--attention" : ""}`} data-testid="agent-current-task" data-task-id={task.id} data-status={task.status}>
       <div className="current-task__head">
-        <StatusBadge status={task.status} label={TASK_STATUS_LABELS[task.status]} testId="agent-current-status" />
+        <StatusBadge status={task.status} label={taskStatusLabel(task)} testId="agent-current-status" />
         <span className="ui-muted">{formatDateTime(task.createdAt)}</span>
       </div>
       <p id={promptId} className="current-task__prompt">
@@ -89,7 +118,7 @@ export function CurrentTask({ task, progress, queued }: CurrentTaskProps) {
         </p>
       )}
       {waiting && !progress?.message && <p className="current-task__message">{task.waiting ?? "O agente quer sua aprovação para continuar."}</p>}
-      {waiting && <ApprovalButtons taskId={task.id} describedBy={promptId} />}
+      {waiting && (isChatQuestion(task) ? <QuestionActions taskId={task.id} /> : <ApprovalButtons taskId={task.id} describedBy={promptId} />)}
       {queued > 0 && <p className="ui-muted">+{queued} na fila</p>}
       <TaskCostChip taskId={task.id} />
     </div>

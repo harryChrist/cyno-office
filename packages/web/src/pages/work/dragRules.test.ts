@@ -22,13 +22,13 @@ const group = (ref: string, order: number): ProjectTask => task(ref, { group: tr
 const sprint = (id: string, order: number, status: Sprint["status"]): Sprint => ({ id, name: `Sprint ${order}`, startAt: AT, endAt: AT, order, status });
 
 /**
- * G1 (entregável)
+ * G1 (módulo)
  *   A  (tarefa-mãe)
  *     A1
  *       A1x  (profundidade 4? não: A1 é neta, A1x não existe)
  *     A2
  *   B
- * G2 (entregável, vazio)
+ * G2 (módulo, vazio)
  * C  (tarefa direto no projeto)
  */
 const sample = (): Project => ({
@@ -68,7 +68,7 @@ describe("treeDrop", () => {
     expect(treeDrop(project, "A", "A", "inside")).toMatchObject({ ok: false, reason: "" });
   });
 
-  it("mudar de pai: sobre um entregável ou uma tarefa", () => {
+  it("mudar de pai: sobre um módulo ou uma tarefa", () => {
     expect(treeDrop(project, "C", "G2", "inside")).toMatchObject({ ok: true, move: { parent: "G2", before: null } });
     expect(treeDrop(project, "B", "G2", "inside")).toMatchObject({ ok: true, move: { parent: "G2", before: null } });
     expect(treeDrop(project, "B", "A", "inside")).toMatchObject({ ok: true, move: { parent: "A", before: null } });
@@ -85,21 +85,41 @@ describe("treeDrop", () => {
     expect(treeDrop(project, "G1", "A", "inside")).toMatchObject({ ok: false });
   });
 
-  it("entregável só na raiz", () => {
-    expect(treeDrop(project, "G2", "B", "before")).toMatchObject({ ok: false, reason: "Entregável só fica direto no projeto." });
-    expect(treeDrop(project, "G2", "C", "inside")).toMatchObject({ ok: false, reason: "Entregável só fica direto no projeto." });
+  it("módulo pode ficar dentro de módulo, de tarefa ou ao lado de qualquer linha", () => {
+    expect(treeDrop(project, "G2", "B", "before")).toMatchObject({ ok: true, move: { parent: "G1", before: "B" } });
+    expect(treeDrop(project, "G2", "G1", "inside")).toMatchObject({ ok: true, move: { parent: "G1", before: null } });
     expect(treeDrop(project, "G2", "G1", "before")).toMatchObject({ ok: true, move: { parent: null, before: "G1" } });
     expect(treeDrop(project, "G1", "C", "after")).toMatchObject({ ok: true, move: { parent: null, before: "D" } });
+    // Dentro de si mesmo ou do que está dentro dele, não.
+    expect(treeDrop(project, "G1", "A1", "inside")).toMatchObject({ ok: false, reason: "Não dá para soltar dentro dela mesma." });
   });
 
-  it("respeita a profundidade máxima (3 níveis)", () => {
-    // A1 está no nível 3 (G1 › A › A1): nada cabe dentro dele; A (altura 2) não cabe dentro de B (nível 2).
-    expect(treeDrop(project, "B", "A1", "inside")).toMatchObject({ ok: false, reason: "Passa do limite de 3 níveis." });
-    expect(treeDrop(project, "A", "B", "inside")).toMatchObject({ ok: false, reason: "Passa do limite de 3 níveis." });
-    // Mas A pode ir para a raiz (altura 2 + 0).
-    expect(treeDrop(project, "A", "C", "before")).toMatchObject({ ok: true, move: { parent: null, before: "C" } });
-    // E uma folha cabe no nível 3, ao lado de A1.
-    expect(treeDrop(project, "B", "A2", "after")).toMatchObject({ ok: true, move: { parent: "A", before: null } });
+  it("sem limite de profundidade nem de itens por nível", () => {
+    // A1 está no nível 3 (G1 > A > A1): agora cabe algo dentro dele, e A cabe dentro de B.
+    expect(treeDrop(project, "B", "A1", "inside")).toMatchObject({ ok: true, move: { parent: "A1", before: null } });
+    expect(treeDrop(project, "A", "B", "inside")).toMatchObject({ ok: true, move: { parent: "B", before: null } });
+    const wide = { ...project, tasks: [...project.tasks, ...Array.from({ length: 120 }, (_, i) => task(`W${i}`, { parent: "G2", order: i }))] };
+    expect(treeDrop(wide, "C", "G2", "inside")).toMatchObject({ ok: true, move: { parent: "G2", before: null } });
+  });
+
+  it("só a rede de segurança (50 níveis) recusa a profundidade", () => {
+    const chain = Array.from({ length: 49 }, (_, i) => task(`N${i}`, { parent: i === 0 ? undefined : `N${i - 1}`, steps: [], ownerId: "", status: "backlog" }));
+    const deep = { ...project, tasks: [...chain, task("Z"), task("Z2", { parent: "Z", order: 1 })] };
+    expect(treeDrop(deep, "Z", "N48", "inside")).toMatchObject({ ok: false, reason: "Passa do limite de 50 níveis." });
+    expect(treeDrop(deep, "Z2", "N48", "inside")).toMatchObject({ ok: true });
+  });
+
+  it("não cria dependência impossível: módulo esperando o que ficaria dentro dele (e o contrário)", () => {
+    const dependent = {
+      ...project,
+      tasks: project.tasks.map((item) => (item.ref === "G2" ? { ...item, dependsOn: ["C"] } : item.ref === "D" ? { ...item, dependsOn: ["G1"] } : item)),
+    };
+    // G2 espera C: C dentro de G2 nunca começaria.
+    expect(treeDrop(dependent, "C", "G2", "inside")).toMatchObject({ ok: false, reason: expect.stringContaining("espera") });
+    // D espera G1: D dentro de A (que está dentro de G1) também nunca começaria.
+    expect(treeDrop(dependent, "D", "A", "inside")).toMatchObject({ ok: false, reason: expect.stringContaining("espera") });
+    // Sem a dependência, pode.
+    expect(treeDrop(project, "C", "G2", "inside")).toMatchObject({ ok: true });
   });
 
   it("tarefa que já começou não vira mãe", () => {
@@ -139,7 +159,7 @@ describe("sprintDrop", () => {
     expect(sprintDrop(project, "B", null)).toMatchObject({ ok: false, reason: "" });
   });
 
-  it("tarefa que terminou fica onde terminou; pai e entregável não entram", () => {
+  it("tarefa que terminou fica onde terminou; pai e módulo não entram", () => {
     expect(sprintDrop(project, "D", "S1")).toMatchObject({ ok: false, reason: expect.stringContaining("já terminou") });
     expect(sprintDrop(project, "A", "S1")).toMatchObject({ ok: false });
     expect(sprintDrop(project, "G1", "S1")).toMatchObject({ ok: false });

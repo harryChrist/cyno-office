@@ -33,7 +33,17 @@ async function addTask(ctx: TestApp, projectId: string, title: string): Promise<
   expect(response.statusCode, response.body).toBe(201);
   return (response.json() as Reply).ref!;
 }
-async function addSprint(ctx: TestApp, projectId: string, body: object = {}): Promise<string> {
+async function addSprint(ctx: TestApp, projectId: string, body: { name?: string; goal?: string; startAt?: string; endAt?: string } = {}): Promise<string> {
+  // Projetos novos não permitem criar a primeira sprint; este arquivo testa o fechamento em projetos legados que já tinham sprints.
+  const project = raw(ctx, projectId);
+  if (!project.sprints?.length) {
+    const now = (runtimeOf(ctx).plans as unknown as { deps: ProjectServiceDeps }).deps.now().getTime();
+    const start = body.startAt ? Date.parse(body.startAt) : now;
+    const end = body.endAt ? Date.parse(body.endAt) : start + 7 * DAY;
+    const active = project.status === "ativo" && start <= now && now < end;
+    project.sprints = [{ id: "S1", name: body.name ?? "Sprint 1", ...(body.goal ? { goal: body.goal } : {}), startAt: iso(start), endAt: iso(end), order: 1, status: active ? "ativa" : "planejada", ...(active ? { openedAt: iso(now) } : {}) }];
+    return "S1";
+  }
   const response = await send(ctx, "POST", `/projects/${projectId}/sprints`, body);
   expect(response.statusCode, response.body).toBe(201);
   return (response.json() as Reply).sprintId!;

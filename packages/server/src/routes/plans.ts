@@ -1,4 +1,4 @@
-import { avulsasCleanupBodySchema, avulsasCleanupQuerySchema, idParamsSchema, planAdjustBodySchema, projectCreateBodySchema, projectModeBodySchema, projectPatchBodySchema, sprintCreateBodySchema, sprintPatchBodySchema, sprintReorderBodySchema, taskCreateBodySchema, taskLabelBodySchema, taskMoveBodySchema, taskPatchBodySchema, taskReassignBodySchema, type AvulsasCleanupPreview, type AvulsasCleanupResult, type Plan, type Project, type ProjectDeleteResult } from "@cyno/shared";
+import { avulsasCleanupBodySchema, avulsasCleanupQuerySchema, idParamsSchema, planAdjustBodySchema, planApproveBodySchema, projectCreateBodySchema, projectHoldBodySchema, projectModeBodySchema, projectPatchBodySchema, projectReleaseBodySchema, sprintCreateBodySchema, sprintPatchBodySchema, sprintReorderBodySchema, taskCreateBodySchema, taskLabelBodySchema, taskMoveBodySchema, taskPatchBodySchema, taskReassignBodySchema, type AvulsasCleanupPreview, type AvulsasCleanupResult, type Plan, type Project, type ProjectDeleteResult } from "@cyno/shared";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { HttpError } from "../platform/http/errors";
@@ -18,7 +18,9 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
 
   scope.post("/plans/:id/approve", async (request) => {
     const { id } = idParamsSchema.parse(request.params);
-    return plansOf(request).approve(id);
+    // Corpo opcional: ausente mantém o `released` definido pelo Maestro (legado = liberado); `all` libera tudo; `none` deixa tudo Planejado.
+    const { release } = planApproveBodySchema.parse(request.body ?? {});
+    return plansOf(request).approve(id, release ? { release } : {});
   });
 
   // O ajuste vai para o Maestro numa mensagem só (ele manda a versão nova).
@@ -38,6 +40,18 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
     const { id } = idParamsSchema.parse(request.params);
     const patch = projectPatchBodySchema.parse(request.body);
     return { project: await plansOf(request).updateProject(id, patch) };
+  });
+
+  // Reabrir projeto concluído ou cancelado (ou retomar pausado); Avulsas nunca muda de status.
+  scope.post("/projects/:id/reopen", async (request): Promise<{ project: Project }> => {
+    const { id } = idParamsSchema.parse(request.params);
+    return { project: await plansOf(request).setProjectStatus(id, "ativo", "usuario") };
+  });
+
+  // Concluir projeto (recusa com 409 se houver tarefa em andamento ou esperando você; Avulsas nunca muda de status).
+  scope.post("/projects/:id/complete", async (request): Promise<{ project: Project }> => {
+    const { id } = idParamsSchema.parse(request.params);
+    return { project: await plansOf(request).setProjectStatus(id, "concluido", "usuario") };
   });
 
   // Modo do projeto: SÓ o usuário liga o Automático (esta rota; o Maestro e o Cyno só sugerem, e nenhuma ferramenta MCP chama aqui).
@@ -115,10 +129,10 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
     return { project: await plansOf(request).archiveTask(id, ref) };
   });
 
-  // Apaga UMA tarefa avulsa já terminada (de projeto comum não: quebraria os "Depois de").
+  // Apaga um item (tarefa, subtarefa ou módulo + subárvore) de qualquer projeto (no Avulsas mantém a regra das folhas terminadas).
   scope.delete("/projects/:id/tasks/:ref", async (request): Promise<{ project: Project }> => {
     const { id, ref } = taskParams.parse(request.params);
-    return { project: await plansOf(request).deleteAvulsasTask(id, ref) };
+    return { project: (await plansOf(request).deleteTask(id, ref, { by: "usuario" })).project };
   });
 
   scope.post("/projects/:id/tasks/:ref/label", async (request): Promise<{ project: Project }> => {
@@ -137,6 +151,22 @@ export function registerPlanRoutes(scope: FastifyInstance, plansOf: PlansOf): vo
   scope.post("/projects/:id/convert", async (request): Promise<{ project: Project }> => {
     const { id } = idParamsSchema.parse(request.params);
     return { project: await plansOf(request).convertProjectToTask(id) };
+  });
+
+  // ---------- Liberação: criar não executa; só entra na fila o que for liberado ----------
+
+  // Libera tarefas ou módulos (`refs`) ou o projeto inteiro (`all`); `withPrerequisites` leva junto o que elas esperam. 409 no Avulsas.
+  scope.post("/projects/:id/release", async (request): Promise<{ project: Project }> => {
+    const { id } = idParamsSchema.parse(request.params);
+    const body = projectReleaseBodySchema.parse(request.body ?? {});
+    return { project: await plansOf(request).releaseWork(id, { ...(body.refs ? { refs: body.refs } : {}), ...(body.all ? { all: true } : {}), ...(body.withPrerequisites ? { withPrerequisites: true } : {}) }) };
+  });
+
+  // Volta a Planejada o que ainda não começou; 409 se nada pôde ser segurado porque já começou.
+  scope.post("/projects/:id/hold", async (request): Promise<{ project: Project }> => {
+    const { id } = idParamsSchema.parse(request.params);
+    const { refs } = projectHoldBodySchema.parse(request.body ?? {});
+    return { project: await plansOf(request).holdWork(id, { refs }) };
   });
 
   // ---------- Sprints: a dimensão de tempo do projeto (só quem anda é a folha da sprint ativa) ----------

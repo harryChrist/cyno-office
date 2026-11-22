@@ -95,7 +95,7 @@ describe("planos com a CLI falsa (Maestro e agentes de CLI)", () => {
 
     expect((await ctx.app.inject({ method: "POST", url: `${API}/plans/${plan.id}/approve` })).statusCode).toBe(200);
     const done = await waitTask(ctx, request.id, "done", 20_000);
-    expect(done.result).toBe("Resposta final do Maestro. Pedido " + request.id + ": o projeto terminou — 2 de 2 concluídas.");
+    expect(done.result).toBe("Resposta final do Maestro. Pedido " + request.id + ": o projeto terminou — 2 de 2 tarefas concluídas.");
 
     const all = await messages(ctx);
     const toMaestro = all.filter((text) => text.includes(`Pedido ${request.id}`));

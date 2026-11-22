@@ -23,11 +23,14 @@ async function newProject(ctx: TestApp, title = "Campanha"): Promise<Project> {
 async function add(ctx: TestApp, projectId: string, body: object): Promise<string> {
   const response = await post(ctx, `/projects/${projectId}/tasks`, body);
   expect(response.statusCode, response.body).toBe(201);
-  return refOf(response);
+  const ref = refOf(response);
+  // Criar não executa: estes testes querem a tarefa rodando, então liberam logo (a regra nova tem os testes dela em release.test.ts).
+  expect((await post(ctx, `/projects/${projectId}/release`, { refs: [ref] })).statusCode).toBe(200);
+  return ref;
 }
 
 describe("POST /projects e criar nós da árvore", () => {
-  it("cria o projeto à mão (origem usuario, ativo, sem plano) e cada nível, com o limite de profundidade", async () => {
+  it("cria o projeto à mão (origem usuario, ativo, sem plano) e cada nível, sem limite de profundidade", async () => {
     const ctx = await setupApp();
     const project = await newProject(ctx);
     expect(project).toMatchObject({ origin: "usuario", kind: "projeto", status: "ativo", tasks: [] });
@@ -38,11 +41,9 @@ describe("POST /projects e criar nós da árvore", () => {
     const group = await add(ctx, project.id, { title: "Front-End", group: true });
     const task = await add(ctx, project.id, { title: "Tela de login", parent: group });
     const sub = await add(ctx, project.id, { title: "Layout", parent: task });
-    const deep = await post(ctx, `/projects/${project.id}/tasks`, { title: "Cor do botão", parent: sub });
-    expect(deep.statusCode).toBe(400);
-    expect((deep.json() as { error: string }).error).toMatch(/3 níveis/);
-    // Entregável só direto no projeto, e sem responsável.
-    expect((await post(ctx, `/projects/${project.id}/tasks`, { title: "Sub", parent: group, group: true })).statusCode).toBe(400);
+    // Sem teto de níveis: subtarefa dentro de subtarefa e módulo dentro de módulo valem; o módulo continua sem responsável.
+    const deep = await add(ctx, project.id, { title: "Cor do botão", parent: sub });
+    const innerGroup = await add(ctx, project.id, { title: "Sub", parent: group, group: true });
     expect((await post(ctx, `/projects/${project.id}/tasks`, { title: "G", group: true, assignee: "x" })).statusCode).toBe(400);
 
     const saved = runtimeOf(ctx).plans.get(project.id);
@@ -50,11 +51,15 @@ describe("POST /projects e criar nós da árvore", () => {
       ["T1", null, true],
       ["T2", "T1", false],
       ["T3", "T2", false],
+      ["T4", "T3", false],
+      ["T5", "T1", true],
     ]);
+    expect([deep, innerGroup]).toEqual(["T4", "T5"]);
     // O pai (T2) deixou de executar: sem passos e sem responsável; a folha T3 ainda não tem responsável (backlog).
     expect(find(saved, "T2")).toMatchObject({ steps: [], ownerId: "" });
-    expect(find(saved, "T3")).toMatchObject({ status: "backlog" });
-    expect(find(saved, "T3").steps).toHaveLength(1);
+    expect(find(saved, "T3")).toMatchObject({ steps: [], ownerId: "" });
+    expect(find(saved, "T4")).toMatchObject({ status: "backlog" });
+    expect(find(saved, "T4").steps).toHaveLength(1);
   });
 
   it("tarefa sem responsável não executa; ao ganhar um entra na fila, roda e o projeto conclui (e reabre com tarefa nova)", async () => {
@@ -103,7 +108,7 @@ describe("POST /projects e criar nós da árvore", () => {
     expect(runtimeOf(ctx).plans.get(project.id).status).toBe("ativo");
   });
 
-  it("o projeto que o Maestro está ajustando, o cancelado e o concluído do Maestro não aceitam edição", async () => {
+  it("o projeto que o Maestro está ajustando e o cancelado não aceitam edição; concluído de qualquer origem reabre ao ganhar tarefa", async () => {
     const ctx = await setupApp();
     const plans = (runtimeOf(ctx).plans as unknown as { plans: Project[] }).plans;
     const project = await newProject(ctx);
@@ -114,7 +119,9 @@ describe("POST /projects e criar nós da árvore", () => {
     expect((await post(ctx, `/projects/${project.id}/tasks`, { title: "A" })).statusCode).toBe(409);
     live.status = "concluido";
     live.origin = "maestro";
-    expect((await post(ctx, `/projects/${project.id}/tasks`, { title: "A" })).statusCode).toBe(409);
+    const reopened = await post(ctx, `/projects/${project.id}/tasks`, { title: "A" });
+    expect(reopened.statusCode).toBe(201);
+    expect((reopened.json() as Reply).project.status).toBe("ativo");
     expect((await post(ctx, "/projects/nao-existe/tasks", { title: "A" })).statusCode).toBe(404);
   });
 });

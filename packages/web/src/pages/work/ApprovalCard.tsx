@@ -7,6 +7,7 @@ import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
 import { RejectionCategories } from "../foryou/RejectionCategories";
 import { approvalConfirm, cardTitle, counterState, overLimitWarning, primaryAction, typeDisplay, typeStyle, waitingAge, type TypeList } from "../foryou/forYouView";
+import { PLAN_APPROVALS } from "./releaseView";
 
 type ApprovalCardProps = {
   item: ForYouItem;
@@ -110,9 +111,36 @@ export function ApprovalCard({ item, types, agentName, now }: ApprovalCardProps)
 
       {!simple && (
         <div className="w-appr__actions">
-          <button type="button" className="ui-button ui-button--small" onClick={() => useForYouFocus.getState().open(item.id)} data-testid="work-approval-open">
-            {kind === "plano" ? "Abrir o plano" : kind === "sprint" ? "Abrir a entrega" : "Responder em Aprovações"}
-          </button>
+          {kind === "plano" && item.status === "pendente" ? (
+            <>
+              <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={() => useForYouFocus.getState().open(item.id)} data-testid="work-approval-open">
+                Abrir o plano
+              </button>
+              <span className="w-grow" />
+              <button
+                type="button"
+                className="ui-button ui-button--secondary ui-button--small"
+                disabled={pending}
+                onClick={() => void run(() => api.decideForYou(item.id, { status: "aprovado", release: PLAN_APPROVALS[1].release }))}
+                data-testid="work-approval-approve-planned"
+              >
+                {pending ? "Enviando…" : PLAN_APPROVALS[1].label}
+              </button>
+              <button
+                type="button"
+                className="ui-button ui-button--success ui-button--small"
+                disabled={pending}
+                onClick={() => void run(() => api.decideForYou(item.id, { status: "aprovado", release: PLAN_APPROVALS[0].release }))}
+                data-testid="work-approval-approve"
+              >
+                {pending ? "Enviando…" : PLAN_APPROVALS[0].label}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="ui-button ui-button--small" onClick={() => useForYouFocus.getState().open(item.id)} data-testid="work-approval-open">
+              {kind === "plano" ? "Abrir o plano" : kind === "sprint" ? "Abrir a entrega" : "Responder em Aprovações"}
+            </button>
+          )}
         </div>
       )}
 

@@ -17,7 +17,7 @@ import "../../hud/attention.css";
 const KIND_ROWS: { kind: AttentionKind; title: string; line: string }[] = [
   { kind: "approval", title: ATTENTION_KIND_LABELS.approval, line: "Um agente pediu o seu OK em Aprovações." },
   { kind: "question", title: ATTENTION_KIND_LABELS.question, line: "Um agente fez uma pergunta que só você responde." },
-  { kind: "plan", title: ATTENTION_KIND_LABELS.plan, line: "Um plano espera o seu OK para começar." },
+  { kind: "plan", title: ATTENTION_KIND_LABELS.plan, line: "O Maestro pediu o seu OK antes de um projeto começar." },
   { kind: "sprint", title: ATTENTION_KIND_LABELS.sprint, line: "Uma sprint terminou e espera a sua conferência." },
   { kind: "routine", title: ATTENTION_KIND_LABELS.routine, line: "Uma proposta de rotina espera o seu OK." },
   { kind: "help", title: ATTENTION_KIND_LABELS.help, line: "Pedido de acesso ou ajuda que o Maestro não resolveu em 5 minutos." },

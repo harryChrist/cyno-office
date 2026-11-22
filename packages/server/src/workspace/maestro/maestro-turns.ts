@@ -1,4 +1,4 @@
-import { conversationLogId, engineBlockLabel, findMaestroAgent, isActiveTaskStatus, subtasksOf, type Task } from "@cyno/shared";
+import { CHAT_QUESTION_WAITING, conversationLogId, engineBlockLabel, findMaestroAgent, isActiveTaskStatus, subtasksOf, type Task } from "@cyno/shared";
 import { runnerLogHooks } from "../agent-log/hooks";
 import { terminalLogBridge } from "../../engines/terminals/log-bridge";
 import type { TerminalAgent, TerminalEvent } from "../../engines/terminals/types";
@@ -127,17 +127,23 @@ export class MaestroTurns {
     const { deps, turn } = this.core;
     const text = result.trim();
     if (ok && text) this.core.chatEntry(maestroId, { kind: "chat", from: "agent", text });
-    // Abriu um pedido e terminou perguntando (sem delegar, planejar nem concluir): o pedido espera a resposta.
-    if (ok && opened.length > 0 && looksLikeQuestion(text)) {
+    // Abriu um pedido na conversa e terminou sem nada segurando (nem subtarefa, nem aprovação, nem plano ativo):
+    // se terminou perguntando, espera a resposta; senão fecha o pedido com a resposta do turno (ex.: projeto estacionado).
+    if (ok && opened.length > 0) {
       const state = deps.state.read();
       for (const id of opened) {
         const task = state.tasks.find((candidate) => candidate.id === id);
         if (!task || task.status !== "in_progress" || turn.concluded.has(id) || deps.plans?.()?.holds(id)) continue;
+        if (this.forYou.hasPending(id) || (turn.queued.get(id) ?? 0) > 0) continue;
         if (subtasksOf(state.tasks, id).some((subtask) => isActiveTaskStatus(subtask.status))) continue;
-        task.waiting = "O Maestro fez uma pergunta na conversa";
-        this.core.setTask(state, task, { status: "waiting_approval" });
-        this.core.logEntry(task, { kind: "status", status: "waiting", message: "Esperando sua resposta na conversa" });
-        this.core.setProgress(task, 0.3, "Esperando sua resposta na conversa");
+        if (looksLikeQuestion(text)) {
+          task.waiting = CHAT_QUESTION_WAITING;
+          this.core.setTask(state, task, { status: "waiting_approval" });
+          this.core.logEntry(task, { kind: "status", status: "waiting", message: "Esperando sua resposta na conversa" });
+          this.core.setProgress(task, 0.3, "Esperando sua resposta na conversa");
+          continue;
+        }
+        this.core.finish(state, task, text ? "done" : "failed", text || "O Maestro terminou sem responder", undefined, "agente");
       }
     }
     else if (!ok) {
@@ -186,7 +192,7 @@ export class MaestroTurns {
       // Terminou perguntando algo ao usuário (sem complete_request): o pedido espera a resposta na conversa.
       const maestro = findMaestroAgent(state);
       if (maestro) this.core.chatEntry(maestro.id, { kind: "chat", from: "agent", text });
-      task.waiting = "O Maestro fez uma pergunta na conversa";
+      task.waiting = CHAT_QUESTION_WAITING;
       this.core.setTask(state, task, { status: "waiting_approval" });
       this.core.logEntry(task, { kind: "status", status: "waiting", message: "Esperando sua resposta na conversa" });
       this.core.setProgress(task, 0.3, "Esperando sua resposta na conversa");

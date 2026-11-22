@@ -2,6 +2,8 @@ import { isProjectOpen, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Pace, 
 import { useId, useState } from "react";
 import { api, ApiRequestError, describeError, type ProjectPatch } from "../../api/client";
 import { ConfirmDialog, ErrorText } from "../../ui/widgets";
+import { canCompleteProject, canReopenProject, COMPLETE_PROJECT_MESSAGE, COMPLETE_PROJECT_TITLE } from "./projectLifecycleView";
+import { syncProjectResponse } from "./useTaskActions";
 import { hoursLabel } from "./workView";
 import { brasiliaNote, fromBrasiliaInput, toBrasiliaInput } from "./workTime";
 
@@ -14,15 +16,15 @@ export function patchErrorMessage(error: unknown): string {
   return describeError(error);
 }
 
-/** Manda uma edição do projeto e guarda o estado (pendente, erro). O evento project:upserted atualiza a tela. */
+/** Manda uma edição do projeto e aplica a resposta no store local na hora (o evento project:upserted mantém igual). */
 function usePatch(project: Project) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const patch = async (body: ProjectPatch): Promise<boolean> => {
+  const runAction = async (call: () => Promise<{ project: Project }>): Promise<boolean> => {
     setPending(true);
     setError(null);
     try {
-      await api.updateProject(project.id, body);
+      syncProjectResponse(await call());
       return true;
     } catch (caught) {
       setError(patchErrorMessage(caught));
@@ -31,7 +33,9 @@ function usePatch(project: Project) {
       setPending(false);
     }
   };
-  return { pending, error, patch };
+  const patch = (body: ProjectPatch): Promise<boolean> => runAction(() => api.updateProject(project.id, body));
+  const reopen = (): Promise<boolean> => runAction(() => api.reopenProject(project.id));
+  return { pending, error, patch, reopen };
 }
 
 function PaceForm({ project, onSave, onCancel, pending }: { project: Project; onSave: (pace: Pace | null) => void; onCancel: () => void; pending: boolean }) {
@@ -113,19 +117,37 @@ export function paceSummary(pace: Pace | undefined): string {
  * `PATCH /projects/:id` (Fatia 4; num servidor antigo, que responde 404, a tela diz "Disponível em breve").
  */
 export function ProjectControls({ project, slim = false }: { project: Project; slim?: boolean }) {
-  const { pending, error, patch } = usePatch(project);
+  const { pending, error, patch, reopen } = usePatch(project);
   const [paceOpen, setPaceOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const id = useId();
   const open = isProjectOpen(project);
   const planPending = project.status === "proposto" || project.status === "ajustando";
-  if (!open) return null;
+  if (!open) {
+    if (slim || !canReopenProject(project)) return null;
+    return (
+      <div className="w-controls" data-testid="work-controls">
+        <div className="w-controls__row">
+          <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => void reopen()} data-testid="project-reopen">
+            {pending ? "Reabrindo…" : "Reabrir projeto"}
+          </button>
+        </div>
+        <ErrorText testId="work-controls-error">{error}</ErrorText>
+      </div>
+    );
+  }
   return (
     <div className="w-controls" data-testid="work-controls">
       <div className="w-controls__row">
         {!planPending && !slim && (
           <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => void patch({ status: project.status === "pausado" ? "ativo" : "pausado" })} data-testid="work-pause">
             {project.status === "pausado" ? "Retomar" : "Pausar"}
+          </button>
+        )}
+        {!slim && canCompleteProject(project) && (
+          <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => setCompleting(true)} data-testid="project-complete">
+            Concluir projeto
           </button>
         )}
         {!slim && (
@@ -171,6 +193,20 @@ export function ProjectControls({ project, slim = false }: { project: Project; s
         />
       )}
       <ErrorText testId="work-controls-error">{error}</ErrorText>
+      {completing && (
+        <ConfirmDialog
+          title={COMPLETE_PROJECT_TITLE}
+          message={<p>{COMPLETE_PROJECT_MESSAGE}</p>}
+          confirmLabel="Concluir projeto"
+          pendingLabel="Concluindo…"
+          tone="success"
+          onConfirm={async () => {
+            syncProjectResponse(await api.completeProject(project.id));
+          }}
+          onClose={() => setCompleting(false)}
+          testId="project-complete-dialog"
+        />
+      )}
       {cancelling && (
         <ConfirmDialog
           title={project.kind === "tarefa" ? "Cancelar a tarefa?" : "Cancelar o projeto?"}

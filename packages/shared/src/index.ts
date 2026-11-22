@@ -17,6 +17,7 @@ export * from "./projects";
 export * from "./sprints";
 export * from "./task-tree";
 export * from "./task-flow";
+export * from "./release";
 export * from "./project-plan";
 export * from "./avulsas";
 export * from "./avulsas-cleanup";

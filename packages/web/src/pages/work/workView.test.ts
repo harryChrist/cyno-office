@@ -1,6 +1,10 @@
 import type { ForYouItem, Project, ProjectTask } from "@cyno/shared";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { makeTask } from "../../test-fixtures";
+import { ActivityTab } from "./ProjectTabs";
+import { SprintsTab } from "./SprintsTab";
 import {
   assemblingRequests,
   awaitingUser,
@@ -12,6 +16,8 @@ import {
   looseTaskProjects,
   newWorkMessage,
   paceToday,
+  planCardCopy,
+  projectApprovalBadge,
   projectBlock,
   projectOfItem,
   projectState,
@@ -20,6 +26,7 @@ import {
   STEP_MARK_LABEL,
   handoffText,
   taskState,
+  unitProgressText,
   urgencyTier,
   workColumn,
   workRank,
@@ -230,7 +237,7 @@ describe("buildRows e filtros", () => {
 
   it("cada linha traz progresso, dono, aprovações e bloqueio", () => {
     const andando = rows.find((row) => row.project.id === "andando")!;
-    expect(andando.progress).toEqual({ done: 1, total: 3, skipped: 0 });
+    expect(andando.progress).toEqual({ done: 1, total: 3, skipped: 0, unit: "tarefas" });
     expect(andando.deadline?.risk).toBe(true);
     const espera = rows.find((row) => row.project.id === "espera")!;
     expect(espera).toMatchObject({ awaiting: 2, approvals: 1 });
@@ -412,5 +419,88 @@ describe("cancelada não é falha, pulada não é feita", () => {
   it("a tarefa pulada ganha o selo Pulada", () => {
     expect(taskState({ status: "concluida", skipped: true })).toEqual({ label: "Pulada", tone: "neutral" });
     expect(taskState({ status: "concluida" }).label).toBe("Feita");
+  });
+});
+
+describe("unitProgressText: o progresso do projeto na unidade dele", () => {
+  it("módulos e tarefas, com singular só quando o total é 1", () => {
+    expect(unitProgressText({ done: 3, total: 8, unit: "modulos" })).toBe("3 de 8 módulos");
+    expect(unitProgressText({ done: 0, total: 1, unit: "modulos" })).toBe("0 de 1 módulo");
+    expect(unitProgressText({ done: 12, total: 40, unit: "tarefas" })).toBe("12 de 40 tarefas");
+    expect(unitProgressText({ done: 1, total: 1, unit: "tarefas" })).toBe("1 de 1 tarefa");
+    expect(unitProgressText({ done: 0, total: 0, unit: "tarefas" })).toBe("Sem tarefas");
+    expect(unitProgressText({ done: 0, total: 0, unit: "modulos" })).toBe("Sem módulos");
+  });
+});
+
+describe("selo de aprovação, cartão do plano e SprintsTab sem sprints", () => {
+  it("selo discreto só quando by !== 'dono', com a frase no título", () => {
+    expect(projectApprovalBadge(undefined)).toBeNull();
+    expect(projectApprovalBadge({ by: "dono", at: AT })).toBeNull();
+    expect(projectApprovalBadge({ by: "regra", at: AT, quote: "pode começar direto" })).toEqual({
+      label: "Começou sem aprovação (regra do workspace)",
+      title: "pode começar direto",
+    });
+    expect(projectApprovalBadge({ by: "maestro", at: AT, quote: "pedido já detalhado" })).toEqual({
+      label: "Começou sem aprovação (escolha do Maestro)",
+      title: "pedido já detalhado",
+    });
+    expect(projectApprovalBadge({ by: "maestro", at: AT, quote: "   " })).toEqual({
+      label: "Começou sem aprovação (escolha do Maestro)",
+    });
+  });
+
+  it("ActivityTab mostra o selo discreto (com tooltip) para regra/maestro e omite para dono/ausente", () => {
+    const emptyAgents = new Map();
+    const byRegra = renderToStaticMarkup(
+      createElement(ActivityTab, {
+        project: project("p1", [], { approval: { by: "regra", at: AT, quote: "sempre começar" } }),
+        agents: emptyAgents,
+      }),
+    );
+    expect(byRegra).toContain('data-testid="activity-approval-badge"');
+    expect(byRegra).toContain("Começou sem aprovação (regra do workspace)");
+    expect(byRegra).toContain('title="sempre começar"');
+
+    const byDono = renderToStaticMarkup(
+      createElement(ActivityTab, {
+        project: project("p2", [], { approval: { by: "dono", at: AT } }),
+        agents: emptyAgents,
+      }),
+    );
+    expect(byDono).not.toContain('data-testid="activity-approval-badge"');
+    expect(byDono).not.toContain("Começou sem aprovação");
+
+    const none = renderToStaticMarkup(createElement(ActivityTab, { project: project("p3", []), agents: emptyAgents }));
+    expect(none).not.toContain('data-testid="activity-approval-badge"');
+  });
+
+  it("linha do tempo usa o texto do selo quando começou sem aprovação", () => {
+    const p = project("p1", [], { createdAt: "2026-11-09T15:00:00.000Z", approval: { by: "maestro", at: "2026-11-09T15:05:00.000Z", quote: "escopo fechado" } });
+    const entries = projectTimeline(p).flatMap((day) => day.entries);
+    expect(entries.find((entry) => entry.kind === "aprovado")).toEqual({
+      kind: "aprovado",
+      text: "Começou sem aprovação (escolha do Maestro)",
+      at: "2026-11-09T15:05:00.000Z",
+      title: "escopo fechado",
+    });
+  });
+
+  it("cartão do plano reflete aprovação opcional e só cita sprints quando o projeto tem sprints", () => {
+    const plain = planCardCopy({ version: 1 });
+    expect(plain.title).toBe("Aprovação pedida pelo Maestro");
+    expect(plain.text).not.toContain("Nada começa antes da sua aprovação");
+    expect(plain.text).not.toContain("sprints");
+    const withSprints = planCardCopy({ version: 2, sprints: [{ id: "S1", name: "S1", startAt: AT, endAt: AT, order: 1, status: "planejada" }] });
+    expect(withSprints.title).toBe("Aprovação pedida pelo Maestro · versão 2");
+    expect(withSprints.text).toContain("sprints");
+  });
+
+  it("SprintsTab em projeto sem sprints não mostra botão de criar sprint", () => {
+    const html = renderToStaticMarkup(
+      createElement(SprintsTab, { project: project("p1", []), agents: new Map(), editable: true, fixed: false, now: NOW, onOpenTask: () => undefined }),
+    );
+    expect(html).not.toContain("sprint-create-first");
+    expect(html).not.toContain("Criar a primeira sprint");
   });
 });

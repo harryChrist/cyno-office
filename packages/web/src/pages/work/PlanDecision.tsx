@@ -3,15 +3,19 @@ import { useId, useState } from "react";
 import { api } from "../../api/client";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
+import { PLAN_APPROVALS } from "./releaseView";
+import { syncProjectResponse } from "./useTaskActions";
 import "./work.css";
 
-/** Aprovar plano / Pedir ajuste (com o que mudar) / Cancelar, para um projeto cujo plano espera o OK. Usado na trilha e em Aprovações. */
+/** Aprovar plano (começar ou deixar planejado) / Pedir ajuste / Cancelar, para um projeto cujo plano espera o OK. Usado na trilha e em Aprovações. */
 export function PlanDecision({ plan, compact = false }: { plan: Pick<Project, "id" | "status"> & { sprints?: Project["sprints"] }; compact?: boolean }) {
   const { pending, error, run } = useAsyncAction();
   const [adjusting, setAdjusting] = useState(false);
   const [feedback, setFeedback] = useState("");
   const fieldId = useId();
   if (plan.status !== "proposto") return null;
+  const [approveStart, approvePlanned] = PLAN_APPROVALS;
+  const approve = (release: "all" | "none") => void run(async () => syncProjectResponse(await api.approvePlan(plan.id, release)));
   return (
     <div className={`plan-decision${compact ? " plan-decision--compact" : ""}`} data-testid="plan-decision">
       {adjusting && (
@@ -56,8 +60,11 @@ export function PlanDecision({ plan, compact = false }: { plan: Pick<Project, "i
             <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => setAdjusting(true)} data-testid="plan-adjust">
               Pedir ajuste
             </button>
-            <button type="button" className="ui-button ui-button--success ui-button--small" disabled={pending} onClick={() => void run(() => api.approvePlan(plan.id))} data-testid="plan-approve">
-              {pending ? "Enviando…" : plan.sprints?.length ? "Aprovar e começar" : "Aprovar plano"}
+            <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => approve(approvePlanned.release)} data-testid={approvePlanned.testId}>
+              {pending ? "Enviando…" : approvePlanned.label}
+            </button>
+            <button type="button" className="ui-button ui-button--success ui-button--small" disabled={pending} onClick={() => approve(approveStart.release)} data-testid={approveStart.testId}>
+              {pending ? "Enviando…" : approveStart.label}
             </button>
           </>
         )}

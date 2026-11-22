@@ -15,6 +15,8 @@ import {
   nextWorkDayStart,
   receivedBy,
   receiversOf,
+  releaseHold,
+  requestIdOf,
   sprintHold,
   taskRankInput,
   windowState,
@@ -42,6 +44,8 @@ export type ProjectSchedulerHooks = {
   failTask(plan: Project, task: ProjectTask, reason: string): void;
   /** Abre e fecha as sprints cuja data chegou (antes de decidir quem começa). */
   advanceSprints(): void;
+  /** A liberação diária (por projeto com `releasePace`): solta o lote do dia e devolve quando acordar de novo (virada do dia, janela, "começa em"). */
+  advanceRelease(): { projectId: string; wakeAt: number }[];
 };
 
 /** "Done when: 1. … 2. …" (o critério de pronto da tarefa; o agente confere e manda `checklist`). */
@@ -137,7 +141,7 @@ export function paceHold(project: Pick<Project, "startAt" | "pace">, task: Pick<
  * (`startAt`, abertura da janela, virada do dia).
  */
 export class WorkScheduler {
-  /** Quando cada espera por ritmo pode acabar (chave "L:" = tarefa de plano, "T:" = tarefa avulsa). */
+  /** Quando cada espera por ritmo pode acabar (chave "L:" = tarefa de plano, "S:" = sprint, "R:" = liberação diária, "T:" = tarefa avulsa). */
   private readonly wakes = new Map<string, number>();
   private wakeTimer: NodeJS.Timeout | undefined;
 
@@ -153,9 +157,10 @@ export class WorkScheduler {
     for (const plan of this.ctx.plans) {
       // A semente do app de teste não é conciliada nem executada (veja `isSeedProject`).
       if ((plan.status !== "ativo" && plan.status !== "pausado") || !hasLifecycle(plan) || isSeedProject(plan)) continue;
-      const request = state.tasks.find((task) => task.id === plan.id);
-      // Projeto criado à mão (origem "usuario") não tem pedido do Maestro: não é cancelado por isso.
-      if (plan.origin !== "usuario" && (!request || !isActiveTaskStatus(request.status))) {
+      const request = state.tasks.find((task) => task.id === requestIdOf(plan));
+      // Projeto criado à mão (origem "usuario") não tem pedido do Maestro; e projeto cujo pedido já
+      // concluiu (`done`, ex.: estacionado e depois liberado pelo dono/ritmo/Maestro) segue aberto.
+      if (plan.origin !== "usuario" && (!request || (!isActiveTaskStatus(request.status) && request.status !== "done"))) {
         this.hooks.cancelPlan(plan, "O pedido foi fechado");
         continue;
       }
@@ -167,7 +172,7 @@ export class WorkScheduler {
           Object.assign(step, { status: "pendente" });
           delete step.taskId;
           planTask.status = planTask.current > 0 ? "em_andamento" : "a_fazer";
-          if (planTask.status === "a_fazer") planTask.queuedAt = this.ctx.at();
+          if (planTask.status === "a_fazer" && !releaseHold(planTask)) planTask.queuedAt = this.ctx.at();
           changed.push(plan);
         } else if (!isActiveTaskStatus(sub.status) || sub.status === "waiting_approval") this.hooks.onStepTask(sub);
       }
@@ -180,6 +185,8 @@ export class WorkScheduler {
   pump(): void {
     if (this.ctx.isStopped()) return;
     this.hooks.advanceSprints();
+    // A liberação diária solta o lote do dia ANTES de decidir quem começa (a folha liberada agora já pode ser despachada neste mesmo pump).
+    const releaseWakes = this.hooks.advanceRelease();
     const settings = this.ctx.deps.settings();
     const state = this.ctx.deps.state.read();
     const now = this.ctx.nowMs();
@@ -188,13 +195,22 @@ export class WorkScheduler {
     const load = this.currentLoad(live);
     const changed = new Set<Project>();
     const started: Project[] = [];
-    for (const key of [...this.wakes.keys()]) if (key.startsWith("L:") || key.startsWith("S:")) this.wakes.delete(key);
+    for (const key of [...this.wakes.keys()]) if (key.startsWith("L:") || key.startsWith("S:") || key.startsWith("R:")) this.wakes.delete(key);
+    for (const { projectId, wakeAt } of releaseWakes) this.wakes.set(`R:${projectId}`, wakeAt);
     // O agendador acorda na hora em que uma sprint abre ou fecha.
     for (const plan of live) {
       const boundary = nextSprintBoundary(plan);
       if (boundary !== undefined) this.wakes.set(`S:${plan.id}`, boundary);
     }
     for (const { plan, task } of this.preferOpenHours(this.sortedCandidates(live, now))) {
+      // Planejada (ainda não liberada): fica na lista, mas não entra na fila (não espera vaga nem agente, e a espera dela não conta como fila).
+      const planned = releaseHold(task);
+      if (planned) {
+        const queued = task.queuedAt !== undefined;
+        delete task.queuedAt;
+        if (this.markWaiting(task, planned) || queued) changed.add(plan);
+        continue;
+      }
       const agent = state.agents.find((candidate) => candidate.id === task.steps[task.current]!.agentId);
       const holdsSlot = task.status === "em_andamento";
       if (!agent || isMaestroAgent(state, agent)) {
@@ -239,6 +255,10 @@ export class WorkScheduler {
   admitTask(plan: Project, planTask: ProjectTask): boolean {
     const key = `T:${plan.id}/${planTask.ref}`;
     if (plan.status === "pausado") {
+      this.wakes.delete(key);
+      return false;
+    }
+    if (releaseHold(planTask)) {
       this.wakes.delete(key);
       return false;
     }
@@ -388,7 +408,8 @@ export class WorkScheduler {
   /** Cria a subtarefa da etapa atual (na fila do agente) com o contexto das anteriores. */
   private startStep(state: OfficeState, plan: Project, task: ProjectTask, agent: Agent): void {
     const team = state.teams.find((candidate) => candidate.id === agent.teamId);
-    const request = state.tasks.find((candidate) => candidate.id === plan.id);
+    const reqId = requestIdOf(plan);
+    const request = state.tasks.find((candidate) => candidate.id === reqId);
     const at = this.ctx.at();
     const index = task.current;
     const step = task.steps[index]!;
@@ -397,7 +418,7 @@ export class WorkScheduler {
       roomId: team?.roomId ?? "",
       teamId: agent.teamId,
       agentId: agent.id,
-      projectId: plan.id,
+      projectId: reqId,
       routeReason: shorten(`Plano · ${task.ref} «${task.title}» · etapa ${index + 1}/${task.steps.length}`, 300),
       prompt: this.stepPrompt(state, plan, task, request),
       status: "queued",
@@ -483,12 +504,13 @@ export class WorkScheduler {
       const stalled = this.collectStalled(plan, state, now);
       if (stalled.length === 0) continue;
       this.ctx.save([plan]);
+      const reqId = requestIdOf(plan);
       const message = [
-        `Pedido ${plan.id}: tarefas do plano paradas há muito tempo:`,
+        `Pedido ${reqId}${plan.requestId ? ` (projeto ${plan.id})` : ""}: tarefas do plano paradas há muito tempo:`,
         stalled.join("\n"),
         "Se der, ajuste (resolve_task, add_project_tasks) ou avise o usuário na resposta; senão, só termine o turno (elas seguem sozinhas quando destravarem).",
       ].join("\n\n");
-      this.ctx.deps.host(plan.id)?.wake(plan.id, "stalled", () => message);
+      this.ctx.deps.host(reqId)?.wake(reqId, "stalled", () => message);
     }
   }
 

@@ -19,6 +19,7 @@ import {
   goalStatusLabel,
   goalTone,
   hourLabel,
+  plannedLabel,
   routineTimeline,
   SECTION_TITLES,
   sectionCounts,
@@ -147,13 +148,20 @@ function NowRow({ row, now, workspace }: { row: NowRowView; now: Date; workspace
 
 function ProjectRow({ project, workspace }: { project: TodayProject; workspace: string | undefined }) {
   const hours = workedLabel(project);
-  const tone: Tone = project.blocked ? (project.blocked.type === "falha" ? "danger" : "warn") : project.status === "pausado" ? "muted" : "run";
+  const stage = stageLabel(project);
+  const planned = plannedLabel(project.planned);
+  const tone: Tone = project.blocked ? (project.blocked.type === "falha" ? "danger" : "warn") : project.status === "pausado" || (!project.stage && !!planned) ? "muted" : "run";
   return (
     <Row testId={`hoje-project-${project.id}`} tone={tone} onOpen={() => go.project(workspace, project.id)} lead={<Dot tone={tone} />}>
       <span className="hj-row__title">{project.title}</span>
       <span className="hj-row__sub">
-        <span>{stageLabel(project)}</span>
+        {stage && <span>{stage}</span>}
         {project.next && <span className="hj-next">próximo: {project.next}</span>}
+        {planned && (
+          <span className={`hj-planned${project.stage ? " hj-planned--aside" : ""}`} data-testid={`hoje-planned-${project.id}`}>
+            {planned}
+          </span>
+        )}
       </span>
       {(project.blocked || project.atRisk || project.deliveryWaiting || hours) && (
         <span className="hj-row__chips">

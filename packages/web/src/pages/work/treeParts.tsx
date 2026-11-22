@@ -2,16 +2,26 @@ import { PROJECT_PRIORITY_LABELS, type Agent, type ProjectPriority, type Project
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AgentAvatar } from "./Agent";
+import type { RowState } from "./releaseView";
 import { TREE_STATUS_LABEL } from "./taskTreeView";
 
-/** Peças pequenas da árvore e do painel: ícone de estado, pilha de avatares, bandeira de prioridade e o popover da linha. */
+/** Peças pequenas da árvore e do painel: ícone de estado, chip de estado, pilha de avatares, bandeira de prioridade e o popover da linha. */
 
 /** Ícone de estado de uma linha (um desenho por estado, com o rótulo para leitor de tela). */
-export function StatusIcon({ status, size = 16 }: { status: ProjectTaskStatus; size?: number }) {
-  const label = TREE_STATUS_LABEL[status];
-  const common = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", strokeWidth: 1.6, role: "img", "aria-label": label } as const;
+export function StatusIcon({ status, size = 16, planned = false, label }: { status: ProjectTaskStatus; size?: number; planned?: boolean; label?: string }) {
+  const text = label ?? (planned ? "Planejada" : TREE_STATUS_LABEL[status]);
+  const common = { width: size, height: size, viewBox: "0 0 16 16", fill: "none", strokeWidth: 1.6, role: "img", "aria-label": text } as const;
+  if (planned) {
+    return (
+      <span className="tt-status tt-status--planned" title={text}>
+        <svg {...common} stroke="currentColor">
+          <circle cx="8" cy="8" r="5.6" />
+        </svg>
+      </span>
+    );
+  }
   return (
-    <span className={`tt-status tt-status--${status}`} title={label}>
+    <span className={`tt-status tt-status--${status}`} title={text}>
       {status === "concluida" ? (
         <svg {...common} stroke="currentColor">
           <circle cx="8" cy="8" r="6.4" fill="currentColor" fillOpacity="0.18" />
@@ -42,6 +52,16 @@ export function StatusIcon({ status, size = 16 }: { status: ProjectTaskStatus; s
           <circle cx="8" cy="8" r="6.4" />
         </svg>
       )}
+    </span>
+  );
+}
+
+/** Chip discreto da coluna Estado (e da liberação em projetos com sprints): escuro, pouca cor, só "Em andamento" destacado. */
+export function StateChip({ state, compact = false, testId }: { state: RowState; compact?: boolean; testId?: string }) {
+  return (
+    <span className={`tt-state tt-state--${state.tone}${compact ? " tt-state--compact" : ""}`} data-tone={state.tone} data-testid={testId}>
+      <span className="tt-state__dot" aria-hidden="true" />
+      <span className="tt-state__label">{state.label}</span>
     </span>
   );
 }

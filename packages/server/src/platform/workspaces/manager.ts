@@ -5,6 +5,7 @@ import {
   INITIAL_MODEL_DEFAULTS,
   isSafeId,
   maestroSessionName,
+  planApprovalRule,
   uniqueSlug,
   WORK_FOLDER_LIMITS,
   withoutUnusedEffort,
@@ -13,6 +14,9 @@ import {
   type MaestroSettings,
   type ModelDefaults,
   type NewWorkspaceMaestro,
+  type PlanApprovalNote,
+  type PlanApprovalRule,
+  type PlanApprovalSettings,
   type ServerEvent,
   type UpdateWorkFolderBody,
   type WorkFolder,
@@ -93,7 +97,10 @@ export class WorkspaceManager {
     const registry = new WorkspaceRegistry(paths.workspacesFile, list);
     if (missingModels.length > 0) await registry.commit(registry.list());
     const usage = options.usage ?? new SubscriptionUsageTracker(options.now);
-    const platform: { settled?: (workspace: string, period: string) => void } = {};
+    const platform: {
+      settled?: (workspace: string, period: string) => void;
+      setPlanApproval?: (workspace: string, rule: PlanApprovalRule, note?: PlanApprovalNote) => Promise<PlanApprovalSettings>;
+    } = {};
     const withNames: RuntimeOptions = {
       ...options,
       usage,
@@ -103,12 +110,21 @@ export class WorkspaceManager {
       workspaceMaestro: (id) => registry.list().find((ws) => ws.id === id)?.maestro,
       workspaceDispatch: (id) => registry.list().find((ws) => ws.id === id)?.dispatch,
       workspaceGestao: (id) => registry.list().find((ws) => ws.id === id)?.gestao,
+      workspacePlanApproval: (id) => {
+        const ws = registry.list().find((item) => item.id === id);
+        return { rule: planApprovalRule(ws?.planApproval), ...(ws?.planApprovalNote ? { note: ws.planApprovalNote } : {}) };
+      },
+      setWorkspacePlanApproval: (id, rule, note) => {
+        if (!platform.setPlanApproval) throw new Error("WorkspaceManager ainda não inicializado");
+        return platform.setPlanApproval(id, rule, note);
+      },
       reportsWeekSettled: (id, period) => platform.settled?.(id, period),
       workspaceAccess: (id) => registry.list().find((ws) => ws.id === id)?.access,
       workspaceFolders: (id) => registry.list().find((ws) => ws.id === id)?.folders,
     };
     const manager = new WorkspaceManager(paths, registry, withNames, options.now);
     platform.settled = (workspace, period) => manager.platformReports.settled(workspace, period);
+    platform.setPlanApproval = (workspace, rule, note) => manager.setPlanApproval(workspace, rule, note);
     for (const ws of list) {
       manager.runtimes.set(ws.id, await WorkspaceRuntime.open(ws.id, paths.workspaceDir(ws.id), withNames));
     }
@@ -295,6 +311,25 @@ export class WorkspaceManager {
   /** Modelos padrão do workspace (cópia; um workspace sem eles usa os globais). */
   models(id: string): ModelDefaults {
     return structuredClone(this.registry.list().find((ws) => ws.id === id)?.models ?? this.modelDefaults.get());
+  }
+
+  /** Regra de aprovação de projetos do workspace (ausente = "maestro"). */
+  planApproval(id: string): PlanApprovalSettings {
+    this.get(id);
+    const ws = this.registry.list().find((candidate) => candidate.id === id)!;
+    return { rule: planApprovalRule(ws.planApproval), ...(ws.planApprovalNote ? { note: ws.planApprovalNote } : {}) };
+  }
+
+  /** Troca a regra de aprovação do workspace; sem `note` (chamada do dono), limpa a nota anterior. */
+  async setPlanApproval(id: string, rule: PlanApprovalRule, note?: PlanApprovalNote): Promise<PlanApprovalSettings> {
+    this.get(id);
+    const list = this.registry.list();
+    const ws = list.find((candidate) => candidate.id === id)!;
+    ws.planApproval = rule;
+    if (note) ws.planApprovalNote = note;
+    else delete ws.planApprovalNote;
+    await this.commit(list);
+    return { rule, ...(note ? { note } : {}) };
   }
 
   /**

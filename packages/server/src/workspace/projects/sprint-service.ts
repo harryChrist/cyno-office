@@ -237,7 +237,7 @@ function reworkSprint(project: Project, from: Sprint): string | undefined {
  * Devolver a entrega: cada tarefa marcada (entregue na sprint) ganha uma tarefa irmã de retrabalho, com o
  * motivo no briefing, na sprint ativa. Devolve as tarefas novas.
  */
-export function createReworkTasks(project: Project, sprint: Sprint, refs: string[], reason: string, nowMs: number, addNode: (project: Project, input: { title: string; parent?: string; briefing: string; assignee?: string; priority?: ProjectTask["priority"] }, at: string) => ProjectTask): ProjectTask[] {
+export function createReworkTasks(project: Project, sprint: Sprint, refs: string[], reason: string, nowMs: number, addNode: (project: Project, input: { title: string; parent?: string; briefing: string; assignee?: string; priority?: ProjectTask["priority"]; released?: boolean }, at: string) => ProjectTask): ProjectTask[] {
   const delivered = new Set((sprint.summary?.done ?? []).map((entry) => entry.ref));
   const created: ProjectTask[] = [];
   for (const ref of [...new Set(refs)]) {
@@ -246,7 +246,7 @@ export function createReworkTasks(project: Project, sprint: Sprint, refs: string
     if (!original) continue;
     const parent = original.parent && project.tasks.find((task) => task.ref === original.parent)?.group ? original.parent : undefined;
     const briefing = [`Retrabalho de ${original.ref} (${original.title}), devolvido na entrega de ${sprint.name}.`, `Motivo: ${reason}`, "", "Briefing original:", original.briefing, ...(original.result ? ["", "Resultado anterior:", original.result.slice(0, 1500)] : [])].join("\n");
-    const task = addNode(project, { title: `Retrabalho: ${original.title}`.slice(0, 200), ...(parent ? { parent } : {}), briefing, ...(original.ownerId ? { assignee: original.ownerId } : {}), priority: original.priority }, iso(nowMs));
+    const task = addNode(project, { title: `Retrabalho: ${original.title}`.slice(0, 200), ...(parent ? { parent } : {}), briefing, ...(original.ownerId ? { assignee: original.ownerId } : {}), priority: original.priority, released: true }, iso(nowMs));
     const sprintId = reworkSprint(project, sprint);
     if (sprintId) task.sprintId = sprintId;
     else delete task.sprintId;

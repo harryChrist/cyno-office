@@ -3,7 +3,10 @@ import {
   blockedText,
   isDeadlineAtRisk,
   isMaestroTask,
+  isBlockedLeaf,
+  releaseHold,
   isProjectTaskFinished,
+  leafTasks,
   localDayKey,
   pendingForYou,
   workClock,
@@ -105,11 +108,18 @@ export function todayWaiting(items: readonly ForYouItem[], agentName: (agentId: 
 
 /** A etapa atual (N de M), o próximo passo e o bloqueio de um projeto. */
 function projectLine(project: Project, nowMs: number, day: string, agentName: (agentId: string) => string | undefined): TodayProject {
-  const tasks = project.tasks.filter((task) => task.status !== "cancelada");
+  // Só as FOLHAS executam: o estado do pai e do entregável é calculado das folhas (nunca gravado), então contá-los aqui
+  // faria o "N/M" crescer e deixaria uma etapa "aberta" para sempre. Arquivadas e canceladas saem da conta.
+  const tasks = leafTasks(project.tasks).filter((task) => task.status !== "cancelada" && !task.archived);
   const finished = tasks.filter(isProjectTaskFinished).length;
   const open = tasks.filter((task) => !isProjectTaskFinished(task));
-  const rank = (task: ProjectTask): number => (task.status === "em_andamento" ? 0 : task.status === "esperando_voce" ? 1 : task.status === "falhou" ? 2 : task.status === "a_fazer" ? 3 : 4);
-  const current = [...open].sort((a, b) => rank(a) - rank(b))[0];
+  // Folhas Planejadas e abertas aguardam liberação: não entram na etapa atual, nem em "próximo", nem no total.
+  const planned = open.filter((task) => releaseHold(task) !== undefined).length;
+  const activeOpen = open.filter((task) => releaseHold(task) === undefined);
+  const total = finished + activeOpen.length;
+  // A folha travada (dependência cancelada ou falha) espera o dono, mesmo gravada como backlog/a_fazer.
+  const rank = (task: ProjectTask): number => (task.status === "em_andamento" ? 0 : task.status === "esperando_voce" || isBlockedLeaf(project, task) ? 1 : task.status === "falhou" ? 2 : task.status === "a_fazer" ? 3 : 4);
+  const current = [...activeOpen].sort((a, b) => rank(a) - rank(b))[0];
   const workedMs = project.worked[day] ?? 0;
   const limitMs = project.pace?.hoursPerDay ? Math.round(project.pace.hoursPerDay * 3_600_000) : undefined;
 
@@ -119,11 +129,12 @@ function projectLine(project: Project, nowMs: number, day: string, agentName: (a
   if (current) {
     const step = current.steps[Math.min(current.current, current.steps.length - 1)];
     const agent = step ? agentName(step.agentId) : undefined;
-    stage = { index: Math.min(finished + 1, tasks.length), total: tasks.length, title: current.title, ...(agent ? { agent } : {}) };
+    stage = { index: Math.min(finished + 1, total), total, title: current.title, ...(agent ? { agent } : {}) };
     const nextStep = current.steps[current.current + 1];
     if (nextStep) next = oneLine(`${nextStep.what}${agentName(nextStep.agentId) ? ` (${agentName(nextStep.agentId)})` : ""}`, 80);
-    else next = open.find((task) => task !== current)?.title;
+    else next = activeOpen.find((task) => task !== current)?.title;
     if (current.blocked) blocked = { type: current.blocked.type, note: oneLine(current.blocked.note, 100) };
+    else if (isBlockedLeaf(project, current)) blocked = { type: "voce", note: oneLine(blockedText(project, current) ?? "esperando você", 100) };
     else if (current.status === "esperando_voce") blocked = { type: "voce", note: current.note ? oneLine(current.note, 100) : "esperando você" };
     else if (current.status === "falhou") blocked = { type: "falha", note: oneLine(current.failure ?? "a etapa falhou", 100) };
   }
@@ -135,6 +146,7 @@ function projectLine(project: Project, nowMs: number, day: string, agentName: (a
     status: project.status,
     ...(stage ? { stage } : {}),
     ...(next ? { next } : {}),
+    ...(planned > 0 ? { planned } : {}),
     ...(blocked ? { blocked } : {}),
     ...(isDeadlineAtRisk(project, nowMs) ? { atRisk: true } : {}),
     ...(closing ? { deliveryWaiting: closing.name } : {}),
@@ -213,7 +225,7 @@ export function buildToday(input: TodayInput): TodayView {
       continue;
     }
     if (project.kind !== "projeto") continue;
-    for (const task of project.tasks) {
+    for (const task of leafTasks(project.tasks)) {
       if (task.status === "concluida" && !task.skipped && sameDay(task.finishedAt, day)) done.push({ kind: "etapa", id: `${project.id}/${task.ref}`, title: task.title, at: task.finishedAt!, projectId: project.id, projectTitle: project.title, ...deliveryParts(task.result) });
     }
   }

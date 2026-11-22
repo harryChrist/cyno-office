@@ -19,7 +19,10 @@ async function newProject(ctx: TestApp): Promise<Project> {
 async function add(ctx: TestApp, projectId: string, body: object): Promise<string> {
   const response = await post(ctx, `/projects/${projectId}/tasks`, body);
   expect(response.statusCode, response.body).toBe(201);
-  return (response.json() as Reply).ref!;
+  const ref = (response.json() as Reply).ref!;
+  // Criar não executa: estes testes querem a tarefa rodando, então liberam logo (a regra nova tem os testes dela em release.test.ts).
+  expect((await post(ctx, `/projects/${projectId}/release`, { refs: [ref] })).statusCode).toBe(200);
+  return ref;
 }
 
 describe("dependências à mão (\"depois de\")", () => {
@@ -65,7 +68,7 @@ describe("dependências à mão (\"depois de\")", () => {
     expect(["a_fazer", "em_andamento", "concluida"]).toContain(find(runtimeOf(ctx).plans.get(project.id), c).status);
   });
 
-  it("recusa, em português claro: ela mesma, a mãe, uma de dentro, ciclo, tarefa que não existe e entregável", async () => {
+  it("recusa, em português claro: ela mesma, a mãe, uma de dentro, ciclo e tarefa que não existe", async () => {
     const ctx = await setupApp();
     const project = await newProject(ctx);
     const group = await add(ctx, project.id, { title: "Divulgação", group: true });
@@ -83,8 +86,8 @@ describe("dependências à mão (\"depois de\")", () => {
     expect(await refused(mother, [a], 400)).toMatch(/“Pesquisar” está dentro desta tarefa/);
     expect(await refused(a, [b], 400)).toMatch(/Isso criaria um ciclo \(.*“Pesquisar”.*“Escrever”.*\)/);
     expect(await refused(a, ["T99"], 404)).toMatch(/não existe/);
-    const other = await add(ctx, project.id, { title: "Outro entregável", group: true });
-    expect(await refused(a, [other], 400)).toMatch(/entregável/);
+    // Um módulo é uma dependência válida (a tarefa espera o módulo inteiro), mas não o módulo de que faz parte.
+    expect(await refused(a, [group], 400)).toMatch(/“Divulgação” é a tarefa de que esta faz parte/);
     // Nada mudou depois das recusas.
     const saved = runtimeOf(ctx).plans.get(project.id);
     expect([find(saved, a).dependsOn, find(saved, b).dependsOn]).toEqual([[], [a]]);
@@ -129,5 +132,33 @@ describe("dependências à mão (\"depois de\")", () => {
     const response = await patch(ctx, `/projects/${project.id}/tasks/${a}`, { dependsOn: [b] });
     expect(response.statusCode).toBe(409);
     expect(errorOf(response)).toMatch(/já começou/);
+  });
+
+  it("módulo depende de módulo: a tarefa do módulo B só roda quando a última tarefa do módulo A termina (e ciclo entre módulos é recusado)", async () => {
+    const ctx = await setupApp();
+    const { agent } = await soloTeam(ctx.app);
+    const project = await newProject(ctx);
+    const moduleA = await add(ctx, project.id, { title: "Módulo A", group: true });
+    const a1 = await add(ctx, project.id, { title: "A1", parent: moduleA });
+    const a2 = await add(ctx, project.id, { title: "A2", parent: moduleA, dependsOn: [a1] });
+    const moduleB = await add(ctx, project.id, { title: "Módulo B", group: true, dependsOn: [moduleA] });
+    const b1 = await add(ctx, project.id, { title: "B1", parent: moduleB, assignee: agent.id });
+    // Ciclo: o módulo A passaria a esperar o B.
+    const cycle = await patch(ctx, `/projects/${project.id}/tasks/${moduleA}`, { dependsOn: [moduleB] });
+    expect(cycle.statusCode).toBe(400);
+    expect(errorOf(cycle)).toMatch(/ciclo/);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const waiting = runtimeOf(ctx).plans.get(project.id);
+    expect(find(waiting, b1).status).toBe("backlog");
+    expect(effectiveDeps(waiting, find(waiting, b1))).toEqual([moduleA]);
+    expect(ctx.store.snapshot().tasks.filter((task) => task.work?.projectId === project.id)).toHaveLength(0);
+
+    // A1 e A2 recebem dono: A2 espera A1; B1 só destrava quando o módulo A inteiro terminou.
+    expect((await patch(ctx, `/projects/${project.id}/tasks/${a2}`, { assignee: agent.id })).statusCode).toBe(200);
+    expect((await patch(ctx, `/projects/${project.id}/tasks/${a1}`, { assignee: agent.id })).statusCode).toBe(200);
+    await ctx.log.waitFor((event) => event.type === "project:upserted" && event.project.id === project.id && event.project.status === "concluido");
+    const done = runtimeOf(ctx).plans.get(project.id);
+    expect([a1, a2, b1].map((ref) => find(done, ref).status)).toEqual(["concluida", "concluida", "concluida"]);
+    expect(find(done, b1).startedAt! >= find(done, a2).finishedAt!).toBe(true);
   });
 });

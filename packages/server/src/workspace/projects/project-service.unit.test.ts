@@ -210,7 +210,7 @@ describe("tarefa pulada", () => {
     expect(after.tasks[0]).toMatchObject({ status: "concluida", skipped: true });
     expect(after.tasks[1]!.status).not.toBe("backlog");
     expect(h.service.describe("req1")).toContain("[pulada]");
-    expect(h.service.describe("req1")).toMatch(/0 de 2 concluídas, 1 pulada/);
+    expect(h.service.describe("req1")).toMatch(/0 de 2 tarefas concluídas, 1 pulada/);
     expect(sub.length).toBeGreaterThan(0);
   });
 
@@ -535,68 +535,87 @@ describe("sprints: tarefa nova do Maestro herda a sprint ativa", () => {
   });
 });
 
-describe("proposta com árvore e sprints (create_project) e as ferramentas de sprint do Maestro", () => {
+describe("proposta em árvore (sem sprints novos) e ferramentas de sprint só em projeto legado", () => {
   const tree = () => ({
-    sprints: [
-      { ref: "s1", name: "Sprint 1", goal: "Base", start_at: "2026-11-11T12:00:00.000Z" },
-      { ref: "s2", name: "Sprint 2" },
-    ],
     tasks: [
-      { ref: "D1", title: "Front-End", briefing: "Entregável", kind: "group" as const },
+      { ref: "D1", title: "Front-End", briefing: "Módulo", kind: "module" as const },
       { ref: "T1", title: "Tela de login", briefing: "Tela", parent: "D1" },
-      { ref: "T2", title: "Arte", briefing: "Arte da tela", owner: "Ana", parent: "T1", sprint: "s1" },
-      { ref: "T3", title: "Revisão", briefing: "Revisar", owner: "Beto", parent: "T1", sprint: "s2", depends_on: ["T2"] },
+      { ref: "T2", title: "Arte", briefing: "Arte da tela", owner: "Ana", parent: "T1" },
+      { ref: "T3", title: "Revisão", briefing: "Revisar", owner: "Beto", parent: "T1", depends_on: ["T2"] },
     ],
   });
 
-  it("monta tudo numa chamada e o cartão mostra sprints, entregável e responsáveis", async () => {
+  /** Simula um projeto legado que JÁ tinha sprints gravadas antes do Lote 4. */
+  function seedLegacySprints(h: Harness, planId = "req1", firstStart = "2026-11-11T12:00:00.000Z") {
+    const plan = (h.service as unknown as { plans: Project[] }).plans.find((candidate) => candidate.id === planId)!;
+    const startMs = Date.parse(firstStart);
+    const day = 86_400_000;
+    plan.sprints = [
+      { id: "S1", name: "Sprint 1", goal: "Base", startAt: new Date(startMs).toISOString(), endAt: new Date(startMs + 7 * day).toISOString(), order: 1, status: "planejada" },
+      { id: "S2", name: "Sprint 2", startAt: new Date(startMs + 7 * day).toISOString(), endAt: new Date(startMs + 14 * day).toISOString(), order: 2, status: "planejada" },
+    ];
+    plan.tasks.find((candidate) => candidate.ref === "T2")!.sprintId = "S1";
+    plan.tasks.find((candidate) => candidate.ref === "T3")!.sprintId = "S2";
+    return plan;
+  }
+
+  it("monta tudo numa chamada sem sprints e o cartão mostra módulo e responsáveis", async () => {
     const h = harness();
     const project = await h.service.propose("req1", tree());
     expect(project.status).toBe("proposto");
-    expect(project.sprints!.map((sprint) => [sprint.id, sprint.status, sprint.endAt])).toEqual([
-      ["S1", "planejada", "2026-11-18T12:00:00.000Z"],
-      ["S2", "planejada", "2026-11-25T12:00:00.000Z"],
-    ]);
-    expect(project.tasks.find((task) => task.ref === "T2")).toMatchObject({ parent: "T1", sprintId: "S1", ownerId: "ana" });
+    expect(project.sprints).toEqual([]);
+    expect(project.tasks.find((task) => task.ref === "T2")).toMatchObject({ parent: "T1", ownerId: "ana" });
     const card = h.items[0]!;
-    expect(card.why).toBe("2 tarefa(s) em 2 sprint(s) para aprovar antes de começar");
-    expect(card.text).toContain("**Sprint 1** (11/11 a 18/11): Base");
-    expect(card.text).toContain("- **Front-End** (entregável)");
-    expect(card.text).toContain("    - **T2 · Arte** — Ana · Sprint 1");
+    expect(card.why).toBe("2 tarefa(s) para aprovar antes de começar");
+    expect(card.text).toContain("- **Front-End** (módulo)");
+    expect(card.text).toContain("    - **T2 · Arte** — Ana");
   });
 
-  it("erro de validação volta inteiro ao Maestro e nada é gravado", async () => {
+  it("recusa sprint em create_project e erro de validação volta inteiro sem gravar", async () => {
     const h = harness();
-    const bad = tree() as unknown as { tasks: Record<string, unknown>[] };
-    bad.tasks[3] = { ...bad.tasks[3]!, sprint: "s9" };
-    await expect(h.service.propose("req1", bad as never)).rejects.toThrow(/Project rejected[\s\S]*Task T3: sprint "s9" does not exist/);
+    const withSprint = { tasks: [{ ref: "T1", title: "A", briefing: "a", owner: "Ana", sprint: "S1" }] };
+    await expect(h.service.propose("req1", withSprint)).rejects.toThrow(/Sprints are retired for new projects/);
     expect(h.service.list().filter((plan) => plan.id === "req1")).toHaveLength(0);
     expect(h.items).toHaveLength(0);
   });
 
-  it("aprovada, a primeira sprint abre na hora (data já chegou) e só a folha dela fica liberada", async () => {
+  it("projeto sem sprints recusa add_sprint, update_sprint, close_sprint e move_task com sprint", async () => {
     const h = harness();
     await h.service.propose("req1", tree());
+    await h.service.approve("req1");
+    await expect(h.service.createSprint("req1", { name: "Sprint 1" }, "maestro")).rejects.toThrow(/Sprints are retired for new projects: use modules and release_work\/set_release_pace/);
+    await expect(h.service.createSprint("req1", { name: "Sprint 1" })).rejects.toMatchObject({ statusCode: 409, message: "Projetos novos não usam sprints: use módulos e a liberação." });
+    await expect(h.service.updateSprint("req1", "S1", { name: "X" }, "maestro")).rejects.toThrow(/does not use sprints/);
+    await expect(h.service.closeSprint("req1", "S1", "maestro")).rejects.toThrow(/does not use sprints/);
+    await expect(h.service.moveTask("req1", "T2", { sprintId: "S1" }, "maestro")).rejects.toThrow(/does not use sprints/);
+    await expect(h.service.moveTask("req1", "T2", { sprintId: null }, "maestro")).rejects.toThrow(/does not use sprints/);
+    expect(() => h.service.sprintIdOf("req1", "S1")).toThrow(/does not use sprints/);
+  });
+
+  it("projeto legado com sprints: aprovada, a primeira sprint abre na hora e só a folha dela fica liberada", async () => {
+    const h = harness();
+    await h.service.propose("req1", tree());
+    seedLegacySprints(h);
     const approved = await h.service.approve("req1");
     expect(approved.sprints!.map((sprint) => sprint.status)).toEqual(["ativa", "planejada"]);
     expect(["a_fazer", "em_andamento"]).toContain(approved.tasks.find((task) => task.ref === "T2")!.status);
     expect(approved.tasks.find((task) => task.ref === "T3")!.status).toBe("backlog");
   });
 
-  it("sprint 1 com datas que já passaram: as datas andam juntas e a primeira abre agora", async () => {
+  it("projeto legado: sprint 1 com datas que já passaram anda junto e abre agora", async () => {
     const h = harness();
-    const old = tree() as unknown as { sprints: Record<string, unknown>[] };
-    old.sprints[0] = { ref: "s1", name: "Sprint 1", goal: "Base", start_at: "2026-10-01T12:00:00.000Z" };
-    await h.service.propose("req1", old as never);
+    await h.service.propose("req1", tree());
+    seedLegacySprints(h, "req1", "2026-10-01T12:00:00.000Z");
     const approved = await h.service.approve("req1");
     const [s1, s2] = approved.sprints!;
     expect(s1).toMatchObject({ status: "ativa", startAt: AT, endAt: "2026-11-18T12:00:00.000Z" });
     expect(s2!.status).toBe("planejada");
   });
 
-  it("add_project_tasks com parent e sprint; folha que ainda não começou vira mãe; get_project em árvore", async () => {
+  it("add_project_tasks com parent e sprint em projeto legado; folha que ainda não começou vira mãe; get_project em árvore", async () => {
     const h = harness();
     await h.service.propose("req1", tree());
+    seedLegacySprints(h);
     await h.service.approve("req1");
     const plan = h.service.get("req1");
     expect(plan.tasks.find((task) => task.ref === "T2")!.sprintId).toBe("S1");
@@ -610,13 +629,35 @@ describe("proposta com árvore e sprints (create_project) e as ferramentas de sp
     expect(text).toContain("Sprints:");
     expect(text).toContain("S1 «Sprint 1» [ativa]");
     expect(text).toContain("- D1 «Front-End» [");
-    expect(text).toContain("(deliverable)");
+    expect(text).toContain("(module)");
     expect(text).toContain("    - T3 «Revisão»");
+  });
+
+  it("add_project_tasks aceita módulo dentro de módulo e depends_on no módulo; get_project mostra a dependência e o progresso por unidade", async () => {
+    const h = harness();
+    await h.service.propose("req1", tree());
+    await h.service.approve("req1");
+    h.service.addTasks("req1", [
+      { ref: "M1", title: "Módulo novo", briefing: "m", kind: "group", depends_on: ["D1"] },
+      { ref: "M2", title: "Sub-módulo", briefing: "m", kind: "group", parent: "M1" },
+      { ref: "T20", title: "Dentro do sub-módulo", briefing: "t", owner: "Ana", parent: "M2" },
+    ]);
+    const plan = h.service.get("req1");
+    expect(plan.tasks.find((task) => task.ref === "M2")).toMatchObject({ group: true, parent: "M1" });
+    // A entrada do módulo espera o D1 inteiro (módulo): não está na fila.
+    expect(plan.tasks.find((task) => task.ref === "T20")!.status).toBe("backlog");
+    const text = h.service.describe("req1");
+    expect(text).toMatch(/- M1 «Módulo novo» \[[^\]]+\] \(module\) 0\/1; Ana; depends on D1/);
+    expect(text).toMatch(/\d+ de \d+ módulos? concluídos?/);
+    // Um módulo vazio de propósito (sem filhas) também vale.
+    h.service.addTasks("req1", [{ ref: "M3", title: "Módulo vazio", briefing: "v", kind: "group" }]);
+    expect(h.service.get("req1").tasks.find((task) => task.ref === "M3")).toMatchObject({ group: true, steps: [] });
   });
 
   it("get_project avisa quando há sprints mas nenhuma ativa e o que espera o dono", async () => {
     const h = harness();
     await h.service.propose("req1", tree());
+    seedLegacySprints(h);
     expect(h.service.describe("req1")).toContain("Waiting for the owner: approval of this project plan");
     await h.service.approve("req1");
     const plan = (h.service as unknown as { plans: Project[] }).plans[0]!;
@@ -650,9 +691,10 @@ describe("proposta com árvore e sprints (create_project) e as ferramentas de sp
     expect(kids.map((child) => child.status)).toEqual(["a_fazer", "backlog", "backlog", "backlog"]);
   });
 
-  it("move_task muda de sprint e de pai; close_sprint inicia o fechamento, cria o cartão e não decide", async () => {
+  it("move_task muda de sprint e de pai em projeto legado; close_sprint inicia o fechamento, cria o cartão e não decide", async () => {
     const h = harness();
     await h.service.propose("req1", tree());
+    seedLegacySprints(h);
     await h.service.approve("req1");
     await h.service.moveTask("req1", "T3", { sprintId: "S1" }, "maestro");
     expect(h.service.get("req1").tasks.find((task) => task.ref === "T3")!.sprintId).toBe("S1");
@@ -672,9 +714,10 @@ describe("proposta com árvore e sprints (create_project) e as ferramentas de sp
     await expect(h.service.closeSprint("req1", "S1", "maestro")).rejects.toThrow();
   });
 
-  it("add_sprint e update_sprint do Maestro", async () => {
+  it("add_sprint e update_sprint do Maestro funcionam em projeto legado que já tem sprints", async () => {
     const h = harness();
     await h.service.propose("req1", tree());
+    seedLegacySprints(h);
     const { sprintId } = await h.service.createSprint("req1", { name: "Sprint 3", goal: "Fim" }, "maestro");
     expect(sprintId).toBe("S3");
     expect(h.service.get("req1").sprints![2]).toMatchObject({ startAt: "2026-11-25T12:00:00.000Z", endAt: "2026-12-02T12:00:00.000Z" });

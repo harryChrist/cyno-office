@@ -7,9 +7,10 @@ import {
   sprintProgress,
   sprintsInOrder,
   statusOf,
-  treeProgress,
+  moduleProgress,
+  projectUnitProgress,
   pendingForYou,
-  projectProgress,
+  releaseHold,
   SENT_REQUEST_STATE_LABELS,
   type ForYouItem,
   type MediaItem,
@@ -64,7 +65,7 @@ export function requestState(record: Pick<SentRequest, "projectId">, snap: Pick<
 
 /** A etapa atual em texto curto ("T2 Revisão · Crivo"), quando há. */
 function stageOf(project: Project | undefined, agentName: RequestSnapshot["agentName"]): string | undefined {
-  const task = project?.tasks.find((candidate) => candidate.status === "em_andamento" || candidate.status === "esperando_voce") ?? project?.tasks.find((candidate) => candidate.status === "a_fazer");
+  const task = project?.tasks.find((candidate) => candidate.status === "em_andamento" || candidate.status === "esperando_voce") ?? project?.tasks.find((candidate) => candidate.status === "a_fazer" && !releaseHold(candidate));
   if (!task) return undefined;
   const step = task.steps[task.current];
   const who = step ? agentName(step.agentId) : undefined;
@@ -81,7 +82,7 @@ function sprintLabel(project: Project | undefined, nowMs: number): string | unde
 
 export function requestView(record: SentRequest, snap: RequestSnapshot, nowMs: number = Date.now()): SentRequestView {
   const state = requestState(record, snap);
-  const progress = projectProgress(snap.project ?? { tasks: [] });
+  const progress = projectUnitProgress(snap.project ?? { tasks: [] });
   const closed = snap.project?.finishedAt ?? snap.tasks.find((task) => task.id === record.projectId && !isActiveTaskStatus(task.status))?.updatedAt;
   const stage = stageOf(snap.project, snap.agentName);
   const sprint = sprintLabel(snap.project, nowMs);
@@ -96,6 +97,7 @@ export function requestView(record: SentRequest, snap: RequestSnapshot, nowMs: n
     state,
     tasksDone: progress.done,
     tasksTotal: progress.total,
+    unit: progress.unit,
     waitingForYou: waitingItemsOf(record, snap).length,
     ...(sprint && state !== "concluido" && state !== "cancelado" && state !== "falhou" ? { sprint } : {}),
     ...(delivery ? { deliveryWaiting: delivery } : {}),
@@ -105,9 +107,12 @@ export function requestView(record: SentRequest, snap: RequestSnapshot, nowMs: n
   };
 }
 
+/** "tasks" ou "modules": a unidade do progresso do pedido. */
+const unitWord = (view: Pick<SentRequestView, "unit">): string => (view.unit === "modulos" ? "modules" : "tasks");
+
 /** Uma linha por pedido (para `list_sent_requests` e o delta do contexto do Cyno). */
 export function requestLine(view: SentRequestView): string {
-  const tasks = view.tasksTotal > 0 ? ` · ${view.tasksDone}/${view.tasksTotal} tasks` : "";
+  const tasks = view.tasksTotal > 0 ? ` · ${view.tasksDone}/${view.tasksTotal} ${unitWord(view)}` : "";
   const waiting = view.waitingForYou > 0 ? ` · waiting for the owner (${view.waitingForYou})` : "";
   return `- ${view.projectId} → ${view.workspace}: "${shorten(view.title, 80)}" — ${SENT_REQUEST_STATE_LABELS[view.state]}${tasks}${waiting}${view.stage ? ` · now: ${view.stage}` : ""}${view.sprint ? ` · ${view.sprint}` : ""}${view.deliveryWaiting ? ` · ${view.deliveryWaiting} delivery waits for the owner's OK` : ""}`;
 }
@@ -118,7 +123,7 @@ const TASK_STATUS_EN: Record<string, string> = { a_fazer: "to do", em_andamento:
 export function requestDetail(view: SentRequestView, snap: RequestSnapshot): string {
   const { project } = snap;
   const lines = [
-    `Request ${view.projectId} "${view.title}" → workspace ${view.workspace} (${view.workspaceName}): ${SENT_REQUEST_STATE_LABELS[view.state]}${view.tasksTotal > 0 ? `, ${view.tasksDone}/${view.tasksTotal} tasks done` : ""}.`,
+    `Request ${view.projectId} "${view.title}" → workspace ${view.workspace} (${view.workspaceName}): ${SENT_REQUEST_STATE_LABELS[view.state]}${view.tasksTotal > 0 ? `, ${view.tasksDone}/${view.tasksTotal} ${unitWord(view)} done` : ""}.`,
     `Sent ${view.sentAt.slice(0, 16).replace("T", " ")}${view.dueAt ? ` · due ${view.dueAt.slice(0, 10)}` : ""}${project && project.priority !== "normal" ? ` · priority ${project.priority}` : ""}${project?.status ? ` · project status: ${project.status}` : ""}.`,
   ];
   if (!project || project.tasks.length === 0) {
@@ -138,9 +143,9 @@ export function requestDetail(view: SentRequestView, snap: RequestSnapshot): str
       const pad = "  ".repeat(depth);
       const kids = childrenOf(project, task.ref);
       if (task.group || kids.length > 0) {
-        const progress = treeProgress(project, task.ref);
+        const progress = moduleProgress(project, task.ref);
         const state = statusOf(project, task);
-        lines.push(`${pad}- ${task.ref} «${shorten(task.title, 80)}»${task.group ? " (deliverable)" : ""} [${TASK_STATUS_EN[state] ?? state}] ${progress.done}/${progress.total}; ${assigneesOf(project, task).map((id) => snap.agentName(id) ?? id).join(", ")}`);
+        lines.push(`${pad}- ${task.ref} «${shorten(task.title, 80)}»${task.group ? " (deliverable)" : ""} [${TASK_STATUS_EN[state] ?? state}] ${progress.done}/${progress.total}; ${assigneesOf(project, task).map((id) => snap.agentName(id) ?? id).join(", ")}${task.dependsOn.length > 0 ? `; depends on ${task.dependsOn.join(", ")}` : ""}`);
         for (const child of kids) walk(child, depth + 1);
         return;
       }

@@ -1,4 +1,4 @@
-import { agentAddress, ASK_LIMITS, effectiveAccess, isMaestroAgent, isoFromInput, PROJECT_INPUT_PRIORITIES, type DayStats, type OfficeState, type TodayView } from "@cyno/shared";
+import { agentAddress, ASK_LIMITS, effectiveAccess, isMaestroAgent, isoFromInput, PROJECT_INPUT_PRIORITIES, type DayStats, type OfficeState, type PlanApprovalRule, type PlanApprovalSettings, type TodayView } from "@cyno/shared";
 import { z } from "zod";
 import type { ForYouService } from "../workspace/for-you/service";
 import type { CardSummaryStore } from "../workspace/card/summary-store";
@@ -40,8 +40,13 @@ export type OfficeToolsDeps = {
   state: { read(): OfficeState };
   maestro: Pick<CliMaestro, "team" | "openRequest" | "delegate" | "viewTask" | "conclude" | "requestApproval" | "askQuestions" | "requestFor"> & Partial<Pick<CliMaestro, "cancelRequest">>;
   runner: Pick<CliAgentRunner, "deliver" | "progress" | "requestApproval" | "requestInformation" | "currentTaskId" | "hasActive" | "holdForHelp">;
-  /** Planos dos pedidos (create_plan & cia do Maestro; get_task e request_help dos agentes). */
-  plans?: Pick<ProjectService, "propose" | "addTasks" | "createSprint" | "updateSprint" | "moveTask" | "assignTask" | "reassignTask" | "closeSprint" | "sprintIdOf" | "decideTask" | "describe" | "workerView" | "help" | "helpReleased" | "handoff" | "updateProject" | "recordChecklist">;
+  /** Planos e projetos (create_project & cia do Maestro; get_task e request_help dos agentes). */
+  plans?: Pick<ProjectService, "propose" | "addTasks" | "createSprint" | "updateSprint" | "moveTask" | "updateTask" | "deleteTask" | "releaseWork" | "holdWork" | "setReleasePace" | "setProjectStatus" | "assignTask" | "reassignTask" | "closeSprint" | "sprintIdOf" | "decideTask" | "describe" | "workerView" | "help" | "helpReleased" | "handoff" | "updateProject" | "recordChecklist">;
+  /** Regra de aprovação de projetos do workspace (`set_plan_approval_rule` e contexto do retorno de `create_project`). */
+  planApproval?: {
+    get: () => PlanApprovalSettings;
+    set: (rule: PlanApprovalRule, ownerQuote: string) => Promise<PlanApprovalSettings>;
+  };
   /** Tipos do "Para você" (o `approval_type` do request_approval e o set_approval_type do Maestro). */
   forYouTypes: ApprovalTypeDeps;
   /** Itens do "Para você" (list/update/cancel_pending_item): o Maestro em todos, o agente só nos dele. */
@@ -119,7 +124,7 @@ export function officeToolsFor(agentId: string, deps: OfficeToolsDeps): McpTool[
   return [...(isMaestroAgent(state, agent) ? maestroTools(deps) : workerTools(agentId, deps)), ...agenda, ...brain, ...browser, ...media, ...board, ...mural];
 }
 
-function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote, plans, manage, routines, media, cardSummary, cyno, today, dayStats, metrics, reports, retro, brainOrganize }: OfficeToolsDeps): McpTool[] {
+function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote, plans, planApproval, manage, routines, media, cardSummary, cyno, today, dayStats, metrics, reports, retro, brainOrganize }: OfficeToolsDeps): McpTool[] {
   return [
     defineTool({
       name: "get_team",
@@ -215,7 +220,7 @@ function maestroTools({ state, maestro, forYouTypes, forYou, structure, teamNote
     }),
     ...(forYou ? forYouTools({ actor: "maestro" }, { state, forYou, types: forYouTypes, ...(media ? { media: media.media } : {}) }) : []),
     ...(maestro.cancelRequest ? [cancelRequestTool(maestro.cancelRequest.bind(maestro))] : []),
-    ...(plans ? planTools(maestro, plans) : []),
+    ...(plans ? planTools(maestro, plans, planApproval) : []),
     ...(routines ? maestroRoutineTools({ state, ...routines }) : []),
     ...(today ? [maestroTodayTool(today)] : []),
     ...(dayStats ? [maestroDayStatsTool(dayStats)] : []),

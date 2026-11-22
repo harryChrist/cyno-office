@@ -137,6 +137,9 @@ describe("busca por nome da opção", () => {
     expect(searchSettings("paralelo").map((option) => option.id)).toEqual(["ws-paralelo"]);
     expect(searchSettings("localhost").map((option) => option.id)).toContain("ws-rede-local");
     expect(sectionsWithMatches(searchSettings("gemini"))).toEqual(new Set(["motores", "modelos-padrao", "modelos"]));
+    for (const term of ["aprovação", "aprovar", "plano", "autonomia"]) {
+      expect(searchSettings(term).map((option) => option.id)).toContain("ws-aprovacao-planos");
+    }
   });
 });
 
@@ -158,6 +161,9 @@ describe("endereços das seções novas e antigas", () => {
     expect(settingsSectionFromHash("#/ws1/configuracoes/aparencia")).toBe("escritorio");
     expect(settingsSectionFromHash("#/ws1/configuracoes/armazenamento")).toBe("armazenamento");
     for (const alias of ["disco", "cache", "espaco"]) expect(settingsSectionFromHash(`#/ws1/configuracoes/${alias}`)).toBe("armazenamento");
+    for (const alias of ["plano", "planos", "aprovar", "autonomia", "aprovacao-planos", "plan-approval"]) {
+      expect(settingsSectionFromHash(`#/ws1/configuracoes/${alias}`)).toBe("distribuicao");
+    }
     expect(settingsSectionFromHash("#/configuracoes/plataforma")).toBe("senha");
   });
 });

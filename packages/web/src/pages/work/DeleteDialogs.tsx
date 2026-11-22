@@ -2,7 +2,8 @@ import type { Project } from "@cyno/shared";
 import { api } from "../../api/client";
 import { ConfirmDialog } from "../../ui/widgets";
 import { DELETE_TASK_NOTE } from "./avulsasCleanupView";
-import { projectTasksText, runningNote } from "./projectDeleteView";
+import { deleteTaskNodeInfo, projectTasksText, runningNote } from "./projectDeleteView";
+import { syncProjectResponse } from "./useTaskActions";
 
 /**
  * Confirmação curta para apagar de vez uma tarefa avulsa terminada. O 409 do servidor (tarefa que não está
@@ -23,11 +24,43 @@ export function DeleteAvulsaTaskDialog({ projectId, taskRef, title, onClose, onD
       confirmLabel="Apagar tarefa"
       pendingLabel="Apagando…"
       onConfirm={async () => {
-        await api.deleteAvulsaTask(projectId, taskRef);
+        syncProjectResponse(await api.deleteTaskNode(projectId, taskRef));
         onDeleted?.();
       }}
       onClose={onClose}
       testId="avulsas-delete-dialog"
+    />
+  );
+}
+
+/**
+ * Confirmação para apagar um item (tarefa, subtarefa ou módulo com tudo dentro) em um projeto comum.
+ * Conta a subárvore por `subtreeRefs` e desabilita a confirmação se houver algo em andamento ou esperando você.
+ */
+export function DeleteTaskNodeDialog({ project, taskRef, onClose, onDeleted }: { project: Project; taskRef: string; onClose: () => void; onDeleted?: (refs: readonly string[]) => void }) {
+  const info = deleteTaskNodeInfo(project, taskRef);
+  return (
+    <ConfirmDialog
+      title={info.title}
+      message={
+        <div className="w-del">
+          <p data-testid="task-node-delete-summary">{info.summary}</p>
+          {info.note && (
+            <p className="w-del__warn" role="status" data-testid="task-node-delete-blocked">
+              {info.note}
+            </p>
+          )}
+        </div>
+      }
+      confirmLabel="Apagar"
+      pendingLabel="Apagando…"
+      disabled={info.blocked}
+      onConfirm={async () => {
+        syncProjectResponse(await api.deleteTaskNode(project.id, taskRef));
+        onDeleted?.(info.refs);
+      }}
+      onClose={onClose}
+      testId="task-node-delete-dialog"
     />
   );
 }

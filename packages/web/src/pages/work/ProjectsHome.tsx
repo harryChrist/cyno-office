@@ -178,6 +178,11 @@ function ProjectRow({ entry, agents }: { entry: ProjectEntry; agents: ReadonlyMa
                 {entry.state.label}
               </span>
             )}
+            {entry.unreleased && (
+              <span className="ph-state ph-state--planned" data-testid={`work-row-planned-${project.id}`}>
+                Planejado
+              </span>
+            )}
             {project.origin === "cyno" && <span className="w-kind w-kind--cyno">Pedido pelo Cyno</span>}
             {project.joint && <span className="w-kind w-kind--cyno">Projeto conjunto</span>}
             {project.mode.kind === "automatico" && !fixed && <span className="w-kind w-kind--auto">Automático</span>}
@@ -195,10 +200,8 @@ function ProjectRow({ entry, agents }: { entry: ProjectEntry; agents: ReadonlyMa
             <span className="ph-none">Sem tarefas</span>
           ) : (
             <>
-              <ProgressBar value={ratio} label="Tarefas concluídas" />
-              <span className="ph-progress__text">
-                {entry.progress.done}/{entry.progress.total}
-              </span>
+              <ProgressBar value={ratio} label={entry.progress.unit === "modulos" ? "Módulos concluídos" : "Tarefas concluídas"} />
+              <span className="ph-progress__text">{entry.progressText}</span>
             </>
           )}
         </span>

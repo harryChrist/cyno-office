@@ -7,7 +7,7 @@ import { ROOM_THEME_IDS } from "./themes";
 import type { BrainContext } from "./brain";
 import { brainOrganizeDecisionSchema, brainOrganizePlanSchema } from "./brain-organize";
 import { FOR_YOU_SOURCE_KINDS, FOR_YOU_SOURCE_LIMITS, FOR_YOU_ACTORS, FOR_YOU_DECISION_STATUSES, FOR_YOU_ID_PATTERN, FOR_YOU_KINDS, FOR_YOU_QUESTION_LIMITS, FOR_YOU_STATUSES, REJECTION_CATEGORIES, type ForYouItem, type ForYouSource } from "./for-you";
-import { BLOCKED_SPANS_MAX, BLOCKED_TYPES, DISPATCH_LIMITS, HANDOFF_INTENTS, HELP_KINDS, PROJECT_BRIEF_MAX, PROJECT_KINDS, PROJECT_LIMITS, PROJECT_ORIGINS, PROJECT_PRIORITIES, PROJECT_STATUSES, PROJECT_STEP_STATUSES, PROJECT_TASK_STATUSES, type Project } from "./projects";
+import { BLOCKED_SPANS_MAX, BLOCKED_TYPES, DISPATCH_LIMITS, HANDOFF_INTENTS, HELP_KINDS, PLAN_APPROVAL_NOTE_BY, PLAN_APPROVAL_RULES, PROJECT_APPROVAL_BY, PROJECT_BRIEF_MAX, PROJECT_KINDS, PROJECT_LIMITS, PROJECT_ORIGINS, PROJECT_SAFETY, PROJECT_PRIORITIES, PROJECT_STATUSES, PROJECT_STEP_STATUSES, PROJECT_TASK_STATUSES, RELEASE_PACE_LIMITS, RELEASE_PACE_UNITS, type PlanApprovalSettings, type Project } from "./projects";
 import { SPRINT_STATUSES, type Sprint } from "./sprints";
 import { forYouTypeIdSchema, type ForYouTypeDef } from "./for-you-types";
 import { gestaoPatchSchema } from "./reports";
@@ -120,6 +120,22 @@ export const maestroSessionNameSchema = z
   // eslint-disable-next-line no-control-regex
   .regex(/^[^\u0000-\u001f\u007f]*$/, "O nome da sessão não pode ter quebras de linha nem caracteres de controle");
 
+export const planApprovalRuleSchema = z.enum(PLAN_APPROVAL_RULES);
+export const planApprovalNoteSchema = z.object({
+  quote: z.string().min(1).max(300),
+  at: z.iso.datetime(),
+  by: z.enum(PLAN_APPROVAL_NOTE_BY),
+});
+export const planApprovalSettingsSchema = z.object({
+  rule: planApprovalRuleSchema,
+  note: planApprovalNoteSchema.optional(),
+}) satisfies z.ZodType<PlanApprovalSettings>;
+/** PUT /api/w/:ws/settings/plan-approval: o dono escolhe a regra de aprovação (e limpa a nota do Maestro). */
+export const updatePlanApprovalBodySchema = z.strictObject({ rule: planApprovalRuleSchema });
+export type UpdatePlanApprovalBody = z.input<typeof updatePlanApprovalBodySchema>;
+export type PlanApprovalResponse = PlanApprovalSettings;
+export const PLAN_APPROVAL_SETTINGS_PATH = "/settings/plan-approval";
+
 export const workspaceSchema = z.object({
   id: idSchema,
   name: workspaceNameSchema,
@@ -130,6 +146,8 @@ export const workspaceSchema = z.object({
   gestao: z.object({ dailyAt: z.string().nullable().optional(), weekly: z.string().optional(), ai: z.object({ daily: z.boolean().optional(), weekly: z.boolean().optional() }).optional() }).optional(),
   access: workspaceAccessSchema.optional(),
   folders: z.array(workFolderSchema).optional(),
+  planApproval: planApprovalRuleSchema.optional(),
+  planApprovalNote: planApprovalNoteSchema.optional(),
 }) satisfies z.ZodType<Workspace>;
 
 /** data/workspaces.json: a lista de workspaces. */
@@ -488,6 +506,7 @@ export const projectTaskSchema = z.object({
   carriedFrom: z.string().max(12).optional(),
   carryCount: z.number().int().min(0).optional(),
   pinnedAt: z.iso.datetime().optional(),
+  released: z.boolean().optional(),
   meta: z
     .object({
       requestId: idSchema,
@@ -503,6 +522,7 @@ export const projectTaskSchema = z.object({
 /** Projeto como gravado em projects/<id>.json (campos novos com padrão: lê o formato antigo do plano). */
 export const projectSchema = z.object({
   id: idSchema,
+  requestId: idSchema.optional(),
   kind: z.enum(PROJECT_KINDS).default("projeto"),
   title: z.string(),
   summary: z.string().optional(),
@@ -531,6 +551,7 @@ export const projectSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   approvedAt: z.iso.datetime().optional(),
+  approval: z.object({ by: z.enum(PROJECT_APPROVAL_BY), at: z.iso.datetime(), quote: z.string().optional() }).optional(),
   finishedAt: z.iso.datetime().optional(),
   doneNotified: z.boolean().optional(),
   brief: z.string().max(PROJECT_BRIEF_MAX).optional(),
@@ -541,6 +562,14 @@ export const projectSchema = z.object({
   pausedAt: z.iso.datetime().optional(),
   pinnedAt: z.iso.datetime().optional(),
   nextRef: z.number().int().min(1).optional(),
+  releasePace: z
+    .object({
+      perDay: z.number().int().min(RELEASE_PACE_LIMITS.perDay.min).max(RELEASE_PACE_LIMITS.perDay.max),
+      unit: z.enum(RELEASE_PACE_UNITS),
+      startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      given: z.object({ day: z.string(), count: z.number().int().min(0) }).optional(),
+    })
+    .optional(),
 }) satisfies z.ZodType<Project, unknown>;
 
 /** @deprecated use projectSchema. */
@@ -557,13 +586,41 @@ const paceSchema = z.strictObject({
   maxParallel: z.number().int().min(1).max(10).optional(),
 });
 
-/** PATCH /projects/:id: o que o usuário (ou o Maestro) muda no projeto; `null` limpa prazo, começo e ritmo. */
+/** Liberação diária pedida pelo usuário (o `given`, a conta do dia, é do servidor e nunca vem do cliente). */
+export const releasePaceBodySchema = z.strictObject({
+  perDay: z.number().int().min(RELEASE_PACE_LIMITS.perDay.min).max(RELEASE_PACE_LIMITS.perDay.max),
+  unit: z.enum(RELEASE_PACE_UNITS),
+  startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD").optional(),
+});
+export type ReleasePaceBody = z.infer<typeof releasePaceBodySchema>;
+
+/** POST /projects/:id/release: liberar tarefas/módulos (`refs`) ou o projeto inteiro (`all`); `withPrerequisites` leva o que elas esperam junto. */
+export const projectReleaseBodySchema = z
+  .strictObject({
+    refs: z.array(z.string().min(1).max(12)).min(1).max(PROJECT_SAFETY.perCall).optional(),
+    all: z.boolean().optional(),
+    withPrerequisites: z.boolean().optional(),
+  })
+  .refine((body) => (body.refs !== undefined) !== (body.all === true), { message: "Diga o que liberar: `refs` ou `all`", path: ["refs"] });
+export type ProjectReleaseBody = z.infer<typeof projectReleaseBodySchema>;
+
+/** POST /projects/:id/hold: volta a Planejada o que ainda não começou. */
+export const projectHoldBodySchema = z.strictObject({ refs: z.array(z.string().min(1).max(12)).min(1).max(PROJECT_SAFETY.perCall) });
+export type ProjectHoldBody = z.infer<typeof projectHoldBodySchema>;
+
+/** POST /plans/:id/approve: o que fazer com as tarefas ao aprovar (ausente = mantém o que o Maestro definiu, ou libera tudo em plano legado; `all` = todas liberadas; `none` = todas Planejadas). */
+export const planApproveBodySchema = z.strictObject({ release: z.enum(["all", "none"]).optional() });
+export type PlanApproveBody = z.infer<typeof planApproveBodySchema>;
+
+/** PATCH /projects/:id: o que o usuário (ou o Maestro) muda no projeto; `null` limpa prazo, começo, ritmo e liberação diária. */
 export const projectPatchBodySchema = z.strictObject({
   title: z.string().trim().min(1).max(PROJECT_LIMITS.title).optional(),
   priority: z.enum(PROJECT_PRIORITIES).optional(),
   startAt: z.union([z.iso.datetime({ offset: true }), z.null()]).optional(),
   dueAt: z.union([z.iso.datetime({ offset: true }), z.null()]).optional(),
   pace: z.union([paceSchema, z.null()]).optional(),
+  /** Liberação diária (objeto liga, `null` desliga). */
+  releasePace: z.union([releasePaceBodySchema, z.null()]).optional(),
   status: z.enum(["ativo", "pausado"]).optional(),
   /** "Isso primeiro": true fixa o projeto no topo da fila; false solta. */
   pinned: z.boolean().optional(),
@@ -619,6 +676,8 @@ export const forYouDecisionBodySchema = z
     rule: z.strictObject({ text: z.string().trim().min(1).max(FOR_YOU_RULE_LIMITS.text).optional(), scope: forYouRuleScopeSchema.optional() }).optional(),
     /** Cartão "organizacao", ao aprovar: as ações da proposta que o dono desmarcou. */
     organize: brainOrganizeDecisionSchema.optional(),
+    /** Cartão "plano", ao aprovar: `all` libera todas as tarefas (padrão), `none` deixa todas Planejadas. */
+    release: z.enum(["all", "none"]).optional(),
     /** Cartão "sprint", ao devolver: as tarefas entregues (`ref`) que voltam como retrabalho na sprint ativa. */
     returnRefs: z.array(z.string().max(12)).max(200).optional(),
   })
@@ -847,7 +906,7 @@ export const taskCreateBodySchema = z.strictObject({
   dueAt: z.iso.datetime({ offset: true }).optional(),
   labels: z.array(z.string().max(32)).max(PROJECT_LIMITS.labelsPerTask).optional(),
   /** "Depois de": refs das tarefas (irmãs) que ela espera; a entrega delas chega ao agente. */
-  dependsOn: z.array(z.string().max(12)).max(PROJECT_LIMITS.subtasksPerTask).optional(),
+  dependsOn: z.array(z.string().max(12)).max(PROJECT_SAFETY.perCall).optional(),
 });
 export type TaskCreateBody = z.infer<typeof taskCreateBodySchema>;
 
@@ -862,7 +921,7 @@ export const taskPatchBodySchema = z.strictObject({
   labels: z.array(z.string().max(32)).max(PROJECT_LIMITS.labelsPerTask).optional(),
   doneWhen: z.array(z.string().trim().min(1).max(500)).max(20).optional(),
   /** A lista inteira de "depois de" (mande sem uma ref para tirá-la). */
-  dependsOn: z.array(z.string().max(12)).max(PROJECT_LIMITS.subtasksPerTask).optional(),
+  dependsOn: z.array(z.string().max(12)).max(PROJECT_SAFETY.perCall).optional(),
   status: z.enum(["cancelada", "refazer"]).optional(),
 });
 export type TaskPatchBody = z.infer<typeof taskPatchBodySchema>;

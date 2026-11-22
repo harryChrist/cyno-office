@@ -1,6 +1,18 @@
 import type { Project, TaskCreateBody, TaskMoveBody, TaskPatchBody } from "@cyno/shared";
 import { useCallback, useMemo, useState } from "react";
-import { api, describeError } from "../../api/client";
+import { api, describeError, type ReleaseBody } from "../../api/client";
+import { useWorkStore } from "../../store/workStore";
+
+/** Extrai o projeto da resposta (`{ project }` ou `Project`) e aplica no store local na hora. */
+export function syncProjectResponse(response: { project: Project } | Project | undefined): Project | undefined {
+  if (!response) return undefined;
+  const project = "project" in response ? response.project : response;
+  if (project && typeof project.id === "string" && Array.isArray(project.tasks)) {
+    useWorkStore.getState().apply({ type: "project:upserted", project });
+    return project;
+  }
+  return undefined;
+}
 
 /**
  * As ações do dono sobre a árvore (criar, editar, mover, duplicar, arquivar, etiquetar, cancelar), com o erro
@@ -18,6 +30,10 @@ export type TaskActions = {
   archive: (ref: string) => Promise<boolean>;
   cancel: (ref: string) => Promise<boolean>;
   label: (ref: string, name: string) => Promise<boolean>;
+  /** Libera o que está Planejado (módulo = tudo dentro; `withPrerequisites` leva o que esperam). */
+  release: (body: ReleaseBody) => Promise<boolean>;
+  /** Segura de volta (Planejada) o que ainda não começou. */
+  hold: (refs: string[]) => Promise<boolean>;
   /** Tarefa do Avulsas -> projeto próprio; devolve o projeto novo. */
   toProject: (ref: string) => Promise<Project | undefined>;
   /** Projeto de uma tarefa só -> tarefa do Avulsas. */
@@ -47,13 +63,19 @@ export function useTaskActions(projectId: string): TaskActions {
       error,
       busy,
       clearError,
-      create: async (body) => (await run(() => api.createProjectTask(projectId, body)))?.ref,
+      create: async (body) => {
+        const created = await run(() => api.createProjectTask(projectId, body));
+        if (created) syncProjectResponse(created);
+        return created?.ref;
+      },
       update: async (ref, body) => (await run(() => api.updateProjectTask(projectId, ref, body))) !== undefined,
       move: async (ref, body) => (await run(() => api.moveProjectTask(projectId, ref, body))) !== undefined,
       duplicate: async (ref) => (await run(() => api.duplicateProjectTask(projectId, ref)))?.ref,
       archive: async (ref) => (await run(() => api.archiveProjectTask(projectId, ref))) !== undefined,
       cancel: async (ref) => (await run(() => api.updateProjectTask(projectId, ref, { status: "cancelada" }))) !== undefined,
       label: async (ref, name) => (await run(() => api.labelProjectTask(projectId, ref, name))) !== undefined,
+      release: async (body) => syncProjectResponse(await run(() => api.releaseWork(projectId, body))) !== undefined,
+      hold: async (refs) => syncProjectResponse(await run(() => api.holdWork(projectId, refs))) !== undefined,
       toProject: async (ref) => (await run(() => api.convertTaskToProject(ref)))?.project,
       toTask: async () => (await run(() => api.convertProjectToTask(projectId))) !== undefined,
     }),

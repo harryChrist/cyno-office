@@ -13,7 +13,7 @@ import { AvatarSprite } from "./AvatarSprite";
 import { AgentUsageChips } from "./AgentUsageChips";
 import { AgentForm } from "./EntityForms";
 import { agentPatch, agentValues, isEmptyPatch, type AgentFormValues } from "./formModels";
-import { AGENT_STATUS_LABELS, countLabel } from "./format";
+import { agentStatusLabel, countLabel } from "./format";
 import { useWidePanel } from "./panelWidth";
 import { agentTasks, currentWork, findAgentDetails, type AgentDetails } from "./selectors";
 import { MaestroCoordination } from "./MaestroCoordination";
@@ -123,7 +123,7 @@ export function AgentPanel({ office, agentId }: { office: OfficeState; agentId: 
           <p className="agent-hero__role" data-testid="agent-role">
             {agent.role}
           </p>
-          <StatusBadge status={agent.status} label={AGENT_STATUS_LABELS[agent.status]} testId="agent-status" />
+          <StatusBadge status={agent.status} label={agentStatusLabel(agent, office.tasks)} testId="agent-status" />
           <UnavailableBadge agent={agent} />
           {agentEngine(agent) === "freebuff" && <FreebuffHourChip agent={agent} />}
           <dl className="agent-hero__meta">

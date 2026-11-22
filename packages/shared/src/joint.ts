@@ -103,6 +103,8 @@ export type JointPartView = {
   stage?: string;
   tasksDone?: number;
   tasksTotal?: number;
+  /** A unidade de `tasksDone`/`tasksTotal` (ausente = tarefas). */
+  unit?: "modulos" | "tarefas";
   /** Partes de que esta ainda espera ("P1"). */
   waitingFor: string[];
   projectId?: string;

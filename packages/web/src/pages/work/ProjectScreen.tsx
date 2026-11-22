@@ -1,16 +1,17 @@
-import { assigneesOf, childrenOf, isAvulsas, isProjectOpen, leavesOf, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type ForYouItem, type Project } from "@cyno/shared";
+import { assigneesOf, childrenOf, isAvulsas, isProjectOpen, leavesOf, projectUnitProgress, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type ForYouItem, type Project, type UnitProgress } from "@cyno/shared";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForYouFocus } from "../../store/forYouFocus";
 import { useNavStore } from "../../store/navStore";
 import { useOfficeStore } from "../../store/officeStore";
-import { ConfirmDialog, ErrorText, ProgressBar } from "../../ui/widgets";
+import { ConfirmDialog, ErrorText, Modal, ProgressBar, Switch } from "../../ui/widgets";
 import { JointPartPanel } from "../joint/JointCard";
 import { ApprovalCard } from "./ApprovalCard";
 import { AvulsasCleanupDialog } from "./AvulsasCleanupDialog";
-import { DeleteAvulsaTaskDialog, DeleteProjectDialog } from "./DeleteDialogs";
+import { DeleteAvulsaTaskDialog, DeleteProjectDialog, DeleteTaskNodeDialog } from "./DeleteDialogs";
 import { ModeCard } from "./ModeCard";
 import { PlanDecision } from "./PlanDecision";
 import { canDeleteProject } from "./projectDeleteView";
+import { canCompleteProject, canReopenProject, COMPLETE_PROJECT_MESSAGE, COMPLETE_PROJECT_TITLE, isProjectEditable } from "./projectLifecycleView";
 import { ProjectControls } from "./ProjectControls";
 import { DueForm } from "./TaskTree";
 import { ActivityTab, DeliveriesTab } from "./ProjectTabs";
@@ -19,12 +20,13 @@ import { TaskPanel, itemsOfTask } from "./TaskPanel";
 import { TaskTree } from "./TaskTree";
 import { WorkBoard } from "./WorkBoard";
 import { useIsMobile } from "./useIsMobile";
-import { useTaskActions } from "./useTaskActions";
+import { useTaskActions, syncProjectResponse } from "./useTaskActions";
 import { AvatarStack, Popover, PriorityFlag } from "./treeParts";
 import { brasiliaShortDate } from "./workTime";
 import { openText } from "./projectsView";
-import { PROJECT_TABS, PROJECT_TAB_LABELS, workSub, type ProjectTab } from "./workRoute";
-import { buildRows, buildWorkBoard, projectState } from "./workView";
+import { PACE_MAX_PER_DAY, paceBodyOf, paceFormOf, paceText, releaseSummaryText, todayKey, type PaceForm, type PaceStart } from "./releaseView";
+import { PROJECT_TAB_LABELS, projectTabsFor, resolveProjectTab, workSub, type ProjectTab } from "./workRoute";
+import { buildRows, buildWorkBoard, planCardCopy, projectApprovalBadge, projectState, unitProgressText } from "./workView";
 import { api } from "../../api/client";
 import { PageTabs } from "../PageTabs";
 import { useAsyncAction } from "../../ui/useAsyncAction";
@@ -94,11 +96,11 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
   const [deletingTask, setDeletingTask] = useState<{ ref: string; title: string } | null>(null);
   const askDelete = (ref: string) => setDeletingTask({ ref, title: project.tasks.find((candidate) => candidate.ref === ref)?.title ?? ref });
   const open = isProjectOpen(project);
-  const editable = open && project.status !== "ajustando";
+  const editable = isProjectEditable(project);
   const live = useMemo(() => ({ tasks: project.tasks.filter((task) => !task.archived) }), [project.tasks]);
   const leaves = useMemo(() => leavesOf(live), [live]);
-  const done = leaves.filter((task) => task.status === "concluida" && !task.skipped).length;
-  const counted = leaves.filter((task) => task.status !== "cancelada" && !(task.status === "concluida" && task.skipped)).length;
+  // O cabeçalho conta módulos de primeiro nível ("3 de 8 módulos"); sem módulo, tarefas ("12 de 40 tarefas").
+  const unit = useMemo(() => projectUnitProgress(live), [live]);
   const agentIds = useMemo(() => {
     const ids: string[] = [];
     for (const root of childrenOf(live)) for (const id of assigneesOf(live, root, Number.POSITIVE_INFINITY)) if (!ids.includes(id)) ids.push(id);
@@ -110,10 +112,16 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
     () => (forYou ?? []).filter((item) => item.status === "pendente" && item.kind !== "plano" && (item.projectId === project.id || project.tasks.some((task) => task.steps.some((step) => step.taskId !== undefined && step.taskId === item.taskId)))),
     [forYou, project],
   );
+  const effectiveTab = resolveProjectTab(tab, project);
+  const visibleTabs = useMemo(() => projectTabsFor(project).map((id) => ({ id, label: PROJECT_TAB_LABELS[id] })), [project]);
+  useEffect(() => {
+    if (tab !== effectiveTab) go(project.id, effectiveTab, taskRef, true);
+  }, [project.id, tab, effectiveTab, taskRef]);
   const selected = taskRef ? project.tasks.find((task) => task.ref === taskRef && !task.archived) : undefined;
   const select = useCallback((ref: string) => go(project.id, "tarefas", ref), [project.id]);
-  const closePanel = useCallback(() => go(project.id, tab), [project.id, tab]);
+  const closePanel = useCallback(() => go(project.id, effectiveTab), [project.id, effectiveTab]);
   const works = office?.tasks ?? [];
+  const planCard = planCardCopy(project);
 
   // Quadro: só as folhas (a tela de antes, agora dentro da aba Tarefas).
   const board = useMemo(() => {
@@ -128,7 +136,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
   };
 
   return (
-    <div className={`ps${selected && tab === "tarefas" ? " ps--panel" : ""}`} data-testid="project-screen" data-project-id={project.id}>
+    <div className={`ps${selected && effectiveTab === "tarefas" ? " ps--panel" : ""}`} data-testid="project-screen" data-project-id={project.id}>
       <BackButton />
       <ProjectHeader
         project={project}
@@ -136,12 +144,12 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
         editable={editable}
         stateLabel={state.label}
         stateTone={state.tone}
-        done={done}
-        counted={counted}
+        unit={unit}
         openCount={leaves.filter((task) => !["concluida", "cancelada", "falhou"].includes(task.status)).length}
         agentIds={agentIds}
         agents={agents}
         waiting={pending.length}
+        now={now}
         onConvertToTask={() => setConverting("projeto")}
         onCleanup={() => setCleaning(true)}
         onDelete={() => setDeletingProject(true)}
@@ -149,12 +157,12 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
       <PageTabs
         flush
         label="Seções do projeto"
-        tabs={PROJECT_TABS.map((id) => ({ id, label: PROJECT_TAB_LABELS[id] }))}
-        active={tab}
+        tabs={visibleTabs}
+        active={effectiveTab}
         onSelect={(id) => go(project.id, id)}
         testIdPrefix="project-tab"
         trailing={
-          tab === "tarefas" ? (
+          effectiveTab === "tarefas" ? (
             <div className="w-seg" role="group" aria-label="Visão das tarefas">
               <button type="button" aria-pressed={view === "lista"} onClick={() => setView("lista")} data-testid="work-view-lista">
                 Lista
@@ -168,13 +176,13 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
       />
 
       <div className="ps-content" role="tabpanel">
-        {tab === "tarefas" && (
+        {effectiveTab === "tarefas" && (
           <>
             {project.status === "ajustando" && <p className="w-notice">O Maestro está ajustando o plano{project.feedback ? `: “${project.feedback}”` : "."} Espere ele terminar para mexer nas tarefas.</p>}
             {project.status === "proposto" && (
               <section className="w-plan" data-testid="work-plan-card">
-                <h3 className="w-plan__title">Plano esperando OK{project.version > 1 ? ` · versão ${project.version}` : ""}</h3>
-                <p className="w-plan__text">Nada começa antes da sua aprovação. Você pode ajustar as tarefas, os responsáveis e as sprints antes de aprovar{project.sprints?.length ? "; a primeira sprint começa na data dela (ou agora, se a data já passou)" : ""}.</p>
+                <h3 className="w-plan__title">{planCard.title}</h3>
+                <p className="w-plan__text">{planCard.text}</p>
                 <PlanDecision plan={project} compact />
                 {planItem && (
                   <button type="button" className="ui-link" onClick={() => useForYouFocus.getState().open(planItem.id)}>
@@ -221,7 +229,8 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
                   editable={editable}
                   canCreate={!fixed}
                   actions={actions}
-                  {...(fixed ? { onConvert: (ref: string) => setConverting(ref), onDelete: askDelete } : {})}
+                  onDelete={askDelete}
+                  {...(fixed ? { onConvert: (ref: string) => setConverting(ref) } : {})}
                 />
               </>
             ) : (
@@ -229,12 +238,12 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
             )}
           </>
         )}
-        {tab === "sprints" && <SprintsTab project={project} agents={agents} editable={editable && !fixed} fixed={fixed} now={now} onOpenTask={select} />}
-        {tab === "entregas" && <DeliveriesTab project={project} agents={agents} onOpenTask={select} />}
-        {tab === "atividade" && <ActivityTab project={project} agents={agents} />}
+        {effectiveTab === "sprints" && <SprintsTab project={project} agents={agents} editable={open && editable && !fixed} fixed={fixed} now={now} onOpenTask={select} />}
+        {effectiveTab === "entregas" && <DeliveriesTab project={project} agents={agents} onOpenTask={select} />}
+        {effectiveTab === "atividade" && <ActivityTab project={project} agents={agents} />}
       </div>
 
-      {selected && tab === "tarefas" && (
+      {selected && effectiveTab === "tarefas" && (
         <TaskPanel
           key={`${project.id}:${selected.ref}`}
           project={project}
@@ -251,7 +260,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
           onSelect={select}
           onClose={closePanel}
           onConvert={(ref) => void convert(ref)}
-          {...(fixed ? { onDelete: askDelete } : {})}
+          onDelete={askDelete}
         />
       )}
       {cleaning && <AvulsasCleanupDialog onClose={() => setCleaning(false)} />}
@@ -264,15 +273,26 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
         />
       )}
       {deletingTask && (
-        <DeleteAvulsaTaskDialog
-          projectId={project.id}
-          taskRef={deletingTask.ref}
-          title={deletingTask.title}
-          onClose={() => setDeletingTask(null)}
-          onDeleted={() => {
-            if (taskRef === deletingTask.ref) closePanel();
-          }}
-        />
+        fixed ? (
+          <DeleteAvulsaTaskDialog
+            projectId={project.id}
+            taskRef={deletingTask.ref}
+            title={deletingTask.title}
+            onClose={() => setDeletingTask(null)}
+            onDeleted={() => {
+              if (taskRef === deletingTask.ref) closePanel();
+            }}
+          />
+        ) : (
+          <DeleteTaskNodeDialog
+            project={project}
+            taskRef={deletingTask.ref}
+            onClose={() => setDeletingTask(null)}
+            onDeleted={(refs) => {
+              if (taskRef && refs.includes(taskRef)) closePanel();
+            }}
+          />
+        )
       )}
       {converting && converting !== "projeto" && (
         <ConfirmDialog
@@ -314,12 +334,12 @@ type HeaderProps = {
   editable: boolean;
   stateLabel: string;
   stateTone: string;
-  done: number;
-  counted: number;
+  unit: UnitProgress;
   openCount: number;
   agentIds: readonly string[];
   agents: ReadonlyMap<string, Agent>;
   waiting: number;
+  now: number;
   onConvertToTask: () => void;
   /** Só no Avulsas: abre o "Limpar avulsas". */
   onCleanup: () => void;
@@ -327,13 +347,19 @@ type HeaderProps = {
   onDelete: () => void;
 };
 
-function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, counted, openCount, agentIds, agents, waiting, onConvertToTask, onCleanup, onDelete }: HeaderProps) {
-  const { error, run } = useAsyncAction();
+function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, openCount, agentIds, agents, waiting, now, onConvertToTask, onCleanup, onDelete }: HeaderProps) {
+  const { pending, error, run } = useAsyncAction();
   const mobile = useIsMobile();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [paceOpen, setPaceOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [title, setTitle] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [doneWhen, setDoneWhen] = useState<string | null>(null);
+  const today = todayKey(now);
+  const open = isProjectOpen(project);
+  const releaseSummary = fixed ? null : releaseSummaryText(project);
+  const approvalBadge = fixed ? null : projectApprovalBadge(project.approval);
   const saveTitle = () => {
     const next = (title ?? "").trim();
     setTitle(null);
@@ -351,7 +377,9 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
   };
   const planPending = project.status === "proposto" || project.status === "ajustando";
   const canEditHeader = editable && !fixed && !planPending;
-  const ratio = counted > 0 ? done / counted : 0;
+  const counted = unit.total;
+  const ratio = counted > 0 ? unit.done / counted : 0;
+  const unitLabel = unit.unit === "modulos" ? "Módulos concluídos" : "Tarefas concluídas";
   const shown = agentIds.slice(0, 3);
   const detail = (
     <>
@@ -423,10 +451,13 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
               <span className="ps-fact__value ui-muted">Sem tarefas</span>
             ) : (
               <span className="ps-fact__bar">
-                <ProgressBar value={ratio} label="Tarefas concluídas" />
-                <span className="ps-fact__value">
-                  {done}/{counted}
-                </span>
+                <ProgressBar value={ratio} label={unitLabel} />
+                <span className="ps-fact__value">{unitProgressText(unit)}</span>
+              </span>
+            )}
+            {releaseSummary && (
+              <span className="ps-fact__sub" data-testid="project-release-summary">
+                {releaseSummary}
               </span>
             )}
           </div>
@@ -502,16 +533,28 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
           )}
         </div>
 
-        <ErrorText testId="project-header-error">{error}</ErrorText>
+        {!fixed && (
+          <div className="ps-pace" data-testid="project-release-pace">
+            <span className="ps-pace__text" data-testid="project-release-pace-text">
+              {paceText(project, today)}
+            </span>
+            {canEditHeader && (
+              <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={() => setPaceOpen(true)} data-testid="project-release-pace-btn">
+                Mudar
+              </button>
+            )}
+          </div>
+        )}
+
         {!fixed && (
           <details className="ps-more" data-testid="project-more">
             <summary>Começa em, ritmo, modo Automático e cancelar</summary>
-            {editable && !planPending && (
+            {open && editable && !planPending && (
               <div className="ps-controls">
                 <ProjectControls project={project} slim />
               </div>
             )}
-            <ModeCard project={project} editable={editable && !planPending} />
+            <ModeCard project={project} editable={open && editable && !planPending} />
           </details>
         )}
     </>
@@ -547,13 +590,26 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
             </h2>
           )}
           <div className="ps-head__tags">
-            {fixed ? <span className="ph-state ph-state--fixed">Projeto fixo</span> : <span className={`ph-state ph-state--${stateTone}`}>{stateLabel}</span>}
+            {fixed ? (
+              <span className="ph-state ph-state--fixed" data-testid="project-state">
+                Projeto fixo
+              </span>
+            ) : (
+              <span className={`ph-state ph-state--${stateTone}`} data-testid="project-state">
+                {stateLabel}
+              </span>
+            )}
             {project.origin === "cyno" && <span className="w-kind w-kind--cyno">Pedido pelo Cyno</span>}
             {project.mode.kind === "automatico" && <span className="w-kind w-kind--auto">Automático</span>}
+            {approvalBadge && (
+              <span className="w-kind w-kind--approval" title={approvalBadge.title} data-testid="project-approval-badge">
+                {approvalBadge.label}
+              </span>
+            )}
           </div>
         </div>
         <div className="ps-head__actions">
-          {canEditHeader && project.tasks.filter((task) => !task.archived).length === 1 && (
+          {open && canEditHeader && project.tasks.filter((task) => !task.archived).length === 1 && (
             <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onConvertToTask} data-testid="project-to-task">
               Virar tarefa avulsa
             </button>
@@ -562,10 +618,27 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
             <button
               type="button"
               className="ui-button ui-button--secondary ui-button--small"
-              onClick={() => void run(() => api.updateProject(project.id, { status: project.status === "pausado" ? "ativo" : "pausado" }))}
+              disabled={pending}
+              onClick={() => void run(async () => syncProjectResponse(await api.updateProject(project.id, { status: project.status === "pausado" ? "ativo" : "pausado" })))}
               data-testid="work-pause"
             >
               {project.status === "pausado" ? "Retomar" : "Pausar"}
+            </button>
+          )}
+          {canCompleteProject(project) && (
+            <button type="button" className="ui-button ui-button--secondary ui-button--small" disabled={pending} onClick={() => setCompleting(true)} data-testid="project-complete">
+              Concluir projeto
+            </button>
+          )}
+          {canReopenProject(project) && (
+            <button
+              type="button"
+              className="ui-button ui-button--secondary ui-button--small"
+              disabled={pending}
+              onClick={() => void run(async () => syncProjectResponse(await api.reopenProject(project.id)))}
+              data-testid="project-reopen"
+            >
+              {pending ? "Reabrindo…" : "Reabrir projeto"}
             </button>
           )}
           {fixed && (
@@ -574,21 +647,26 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
             </button>
           )}
           {canDeleteProject(project) && (
-            <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onDelete} data-testid="project-delete">
+            <button type="button" className="ui-button ui-button--ghost ui-button--small ps-head__delete" onClick={onDelete} data-testid="project-delete">
               Apagar projeto
             </button>
           )}
         </div>
       </div>
 
+      <ErrorText testId="project-header-error">{error}</ErrorText>
+
       {mobile ? (
         <div className="ps-compact" data-testid="project-compact">
           {!fixed && counted > 0 && (
             <span className="ps-compact__progress" data-testid="project-progress-compact">
-              <ProgressBar value={ratio} label="Tarefas concluídas" />
-              <span className="ps-fact__value">
-                {done}/{counted}
-              </span>
+              <ProgressBar value={ratio} label={unitLabel} />
+              <span className="ps-fact__value">{unitProgressText(unit)}</span>
+              {releaseSummary && (
+                <span className="ps-fact__sub" data-testid="project-release-summary-compact">
+                  {releaseSummary}
+                </span>
+              )}
             </span>
           )}
           {fixed && <span className="ps-fact__value">{openText(openCount)}</span>}
@@ -601,7 +679,158 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, done, 
         </div>
       ) : null}
       {mobile && !detailsOpen ? null : detail}
+      {paceOpen && <ReleasePaceDialog project={project} today={today} onClose={() => setPaceOpen(false)} />}
+      {completing && (
+        <ConfirmDialog
+          title={COMPLETE_PROJECT_TITLE}
+          message={<p>{COMPLETE_PROJECT_MESSAGE}</p>}
+          confirmLabel="Concluir projeto"
+          pendingLabel="Concluindo…"
+          tone="success"
+          onConfirm={async () => {
+            syncProjectResponse(await api.completeProject(project.id));
+          }}
+          onClose={() => setCompleting(false)}
+          testId="project-complete-dialog"
+        />
+      )}
     </header>
+  );
+}
+
+/** Diálogo do ritmo de liberação automática (N tarefas ou módulos por dia). */
+function ReleasePaceDialog({ project, today, onClose }: { project: Project; today: string; onClose: () => void }) {
+  const [form, setForm] = useState<PaceForm>(() => paceFormOf(project.releasePace, today));
+  const [localError, setLocalError] = useState<string | null>(null);
+  const { pending, error, run } = useAsyncAction();
+
+  const submit = async () => {
+    setLocalError(null);
+    const parsed = paceBodyOf(form, today);
+    if (!parsed.ok) {
+      setLocalError(parsed.error);
+      return;
+    }
+    const ok = await run(async () => syncProjectResponse(await api.updateProject(project.id, { releasePace: parsed.releasePace })));
+    if (ok) onClose();
+  };
+
+  const turnOff = async () => {
+    setLocalError(null);
+    const ok = await run(async () => syncProjectResponse(await api.updateProject(project.id, { releasePace: null })));
+    if (ok) onClose();
+  };
+
+  const setStart = (start: PaceStart) => {
+    setLocalError(null);
+    setForm((current) => ({ ...current, start }));
+  };
+
+  return (
+    <Modal title="Ritmo de liberação" onClose={onClose} testId="release-pace-dialog">
+      <form
+        className="rp-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <Switch
+          label="Liberar automaticamente"
+          checked={form.enabled}
+          testId="pace-enabled"
+          disabled={pending}
+          onChange={(enabled) => {
+            setLocalError(null);
+            setForm((current) => ({ ...current, enabled }));
+          }}
+        />
+        {form.enabled && (
+          <>
+            <div className="rp-form__row">
+              <label className="rp-form__field">
+                <span>Quantidade por dia</span>
+                <input
+                  className="ui-input ui-input--compact"
+                  type="number"
+                  min={1}
+                  max={PACE_MAX_PER_DAY}
+                  step={1}
+                  value={form.perDay}
+                  disabled={pending}
+                  onChange={(event) => {
+                    setLocalError(null);
+                    setForm((current) => ({ ...current, perDay: event.currentTarget.value }));
+                  }}
+                  data-testid="pace-per-day"
+                />
+              </label>
+              <label className="rp-form__field">
+                <span>Unidade</span>
+                <select
+                  className="ui-input ui-input--compact"
+                  value={form.unit}
+                  disabled={pending}
+                  onChange={(event) => setForm((current) => ({ ...current, unit: event.currentTarget.value as PaceForm["unit"] }))}
+                  data-testid="pace-unit"
+                >
+                  <option value="tarefas">Tarefas</option>
+                  <option value="modulos">Módulos</option>
+                </select>
+              </label>
+            </div>
+            <fieldset className="rp-form__start">
+              <legend>Começa em</legend>
+              <div className="rp-form__options">
+                {(
+                  [
+                    ["hoje", "Hoje"],
+                    ["amanha", "Amanhã"],
+                    ["data", "Data"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label key={value} className="rp-form__radio">
+                    <input type="radio" name="release-pace-start" checked={form.start === value} disabled={pending} onChange={() => setStart(value)} data-testid={`pace-start-${value}`} />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              {form.start === "data" && (
+                <input
+                  className="ui-input ui-input--compact rp-form__date"
+                  type="date"
+                  min={today}
+                  value={form.date}
+                  disabled={pending}
+                  aria-label="Data de início"
+                  onChange={(event) => {
+                    setLocalError(null);
+                    setForm((current) => ({ ...current, date: event.currentTarget.value }));
+                  }}
+                  data-testid="pace-start-date"
+                />
+              )}
+            </fieldset>
+          </>
+        )}
+        <p className="rp-form__hint">Pega os próximos itens pela prioridade e depois pela ordem da árvore. Os pré-requisitos entram junto e contam no total do dia.</p>
+        <ErrorText testId="pace-error">{localError ?? error}</ErrorText>
+        <div className="ui-actions">
+          {project.releasePace && (
+            <button type="button" className="ui-button ui-button--ghost" disabled={pending} onClick={() => void turnOff()} data-testid="pace-off">
+              Desligar
+            </button>
+          )}
+          <span className="w-grow" />
+          <button type="button" className="ui-button ui-button--secondary" disabled={pending} onClick={onClose} data-testid="pace-cancel">
+            Cancelar
+          </button>
+          <button type="submit" className="ui-button" disabled={pending} data-testid="pace-save">
+            {pending ? "Salvando…" : "Salvar"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

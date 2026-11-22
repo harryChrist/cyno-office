@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { projectSchema } from "./api";
-import { projectProgress, type Project, type ProjectTask, type ProjectTaskStatus } from "./projects";
+import { PROJECT_SAFETY, projectProgress, type Project, type ProjectTask, type ProjectTaskStatus } from "./projects";
 import type { Sprint } from "./sprints";
 import { assigneeCount, assigneesOf, childrenOf, depthOf, isLeaf, leafTasks, leavesOf, pathOf, rollupStatus, sprintProgress, statusOf, treeProgress, validateTree } from "./task-tree";
 
@@ -143,12 +143,16 @@ describe("validateTree", () => {
   it("árvore de 3 níveis é válida", () => {
     expect(ok(proj([task("G", { group: true }), task("T", { parent: "G" }), task("S", { parent: "T" })]))).toEqual([]);
   });
-  it("profundidade 4 é recusada", () => {
-    const errors = ok(proj([task("G", { group: true }), task("T", { parent: "G" }), task("S", { parent: "T" }), task("X", { parent: "S" })]));
-    expect(errors.join("\n")).toMatch(/Task X: nested 4 levels/);
+  it("profundidade 8 é válida (não há mais teto de 3 níveis)", () => {
+    const chain: ProjectTask[] = [];
+    for (let level = 1; level <= 7; level += 1) chain.push(task(`G${level}`, { group: true, ...(level > 1 ? { parent: `G${level - 1}` } : {}) }));
+    chain.push(task("T", { parent: "G7" }));
+    expect(depthOf(proj(chain), "T")).toBe(8);
+    expect(ok(proj(chain))).toEqual([]);
   });
-  it("entregável só em profundidade 1 e sem steps", () => {
-    expect(ok(proj([task("T"), task("G", { group: true, parent: "T" })])).join("\n")).toMatch(/Task G: a deliverable \(group\) can only sit directly under the project/);
+  it("entregável (módulo) em qualquer profundidade, dentro de outro módulo e dentro de tarefa; sem steps", () => {
+    expect(ok(proj([task("T", { steps: [] }), task("G", { group: true, parent: "T" })]))).toEqual([]);
+    expect(ok(proj([task("G1", { group: true }), task("G2", { group: true, parent: "G1" }), task("F", { parent: "G2" })]))).toEqual([]);
     expect(ok(proj([task("G", { group: true, steps: [{ agentId: "eco", what: "x", status: "pendente" }] })])).join("\n")).toMatch(/has no steps/);
   });
   it("folha sem steps é inválida; o pai pode não ter", () => {
@@ -167,12 +171,11 @@ describe("validateTree", () => {
     expect(ok(proj([task("P", { sprintId: "S1", steps: [] }), task("F", { parent: "P", sprintId: "S1" })], { sprints })).join("\n")).toMatch(/only leaf tasks go in a sprint/);
     expect(ok(proj([task("T", { sprintId: "S1" })], { sprints }))).toEqual([]);
   });
-  it("sem limite de agentes por tarefa: 5 subtarefas de agentes diferentes passam; mais de 12 subtarefas é o teto técnico", () => {
+  it("sem limite de subtarefas por tarefa: 100 subtarefas passam", () => {
     const kids = (count: number) => Array.from({ length: count }, (_, index) => task(`F${index}`, { parent: "P", ownerId: `ag${index}` }));
     const base = [task("G", { group: true }), task("P", { parent: "G", steps: [], ownerId: "" })];
     expect(ok(proj([...base, ...kids(5)]))).toEqual([]);
-    expect(ok(proj([...base, ...kids(12)]))).toEqual([]);
-    expect(ok(proj([...base, ...kids(13)])).join("\n")).toMatch(/Task P: 13 subtasks \(at most 12 per task/);
+    expect(ok(proj([...base, ...kids(100)]))).toEqual([]);
   });
   it("entregável não tem limite de agentes", () => {
     const kids = ["a", "b", "c", "d", "e"].map((agent, index) => task(`F${index}`, { parent: "G", ownerId: agent }));
@@ -193,11 +196,19 @@ describe("validateTree", () => {
     expect(ok(proj([task("T", { labels: ["a", "b", "c", "d", "e", "f"] })], { labels })).join("\n")).toMatch(/at most 5 labels/);
     expect(ok(proj([task("T", { labels: ["zz"] })], { labels })).join("\n")).toMatch(/label "zz" does not exist/);
   });
-  it("tetos: 200 nós e 40 filhas", () => {
-    const many = Array.from({ length: 201 }, (_, index) => task(`T${index}`));
-    expect(ok(proj(many)).join("\n")).toMatch(/At most 200 nodes/);
-    const kids = Array.from({ length: 41 }, (_, index) => task(`K${index}`, { parent: "G" }));
-    expect(ok(proj([task("G", { group: true }), ...kids])).join("\n")).toMatch(/Task G has 41 children/);
+  it("sem tetos de produto: 150 tarefas na raiz e 100 filhas num módulo passam", () => {
+    expect(ok(proj(Array.from({ length: 150 }, (_, index) => task(`T${index}`))))).toEqual([]);
+    const kids = Array.from({ length: 100 }, (_, index) => task(`K${index}`, { parent: "G" }));
+    expect(ok(proj([task("G", { group: true }), ...kids]))).toEqual([]);
+  });
+  it("rede de segurança: acima de 5000 itens ou 50 níveis recusa com mensagem clara", () => {
+    const many = Array.from({ length: PROJECT_SAFETY.nodes + 1 }, (_, index) => task(`T${index}`));
+    expect(ok(proj(many)).join("\n")).toMatch(/safety net: at most 5000 items per project/);
+    expect(ok(proj(many.slice(0, PROJECT_SAFETY.nodes)))).toEqual([]);
+    const deep: ProjectTask[] = [];
+    for (let level = 1; level <= PROJECT_SAFETY.depth + 1; level += 1) deep.push(task(`G${level}`, { group: true, ...(level > 1 ? { parent: `G${level - 1}` } : {}) }));
+    expect(ok(proj(deep)).join("\n")).toMatch(/nested 51 levels deep \(safety net: at most 50 levels/);
+    expect(ok(proj(deep.slice(0, PROJECT_SAFETY.depth)))).toEqual([]);
   });
 });
 

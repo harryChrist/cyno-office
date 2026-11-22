@@ -12,7 +12,7 @@ import {
 } from "@cyno/shared";
 import { liveSummary } from "../store/agentLog";
 import type { TaskProgressMap } from "../store/taskProgress";
-import { AGENT_STATUS_LABELS, truncate, type StatusTone } from "../ui/format";
+import { agentStatusLabel, truncate, type StatusTone } from "../ui/format";
 import { engineLabel, lastActivity } from "./agentLogTimeline";
 
 /** Uma linha da lista de agentes. */
@@ -55,12 +55,12 @@ export function agentListRow(office: OfficeState, agent: Agent, entries: readonl
   const summary = liveSummary(entries);
   const busy = agent.status === "working" || agent.status === "waiting_approval";
   const logLine = busy && summary.activeTaskId ? lastActivity(entries) : undefined;
-  const activity = live?.message ?? logLine ?? (current ? `“${truncate(current.prompt, 70)}”` : agent.status === "idle" ? "Livre" : AGENT_STATUS_LABELS[agent.status]);
+  const activity = live?.message ?? logLine ?? (current ? `“${truncate(current.prompt, 70)}”` : agent.status === "idle" ? "Livre" : agentStatusLabel(agent, office.tasks));
   return {
     agent,
     isMaestro: isMaestroAgent(office, agent),
     tone: TONES[agent.status],
-    statusLabel: AGENT_STATUS_LABELS[agent.status],
+    statusLabel: agentStatusLabel(agent, office.tasks),
     activity,
     // O log carregado diz ao vivo; sem log ainda, vale o resumo do server.
     activeSubagents: busy ? (entries.length > 0 ? summary.activeSubagents : serverSubagents) : 0,

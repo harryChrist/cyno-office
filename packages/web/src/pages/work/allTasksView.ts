@@ -13,7 +13,7 @@ export type TaskEntry = {
   key: string;
   project: Project;
   task: ProjectTask;
-  /** "Projeto › Entregável" (o caminho acima da tarefa). */
+  /** "Projeto › Módulo" (o caminho acima da tarefa). */
   path: string;
   status: ProjectTaskStatus;
   /** Todos os responsáveis (o primeiro é o dono da tarefa). */

@@ -92,7 +92,7 @@ describe("planos (Maestro simulado)", () => {
     expect(maxConcurrency(planEvents(ctx, plan.id))).toEqual({ running: 2, perAgent: 1 });
     // O Maestro só foi acordado uma vez: no fim, com o resumo.
     expect(wake.mock.calls.map((call) => call[1])).toEqual(["done"]);
-    expect((wake.mock.calls[0]![2] as () => string)()).toContain("o projeto terminou — 4 de 4 concluídas");
+    expect((wake.mock.calls[0]![2] as () => string)()).toContain("o projeto terminou — 4 de 4 tarefas concluídas");
     const done = ctx.store.snapshot().tasks.find((task) => task.id === request.id)!;
     expect(done.result).toContain("Plano concluído (4 tarefas).");
   });

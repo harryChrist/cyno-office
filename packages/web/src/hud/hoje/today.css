@@ -227,6 +227,15 @@
   color: var(--ui-text-2);
 }
 
+.hj-planned {
+  color: var(--ui-text-3);
+}
+
+.hj-planned--aside {
+  font-size: 11px;
+  opacity: 0.85;
+}
+
 .hj-row__meta {
   flex: none;
   padding-top: 1px;

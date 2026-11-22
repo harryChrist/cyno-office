@@ -34,7 +34,7 @@ export function restartResume(
 
 /**
  * O texto final de um turno é uma pergunta ao usuário? (a última linha termina em "?", ou há várias
- * perguntas no fim). Aí o pedido não fecha: espera a resposta na conversa.
+ * perguntas no fim de um texto curto). Aí o pedido não fecha: espera a resposta na conversa.
  */
 export function looksLikeQuestion(text: string): boolean {
   const lines = text
@@ -44,8 +44,14 @@ export function looksLikeQuestion(text: string): boolean {
     .filter(Boolean);
   const last = (lines.at(-1) ?? "").replace(/[*_`)\]\s]+$/u, "");
   if (last.endsWith("?")) return true;
+  // Várias perguntas seguidas só valem num texto curto de pergunta. Um relatório longo que termina
+  // listando decisões em aberto ("- quer que eu crie X?") é um relatório, não um pedido de resposta.
+  if (lines.length > SHORT_QUESTION_LINES || text.length > SHORT_QUESTION_CHARS) return false;
   return lines.slice(-4).filter((line) => /\?[*_`)\s]*$/u.test(line)).length >= 2;
 }
+
+const SHORT_QUESTION_LINES = 6;
+const SHORT_QUESTION_CHARS = 600;
 
 /** Id de pedido ("Pedido <uuid>") citado num texto digitado direto no terminal do Maestro. */
 export function citedRequestId(prompt: string): string | undefined {

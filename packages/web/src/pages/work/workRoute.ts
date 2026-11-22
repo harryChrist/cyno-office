@@ -1,4 +1,4 @@
-import { AVULSAS_ID, leafRequestId, type Project } from "@cyno/shared";
+import { AVULSAS_ID, hasSprints, leafRequestId, type Project } from "@cyno/shared";
 
 /**
  * Endereços de "Projetos e tarefas" (o que vem depois de `#/<ws>/trabalho`):
@@ -31,14 +31,31 @@ const decode = (part: string): string => {
 
 const isTab = (value: string): value is ProjectTab => (PROJECT_TABS as readonly string[]).includes(value);
 
-/** Lê o `sub` do navStore. Endereço que não é de projeto = a entrada. */
+/** A aba Sprints só aparece quando o projeto já tem sprints. */
+export function showSprintsTab(project: Pick<Project, "sprints">): boolean {
+  return hasSprints(project);
+}
+
+/** Abas visíveis de um projeto: sem sprints, a aba Sprints some. */
+export function projectTabsFor(project: Pick<Project, "sprints">): ProjectTab[] {
+  return showSprintsTab(project) ? [...PROJECT_TABS] : PROJECT_TABS.filter((id) => id !== "sprints");
+}
+
+/** Aba efetiva do projeto: um endereço pedindo `sprints` em projeto sem sprints cai em "Tarefas". */
+export function resolveProjectTab(tab: ProjectTab, project: Pick<Project, "sprints">): ProjectTab {
+  return tab === "sprints" && !showSprintsTab(project) ? "tarefas" : tab;
+}
+
+/** Lê o `sub` do navStore. Endereço que não é de projeto = a entrada. Aceita `p/<id>/<aba>` e `p/<id>?tab=<aba>`. */
 export function parseWorkRoute(sub: string): WorkRoute {
   const cut = sub.indexOf("?");
   const query = cut >= 0 ? sub.slice(cut + 1) : "";
   const parts = (cut >= 0 ? sub.slice(0, cut) : sub).split("/").filter(Boolean).map(decode);
   if (parts[0] === "tarefas") return { view: "tasks", query, ...(parts[1] && parts[2] ? { projectId: parts[1], ref: parts[2] } : {}) };
   if (parts[0] !== "p" || !parts[1]) return { view: "home" };
-  const tab = parts[2] && isTab(parts[2]) ? parts[2] : "tarefas";
+  const queryTab = query ? new URLSearchParams(query).get("tab") : null;
+  const rawTab = parts[2] ?? queryTab ?? "";
+  const tab = isTab(rawTab) ? rawTab : "tarefas";
   const ref = parts[3];
   return { view: "project", projectId: parts[1], tab, ...(ref ? { ref } : {}) };
 }

@@ -145,7 +145,7 @@ export class JointCoordinator {
         dependsOn: [...part.dependsOn],
         state,
         ...(live?.stage ? { stage: live.stage } : {}),
-        ...(live && live.tasksTotal > 0 ? { tasksDone: live.tasksDone, tasksTotal: live.tasksTotal } : {}),
+        ...(live && live.tasksTotal > 0 ? { tasksDone: live.tasksDone, tasksTotal: live.tasksTotal, ...(live.unit ? { unit: live.unit } : {}) } : {}),
         waitingFor,
         ...(part.projectId ? { projectId: part.projectId } : {}),
         ...(part.blockedReason ? { blockedReason: part.blockedReason } : {}),
@@ -166,7 +166,7 @@ export class JointCoordinator {
       for (const part of view.parts) {
         const wait = part.waitingFor.length > 0 ? ` (waiting for part ${part.waitingFor.join(", ")})` : "";
         const stage = part.stage ? `, now: ${part.stage}` : "";
-        const tasks = part.tasksTotal ? `, ${part.tasksDone}/${part.tasksTotal} tasks` : "";
+        const tasks = part.tasksTotal ? `, ${part.tasksDone}/${part.tasksTotal} ${part.unit === "modulos" ? "modules" : "tasks"}` : "";
         lines.push(`- ${part.ref} → ${part.workspace} "${shorten(part.title, 80)}": ${JOINT_PART_STATE_LABELS[part.state]}${wait}${stage}${tasks}${part.dependsOn.length > 0 ? `; depends on ${part.dependsOn.join(", ")}` : ""}${part.blockedReason ? `; ${part.blockedReason}` : ""}`);
         if (part.summary) lines.push(`    delivered: ${shorten(part.summary.replace(/\s+/g, " "), 400)}`);
         if (part.received) lines.push(`    received: ${part.received.items.map((item) => `${item.from}${item.media.length > 0 ? ` + ${item.media.map((media) => media.mediaId).join(",")}` : ""}`).join("; ")}`);

@@ -71,10 +71,17 @@ export function blockLabel(blocked: NonNullable<TodayProject["blocked"]>): strin
   return blocked.note && blocked.note !== base ? `${base}: ${blocked.note}` : base;
 }
 
-/** "etapa 2/4: roteiro" */
-export function stageLabel(project: Pick<TodayProject, "stage" | "status">): string {
-  if (!project.stage) return project.status === "pausado" ? "pausado" : "sem etapa em andamento";
-  return `etapa ${project.stage.index}/${project.stage.total}: ${project.stage.title}`;
+/** "etapa 2/4: roteiro"; vazio quando não há etapa mas há planejadas aguardando liberação. */
+export function stageLabel(project: Pick<TodayProject, "stage" | "status" | "planned">): string {
+  if (project.stage) return `etapa ${project.stage.index}/${project.stage.total}: ${project.stage.title}`;
+  if (project.planned && project.planned > 0) return "";
+  return project.status === "pausado" ? "pausado" : "sem etapa em andamento";
+}
+
+/** "3 planejadas aguardando liberação" (ou singular); vazio quando não há planejadas. */
+export function plannedLabel(count: number | undefined): string {
+  if (!count || count <= 0) return "";
+  return count === 1 ? "1 planejada aguardando liberação" : `${count} planejadas aguardando liberação`;
 }
 
 /** Horas de hoje: "0,5 h", ou "0,5/1 h" com o limite por dia; vazio quando não trabalhou e não há limite. */

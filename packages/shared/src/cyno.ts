@@ -329,8 +329,11 @@ export type SentRequestView = {
   address: string;
   sentAt: string;
   state: SentRequestState;
+  /** Progresso na unidade do projeto (`unit`): tarefas, ou módulos de primeiro nível quando o projeto tem módulos (`projectUnitProgress`). */
   tasksDone: number;
   tasksTotal: number;
+  /** A unidade de `tasksDone`/`tasksTotal` (ausente = tarefas, como antes). */
+  unit?: "modulos" | "tarefas";
   /** Itens do "Para você" ligados ao pedido que esperam o dono. */
   waitingForYou: number;
   /** Etapa atual em texto curto ("Redação · Eco"), quando há. */

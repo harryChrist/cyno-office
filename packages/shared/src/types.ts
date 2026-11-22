@@ -5,6 +5,7 @@ import type { RoomPurpose, RoomSize } from "./room-spec";
 import type { WorkspaceAccess } from "./access";
 import type { AgentFolders, WorkFolder } from "./folders";
 import type { ModelChoice, ModelDefaults } from "./models";
+import type { PlanApprovalNote, PlanApprovalRule } from "./projects";
 import type { AgentEffort, AgentEngine } from "./terminal";
 
 /**
@@ -31,6 +32,10 @@ export type Workspace = {
   access?: WorkspaceAccess;
   /** Pastas de trabalho: pastas reais do computador que os agentes usam (veja folders.ts). Ausente = nenhuma. */
   folders?: WorkFolder[];
+  /** Regra de aprovação de projetos do Maestro (ausente = "maestro"; veja PLAN_APPROVAL_RULES em projects.ts). */
+  planApproval?: PlanApprovalRule;
+  /** Frase do dono e data da última vez em que o Maestro gravou a regra de aprovação. */
+  planApprovalNote?: PlanApprovalNote;
 };
 
 /**
@@ -245,6 +250,14 @@ export const ACTIVE_TASK_STATUSES = [
   "in_progress",
   "waiting_approval",
 ] as const satisfies readonly TaskStatus[];
+
+/** O porquê de um pedido do Maestro esperar uma pergunta feita na conversa (e não uma aprovação). */
+export const CHAT_QUESTION_WAITING = "O Maestro fez uma pergunta na conversa";
+
+/** O pedido só espera a sua resposta na conversa (nada para aprovar: sem subtarefa nem item no "Para você")? */
+export function isChatQuestion(task: Pick<Task, "status" | "waiting">): boolean {
+  return task.status === "waiting_approval" && task.waiting === CHAT_QUESTION_WAITING;
+}
 
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return (ACTIVE_TASK_STATUSES as readonly TaskStatus[]).includes(status);

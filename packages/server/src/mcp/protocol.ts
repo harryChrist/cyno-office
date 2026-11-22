@@ -32,6 +32,7 @@ export function defineTool<S extends z.ZodObject>(tool: {
   description: string;
   input: S;
   call: (args: z.output<S>) => McpToolResult | Promise<McpToolResult>;
+  listed?: boolean;
 }): McpTool {
   return tool as unknown as McpTool;
 }

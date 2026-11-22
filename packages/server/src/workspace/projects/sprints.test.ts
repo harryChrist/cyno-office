@@ -32,9 +32,23 @@ async function newProject(ctx: TestApp, title = "Campanha"): Promise<string> {
 async function addTask(ctx: TestApp, projectId: string, body: object): Promise<string> {
   const response = await send(ctx, "POST", `/projects/${projectId}/tasks`, body);
   expect(response.statusCode, response.body).toBe(201);
-  return (response.json() as Reply).ref!;
+  const ref = (response.json() as Reply).ref!;
+  // Criar não executa: estes testes querem a tarefa rodando, então liberam logo (a regra nova tem os testes dela em release.test.ts).
+  expect((await send(ctx, "POST", `/projects/${projectId}/release`, { refs: [ref] })).statusCode).toBe(200);
+  return ref;
 }
-async function addSprint(ctx: TestApp, projectId: string, body: object = {}): Promise<string> {
+async function addSprint(ctx: TestApp, projectId: string, body: { name?: string; goal?: string; startAt?: string; endAt?: string; adoptOpen?: boolean } = {}): Promise<string> {
+  // Projetos novos não permitem criar a primeira sprint (409); estes testes cobrem o ciclo em projetos legados que já tinham sprints.
+  const raw = (runtimeOf(ctx).plans as unknown as { plans: Project[] }).plans.find((plan) => plan.id === projectId)!;
+  if (!raw.sprints?.length) {
+    const now = (runtimeOf(ctx).plans as unknown as { deps: ProjectServiceDeps }).deps.now().getTime();
+    const start = body.startAt ? Date.parse(body.startAt) : now;
+    const end = body.endAt ? Date.parse(body.endAt) : start + 7 * DAY;
+    const active = raw.status === "ativo" && start <= now && now < end;
+    raw.sprints = [{ id: "S1", name: body.name ?? "Sprint 1", ...(body.goal ? { goal: body.goal } : {}), startAt: iso(start), endAt: iso(end), order: 1, status: active ? "ativa" : "planejada", ...(active ? { openedAt: iso(now) } : {}) }];
+    if (body.adoptOpen) for (const task of raw.tasks) if (!task.group && !task.sprintId && task.status !== "concluida" && task.status !== "cancelada") task.sprintId = "S1";
+    return "S1";
+  }
   const response = await send(ctx, "POST", `/projects/${projectId}/sprints`, body);
   expect(response.statusCode, response.body).toBe(201);
   return (response.json() as Reply).sprintId!;
@@ -42,6 +56,22 @@ async function addSprint(ctx: TestApp, projectId: string, body: object = {}): Pr
 const waitDone = (ctx: TestApp, id: string, ref: string) => ctx.log.waitFor((event) => event.type === "project:upserted" && event.project.id === id && event.project.tasks.find((task) => task.ref === ref)?.status === "concluida");
 
 describe("sprints pelas rotas e o agendador por sprint", () => {
+  it("projeto novo sem sprints recusa POST /projects/:id/sprints com 409; projeto que já tem sprint aceita criar mais", async () => {
+    const ctx = await setupApp();
+    fakeClock(ctx);
+    const id = await newProject(ctx, "Sem sprints");
+    const denied = await send(ctx, "POST", `/projects/${id}/sprints`, { name: "Sprint 1" });
+    expect(denied.statusCode).toBe(409);
+    expect((denied.json() as Reply).error).toBe("Projetos novos não usam sprints: use módulos e a liberação.");
+    expect(live(ctx, id).sprints ?? []).toHaveLength(0);
+
+    // Projeto legado que já tem sprint continua aceitando criar novas sprints pela rota.
+    await addSprint(ctx, id, { name: "Sprint 1", startAt: iso(NOON - DAY), endAt: iso(NOON + 7 * DAY) });
+    const created = await send(ctx, "POST", `/projects/${id}/sprints`, { name: "Sprint 2" });
+    expect(created.statusCode, created.body).toBe(201);
+    expect((created.json() as Reply).sprintId).toBe("S2");
+  });
+
   it("só a folha da sprint ativa anda; a da futura espera com a nota e começa quando a sprint abre (tick por data)", async () => {
     const ctx = await setupApp();
     const { agent } = await soloTeam(ctx.app);

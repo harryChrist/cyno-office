@@ -1,4 +1,4 @@
-import { childrenOf, forYouKind, isLeaf, joinNames, receiversOf, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, pathOf, flowStatusOf, blockedText, deadDependencies, isBlockedLeaf, pendencySummary, treeProgress, type Agent, type ForYouItem, type Project, type ProjectPriority, type ProjectTask, type Task } from "@cyno/shared";
+import { childrenOf, forYouKind, isLeaf, joinNames, moduleProgress, receiversOf, releaseHold, releaseState, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, pathOf, flowStatusOf, blockedText, deadDependencies, isBlockedLeaf, pendencySummary, type Agent, type ForYouItem, type Project, type ProjectPriority, type ProjectTask, type Task } from "@cyno/shared";
 import { useEffect, useId, useMemo, useState } from "react";
 import { useWorkPanelStore } from "../../agentWork/workPanelStore";
 import { useNavStore } from "../../store/navStore";
@@ -13,12 +13,13 @@ import { DeliveryHead } from "./DeliveryHead";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { AgentAvatar, AgentTag } from "./Agent";
 import { ApprovalCard } from "./ApprovalCard";
-import { canDeleteAvulsaTask } from "./avulsasCleanupView";
+import { canDeleteTaskNode } from "./projectDeleteView";
 import { HISTORY_LABELS, statusHistory, statusLabel, taskError } from "./board";
 import { DueForm, LabelsForm } from "./TaskTree";
 import { DependsField, FlowBlock } from "./FlowBlock";
-import { TREE_STATUS_LABEL } from "./taskTreeView";
-import { StatusIcon } from "./treeParts";
+import { pendingWaitsText } from "./flowView";
+import { containerState, leafState, plannedWaitButton, plannedWaits, plannedWaitText, releaseMenu } from "./releaseView";
+import { StateChip, StatusIcon } from "./treeParts";
 import type { TaskActions } from "./useTaskActions";
 import { STEP_MARK_GLYPH, STEP_MARK_LABEL, stepMark, taskState } from "./workView";
 import { brasiliaDateTime, brasiliaNote } from "./workTime";
@@ -42,7 +43,7 @@ type PanelProps = {
   onSelect: (ref: string) => void;
   onClose: () => void;
   onConvert: (ref: string) => void;
-  /** Só no Avulsas: pede para apagar de vez a folha terminada (quem chama abre a confirmação). */
+  /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
 
@@ -62,10 +63,18 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
   const status = flowStatusOf(project, task);
   const path = pathOf(project, task.ref).slice(0, -1);
   const leaf = isLeaf(project, task);
-  const children = childrenOf({ tasks: project.tasks.filter((candidate) => !candidate.archived) }, task.ref);
+  const live = useMemo(() => ({ tasks: project.tasks.filter((candidate) => !candidate.archived) }), [project.tasks]);
+  const children = childrenOf(live, task.ref);
+  const rowState = leaf
+    ? leafState({ status, hold: releaseHold(task) !== undefined, blocked: task.blocked !== undefined && task.blocked.type !== "voce" })
+    : containerState({ status, release: children.length === 0 && task.released === false ? "planejada" : releaseState(live, task.ref) });
+  const taskPlannedWaits = useMemo(() => plannedWaits(live, task), [live, task]);
+  const releaseActions = useMemo(() => (editable && !avulsa ? releaseMenu(live, task) : []), [editable, avulsa, live, task]);
   const locked = started(task);
-  const canDelete = onDelete !== undefined && canDeleteAvulsaTask(project, task);
+  const canDelete = onDelete !== undefined && canDeleteTaskNode(project, task);
   const step = task.steps[stepIndex];
+  const hasAgentLinks = leaf && (step?.agentId ?? "") !== "";
+  const waits = !leaf ? pendingWaitsText(project, task) : "";
   const work = step?.taskId ? works.find((candidate) => candidate.id === step.taskId) : undefined;
 
   useEffect(() => {
@@ -85,7 +94,7 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
             <p className="tp__eyebrow">
               {path.length > 0 ? `${path.map((node) => node.title).join(" › ")} · ` : ""}
               {task.ref}
-              {task.group ? " · entregável" : ""}
+              {task.group ? " · módulo" : ""}
             </p>
             <TitleEditor id={titleId} title={task.title} editable={editable} onSave={(title) => void actions.update(task.ref, { title })} />
           </div>
@@ -95,8 +104,8 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
         </header>
         <div className="tp__body">
           <div className="tp__state">
-            <StatusIcon status={status} />
-            <span className={`tp__statetext tp__statetext--${status}`}>{TREE_STATUS_LABEL[status]}</span>
+            <StatusIcon status={status} planned={rowState.planned} label={rowState.label} />
+            <StateChip state={rowState} testId="task-panel-state" />
             {task.skipped && <span className="ui-badge ui-badge--neutral">Pulada</span>}
             {leaf && task.rework.count > 0 && (
               <span className="ui-badge ui-badge--attention" title={task.rework.last?.reason}>
@@ -104,6 +113,49 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
               </span>
             )}
           </div>
+          {releaseActions.length > 0 && (
+            <div className="tp__release-actions" data-testid="task-panel-release-actions">
+              {releaseActions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`ui-button ui-button--small ${item.id === "release" ? "" : "ui-button--secondary"}`}
+                  disabled={actions.busy}
+                  onClick={() => {
+                    if (item.id === "release") void actions.release({ refs: [task.ref] });
+                    else if (item.id === "release_with") void actions.release({ refs: [task.ref], withPrerequisites: true });
+                    else void actions.hold([task.ref]);
+                  }}
+                  data-testid={`task-panel-${item.id}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {taskPlannedWaits.length > 0 && (
+            <div className="tp__planned-wait" role="status" data-testid="task-panel-planned-wait">
+              <p className="tp__line">
+                <strong>{plannedWaitText(taskPlannedWaits)}.</strong>
+              </p>
+              {editable && (
+                <button
+                  type="button"
+                  className="ui-button ui-button--secondary ui-button--small"
+                  disabled={actions.busy}
+                  onClick={() => void actions.release({ refs: taskPlannedWaits.map((item) => item.ref) })}
+                  data-testid="task-panel-release-wait"
+                >
+                  {plannedWaitButton(taskPlannedWaits)}
+                </button>
+              )}
+            </div>
+          )}
+          {waits && taskPlannedWaits.length === 0 && (
+            <p className="tp__line tp__line--wait" data-testid="task-panel-waits">
+              <strong>{waits.charAt(0).toUpperCase() + waits.slice(1)}.</strong> Só começa quando isso terminar.
+            </p>
+          )}
           {leaf && isBlockedLeaf(project, task) && (
             <div className="tp__blocked" role="alert" data-testid="task-panel-blocked">
               <p className="tp__line">
@@ -180,9 +232,7 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
                   {locked && <small className="tp__hint">A tarefa já começou: o responsável não muda.</small>}
                 </label>
               )}
-              {!task.group && (
-                <DependsField project={project} task={task} agents={agents} actions={actions} locked={(leaf && locked) || avulsa} />
-              )}
+              <DependsField project={project} task={task} agents={agents} actions={actions} locked={(leaf && locked) || avulsa} />
               {!task.group && !children.length && (
                 <label className="tp__field">
                   <span>Prioridade</span>
@@ -236,12 +286,12 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
             <section className="tp__section" aria-label="O que tem dentro">
               <h3 className="tp__h">
                 Dentro {(() => {
-                  const { done, total } = treeProgress(project, task.ref);
-                  return total > 0 ? <span className="tp__count">{done} de {total} concluídas</span> : null;
+                  const { done, total } = moduleProgress({ tasks: project.tasks.filter((candidate) => !candidate.archived) }, task.ref);
+                  return total > 0 ? <span className="tp__count">{done} de {total} {total === 1 ? "atividade concluída" : "atividades concluídas"}</span> : null;
                 })()}
               </h3>
               {children.length === 0 ? (
-                <p className="tp__text">Nada aqui ainda. Use “Adicionar” na árvore.</p>
+                <p className="tp__text">Nada aqui ainda. Use “+ Módulo” ou “+ Tarefa” na árvore.</p>
               ) : (
                 <ul className="tp__children">
                   {children.map((child) => (
@@ -322,9 +372,9 @@ export function TaskPanel({ project, task, agents, workers, items, works, progre
             </>
           )}
         </div>
-        {leaf && ((step?.agentId ?? "") !== "" || canDelete) && (
+        {(hasAgentLinks || canDelete) && (
           <footer className="tp__foot">
-            {(step?.agentId ?? "") !== "" && <AgentLinks agent={agents.get(step!.agentId)} onClose={onClose} />}
+            {hasAgentLinks && <AgentLinks agent={agents.get(step!.agentId)} onClose={onClose} />}
             {canDelete && (
               <button type="button" className="ui-button ui-button--ghost ui-button--small tp__delete" onClick={() => onDelete?.(task.ref)} data-testid="task-panel-delete">
                 Apagar

@@ -1,13 +1,20 @@
 import {
+  ACTIVITY_MAESTRO,
   ACTIVITY_USER,
   agentEngine,
   DAY_MS,
+  DEFAULT_PLAN_APPROVAL,
   dispatchSettings,
   METRICS_MEDIAN_DAYS,
   MODEL_SAVING_DAYS,
   gestaoSettings,
+  PLAN_APPROVAL_LABELS,
+  releaseHold,
   taskRankInput,
   workRank,
+  type PlanApprovalNote,
+  type PlanApprovalRule,
+  type PlanApprovalSettings,
   type ReportKind,
   type DispatchSettings,
   type MetricsReport,
@@ -160,6 +167,10 @@ export type RuntimeOptions = {
   workspaceDispatch?: (workspaceId: string) => Workspace["dispatch"];
   /** Cerimônias da Gestão do workspace (horário do resumo do dia e da revisão da semana, parágrafo de IA; ausente = os padrões). */
   workspaceGestao?: (workspaceId: string) => Workspace["gestao"];
+  /** Regra de aprovação de projetos do workspace (ausente = "maestro"). */
+  workspacePlanApproval?: (workspaceId: string) => PlanApprovalSettings;
+  /** Grava a regra de aprovação de projetos do workspace (usado por `set_plan_approval_rule`). */
+  setWorkspacePlanApproval?: (workspaceId: string, rule: PlanApprovalRule, note?: PlanApprovalNote) => Promise<PlanApprovalSettings>;
   /** A semana do workspace foi resolvida (relatório gerado, já existia ou sem movimento): a plataforma soma quando todos resolvem. */
   reportsWeekSettled?: (workspaceId: string, period: string) => void;
   /** Tempos do aviso de "tarefa parada" dos planos (testes). */
@@ -313,6 +324,9 @@ export class WorkspaceRuntime {
   private readonly usageInfo: Pick<RuntimeOptions, "usage" | "availability" | "now">;
   /** O limite de trabalho em paralelo de agora (as Configurações podem mudar, por isso é uma leitura). */
   private readonly dispatchNow: () => DispatchSettings;
+  /** Regra de aprovação de projetos deste workspace (lida a cada `create_project`). */
+  private readonly planApprovalNow: () => PlanApprovalSettings;
+  private readonly setPlanApprovalRule: ((rule: PlanApprovalRule, note?: PlanApprovalNote) => Promise<PlanApprovalSettings>) | undefined;
   private readonly platformLink: RuntimeOptions["platformLink"];
   private readonly agendaDeps: OfficeToolsDeps["agenda"];
   private readonly muralDeps: OfficeToolsDeps["mural"];
@@ -345,6 +359,8 @@ export class WorkspaceRuntime {
     this.simulated = options.runner !== undefined;
     this.usageInfo = { usage: options.usage, availability: options.availability, now: options.now };
     this.dispatchNow = () => dispatchSettings(options.workspaceDispatch?.(id));
+    this.planApprovalNow = () => options.workspacePlanApproval?.(id) ?? { rule: DEFAULT_PLAN_APPROVAL };
+    this.setPlanApprovalRule = options.setWorkspacePlanApproval ? (rule, note) => options.setWorkspacePlanApproval!(id, rule, note) : undefined;
     this.agendaDeps = options.agenda ? { service: options.agenda, workspaceId: id, now: options.now, ...(options.workspaceName ? { workspaceName: options.workspaceName } : {}) } : undefined;
     this.muralDeps = options.mural ? { service: options.mural, workspaceId: id, workspaceName: (workspaceId) => options.workspaceName?.(workspaceId) } : undefined;
     this.models = () => options.workspaceModels?.(id);
@@ -684,6 +700,7 @@ export class WorkspaceRuntime {
         return this.cliMaestro.owns(state, request) ? this.cliMaestro : this.maestro;
       },
       settings: () => dispatchSettings(options.workspaceDispatch?.(id)),
+      planApproval: () => this.planApprovalNow(),
       availability: (agent) => options.availability?.block(agentEngine(agent), agent.model, { agentId: agent.id, workspaceId: id }),
       holdsHour: (agent) => agentEngine(agent) === "freebuff" && freebuffHoldsHour(options.usage?.get("freebuff")?.freebuff, { agentId: agent.id, workspaceId: id }, options.now().getTime()),
       typeNote: (typeId) => delegationTypeNote(this.forYouTypes.list(), typeId),
@@ -1170,7 +1187,8 @@ export class WorkspaceRuntime {
     for (const project of expandAvulsas(this.plans.list())) {
       if (project.status !== "ativo" || project.origin === "rotina") continue;
       project.tasks.forEach((task, index) => {
-        if (task.group === true || (task.status !== "a_fazer" && task.status !== "backlog")) return;
+        // A folha Planejada (ainda não liberada) não "vem a seguir": só entra no resumo quando for liberada.
+        if (task.group === true || (task.status !== "a_fazer" && task.status !== "backlog") || releaseHold(task)) return;
         const agentId = task.steps[0]?.agentId ?? (task.ownerId || undefined);
         rows.push({ title: task.title, project: project.kind === "projeto" ? project.title : "Avulsas", ...(agentId && names.get(agentId) ? { agent: names.get(agentId)! } : {}), rank: taskRankInput(project, task, index) });
       });
@@ -1289,6 +1307,24 @@ export class WorkspaceRuntime {
           }
         : {}),
       plans: this.plans,
+      planApproval: {
+        get: () => this.planApprovalNow(),
+        set: async (rule, ownerQuote) => {
+          const at = this.now().toISOString();
+          const quote = ownerQuote.trim();
+          const note: PlanApprovalNote = { quote, at, by: "maestro" };
+          const saved = this.setPlanApprovalRule ? await this.setPlanApprovalRule(rule, note) : { rule, note };
+          activeActivity()?.record({
+            workspaceId: this.id,
+            category: "plano",
+            action: "regra-aprovacao",
+            actor: ACTIVITY_MAESTRO,
+            summary: `O Maestro passou a regra de aprovação para «${PLAN_APPROVAL_LABELS[rule]}» a pedido do dono: «${quote}»`,
+            data: { rule, quote },
+          });
+          return saved;
+        },
+      },
       today: () => this.today(),
       dayStats: { dayStats: (day) => this.dayStats(day), now: () => this.now() },
       metrics: { metrics: (window) => this.metrics(window), now: () => this.now() },

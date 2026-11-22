@@ -67,7 +67,7 @@ export function NewWorkDialog({ onClose, onSent }: { onClose: () => void; onSent
             <input type="radio" name={`${id}-k`} checked={kind === "projeto"} onChange={() => setKind("projeto")} data-testid="work-new-projeto" />
             <span>
               <strong>Projeto</strong>
-              <small>Várias tarefas; o Maestro monta o plano e você aprova.</small>
+              <small>Várias tarefas; o Maestro organiza o projeto e pede seu OK quando precisar.</small>
             </span>
           </label>
         </fieldset>
@@ -87,7 +87,7 @@ export function NewWorkDialog({ onClose, onSent }: { onClose: () => void; onSent
             </select>
           </div>
         </div>
-        <p className="w-new__hint">O pedido vai para o Maestro, que cria o {kind === "projeto" ? "plano (você aprova antes de começar)" : "trabalho e escolhe o agente"}.</p>
+        <p className="w-new__hint">O pedido vai para o Maestro, que organiza o {kind === "projeto" ? "projeto (e pede sua aprovação conforme a regra do workspace)" : "trabalho e escolhe o agente"}.</p>
         <ErrorText testId="work-new-error">{error}</ErrorText>
         <div className="ui-actions">
           <button type="button" className="ui-button ui-button--secondary" onClick={onClose}>

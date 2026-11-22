@@ -1,8 +1,11 @@
-import { childrenOf, isLeaf, PROJECT_LIMITS, type Project, type ProjectTask } from "@cyno/shared";
+import { isLeaf, PROJECT_SAFETY, type Project, type ProjectTask } from "@cyno/shared";
+import { depthIn, heightIn, isLeafIn, kidsOf, moveDependencyConflict, subtreeSet, treeIndex } from "./treeIndex";
 
 /**
  * As regras de onde uma linha pode cair ao arrastar (árvore e sprints). Funções puras: a tela só pergunta
  * "pode?" e mostra o aviso curto quando não pode. Valem as mesmas regras do servidor (`moveNode`, `moveToSprint`).
+ * Não há limite de profundidade nem de itens por nível (só a rede de segurança `PROJECT_SAFETY`); módulo pode ir
+ * para dentro de módulo.
  */
 
 export type DropZone = "before" | "after" | "inside";
@@ -18,63 +21,36 @@ const live = (project: Pick<Project, "tasks">): Pick<Project, "tasks"> => ({ tas
 /** A folha já começou? Então não vira mãe (o servidor recusa). */
 const startedLeaf = (task: ProjectTask): boolean => !task.group && task.status !== "backlog" && task.status !== "a_fazer";
 
-/** Os `ref` de dentro da subárvore (inclusive o próprio). */
-function subtree(project: Pick<Project, "tasks">, ref: string): Set<string> {
-  const out = new Set<string>([ref]);
-  const stack = [ref];
-  while (stack.length > 0) {
-    for (const child of childrenOf(project, stack.pop())) {
-      if (out.has(child.ref)) continue;
-      out.add(child.ref);
-      stack.push(child.ref);
-    }
-  }
-  return out;
-}
-
-/** Altura da subárvore do nó (1 = só ele). */
-function height(project: Pick<Project, "tasks">, task: ProjectTask): number {
-  return 1 + Math.max(0, ...childrenOf(project, task.ref).map((child) => height(project, child)));
-}
-
-/** Profundidade de um nó (1 = direto no projeto). */
-function depthOf(project: Pick<Project, "tasks">, task: ProjectTask): number {
-  const byRef = new Map(project.tasks.map((candidate) => [candidate.ref, candidate]));
-  let depth = 1;
-  for (let parent = task.parent ? byRef.get(task.parent) : undefined, guard = 0; parent && guard < 10; parent = parent.parent ? byRef.get(parent.parent) : undefined, guard += 1) depth += 1;
-  return depth;
-}
-
 /**
- * Onde a linha `dragRef` cai se soltar sobre `overRef` na zona dada (antes, depois ou dentro). Respeita a
- * profundidade máxima, não deixa soltar dentro de si mesma nem nos filhos dela, entregável só na raiz e
- * tarefa que já começou não vira mãe.
+ * Onde a linha `dragRef` cai se soltar sobre `overRef` na zona dada (antes, depois ou dentro). Não deixa soltar
+ * dentro de si mesma nem nos filhos dela, nem criar dependência impossível (um módulo esperando o próprio conteúdo),
+ * e tarefa que já começou não vira mãe.
  */
 export function treeDrop(project: Project, dragRef: string, overRef: string, zone: DropZone): TreeVerdict {
   const visible = live(project);
-  const dragged = visible.tasks.find((task) => task.ref === dragRef);
-  const over = visible.tasks.find((task) => task.ref === overRef);
+  const index = treeIndex(visible.tasks);
+  const dragged = index.byRef.get(dragRef);
+  const over = index.byRef.get(overRef);
   const no = (reason: string): TreeVerdict => ({ ok: false, reason, zone, overRef });
   if (!dragged || !over) return no("");
   if (dragRef === overRef) return no("");
-  if (subtree(visible, dragRef).has(overRef)) return no("Não dá para soltar dentro dela mesma.");
-  const need = height(visible, dragged);
+  if (subtreeSet(index, dragRef).has(overRef)) return no("Não dá para soltar dentro dela mesma.");
+  const need = heightIn(index, dragRef);
 
   let parent: ProjectTask | undefined;
   if (zone === "inside") {
-    if (dragged.group) return no("Entregável só fica direto no projeto.");
-    if (startedLeaf(over) && isLeaf(visible, over)) return no("Essa tarefa já começou: não dá para dividir em subtarefas.");
+    if (startedLeaf(over) && isLeafIn(index, over)) return no("Essa tarefa já começou: não dá para dividir em subtarefas.");
     parent = over;
   } else {
-    parent = over.parent ? visible.tasks.find((task) => task.ref === over.parent) : undefined;
-    if (dragged.group && parent) return no("Entregável só fica direto no projeto.");
+    parent = over.parent ? index.byRef.get(over.parent) : undefined;
   }
-  const parentDepth = parent ? depthOf(visible, parent) : 0;
-  if (parentDepth + need > PROJECT_LIMITS.depth) return no(`Passa do limite de ${PROJECT_LIMITS.depth} níveis.`);
+  const parentDepth = parent ? depthIn(index, parent.ref) : 0;
+  if (parentDepth + need > PROJECT_SAFETY.depth) return no(`Passa do limite de ${PROJECT_SAFETY.depth} níveis.`);
+  const conflict = moveDependencyConflict(index, dragRef, parent?.ref);
+  if (conflict) return no(conflict);
 
   const newParent = parent?.ref ?? null;
-  const siblings = childrenOf(visible, newParent ?? undefined).filter((task) => task.ref !== dragRef);
-  if (siblings.length >= PROJECT_LIMITS.children && (dragged.parent ?? null) !== newParent) return no(`Cada nível aceita até ${PROJECT_LIMITS.children} itens.`);
+  const siblings = kidsOf(index, newParent).filter((task) => task.ref !== dragRef);
 
   let before: string | null;
   if (zone === "inside") before = null;
@@ -85,9 +61,9 @@ export function treeDrop(project: Project, dragRef: string, overRef: string, zon
   }
 
   // Já está exatamente aí?
-  const current = childrenOf(visible, dragged.parent).map((task) => task.ref);
-  const index = current.indexOf(dragRef);
-  const stays = (dragged.parent ?? null) === newParent && (before === null ? index === current.length - 1 : current[index + 1] === before);
+  const current = kidsOf(index, dragged.parent).map((task) => task.ref);
+  const position = current.indexOf(dragRef);
+  const stays = (dragged.parent ?? null) === newParent && (before === null ? position === current.length - 1 : current[position + 1] === before);
   if (stays) return no("");
   return { ok: true, move: { parent: newParent, before }, zone, overRef };
 }

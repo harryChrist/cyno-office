@@ -1,7 +1,7 @@
 import { findMaestroAgent, isActiveTaskStatus, isMaestroAgent, subtasksOf, type OfficeState, type Task } from "@cyno/shared";
 import type { TaskProgressMap } from "../store/taskProgress";
 import { MAESTRO_ACTIVITY_LABELS, type ActivityEntry, type ActivityKind } from "../ui/activity";
-import { AGENT_STATUS_LABELS, truncate, type StatusTone } from "../ui/format";
+import { agentStatusLabel, truncate, type StatusTone } from "../ui/format";
 import type { RequestItem, RequestStage, StepItem, StepState } from "./timeline";
 
 /** Quantos pedidos o painel do Maestro mostra (os mais recentes); o resto fica na página Trabalho. */
@@ -124,7 +124,7 @@ export function agentWorkStatus(office: OfficeState, agentId: string, progress: 
   const live = current ? progress[current.id] : undefined;
   const tone: StatusTone = agent.status === "working" ? "busy" : agent.status === "waiting_approval" ? "attention" : agent.status === "done" ? "success" : "neutral";
   return {
-    label: AGENT_STATUS_LABELS[agent.status],
+    label: agentStatusLabel(agent, office.tasks),
     tone,
     detail: live?.message ?? (current ? `“${truncate(current.prompt, 80)}”` : undefined),
     progress: live?.progress,

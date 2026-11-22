@@ -72,7 +72,7 @@ export function NewProjectDialog({ onClose, onCreated }: { onClose: () => void; 
             </select>
           </div>
         </div>
-        <p className="w-new__hint">O projeto começa vazio e em andamento. Crie os entregáveis e as tarefas na árvore e escolha quem faz cada uma.</p>
+        <p className="w-new__hint">O projeto começa vazio e em andamento. Crie os módulos e as tarefas na árvore e escolha quem faz cada uma.</p>
         <ErrorText testId="work-new-project-error">{error}</ErrorText>
         <div className="ui-actions">
           <button type="button" className="ui-button ui-button--secondary" onClick={onClose}>

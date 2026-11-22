@@ -1,6 +1,7 @@
-import { assigneesOf, childrenOf, compareWork, isAvulsas, isProjectOpen, projectProgress, type ForYouItem, type Project, type ProjectPriority } from "@cyno/shared";
+import { assigneesOf, childrenOf, compareWork, isAvulsas, isProjectOpen, projectUnitProgress, type ForYouItem, type Project, type ProjectPriority, type UnitProgress } from "@cyno/shared";
+import { isUnreleasedProject } from "./releaseView";
 import { currentSprintLabel } from "./sprintsView";
-import { awaitingUser, deadlineOf, projectState, type Deadline, type StateInfo } from "./workView";
+import { awaitingUser, deadlineOf, projectState, unitProgressText, type Deadline, type StateInfo } from "./workView";
 
 /**
  * A entrada de "Projetos e tarefas": só os projetos, em três grupos (Em progresso, Na fila, Concluídos), e o
@@ -18,8 +19,10 @@ export type ProjectEntry = {
   project: Project;
   group: ProjectGroupId | "avulsas";
   state: StateInfo;
-  /** Folhas concluídas e total (sem canceladas nem puladas). */
-  progress: { done: number; total: number };
+  /** Módulos de primeiro nível concluídos e total ("3 de 8 módulos"); sem módulo, tarefas. Sem canceladas nem puladas. */
+  progress: UnitProgress;
+  /** O texto do progresso: "3 de 8 módulos", "12 de 40 tarefas". */
+  progressText: string;
   /** Agentes envolvidos (até 3) e quantos passam disso. */
   agents: string[];
   moreAgents: number;
@@ -33,6 +36,8 @@ export type ProjectEntry = {
   risk: boolean;
   /** Projeto pausado (selo). */
   paused: boolean;
+  /** Tem folhas e nenhuma foi liberada (chip "Planejado"). */
+  unreleased: boolean;
   /** A sprint em andamento ("Sprint 2 · até 18/11"), quando há. */
   sprint?: string;
 };
@@ -61,13 +66,14 @@ function entryOf(project: Project, group: ProjectEntry["group"], waiting: number
   const roots = childrenOf(live);
   const agents: string[] = [];
   for (const root of roots) for (const id of assigneesOf(live, root, Number.POSITIVE_INFINITY)) if (!agents.includes(id)) agents.push(id);
-  const { done, total } = projectProgress(live);
+  const progress = projectUnitProgress(live);
   const deadline = group === "avulsas" ? null : deadlineOf(project, now);
   return {
     project,
     group,
     state: projectState(project),
-    progress: { done, total },
+    progress,
+    progressText: unitProgressText(progress),
     agents: agents.slice(0, ENTRY_AGENTS_SHOWN),
     moreAgents: Math.max(0, agents.length - ENTRY_AGENTS_SHOWN),
     deadline,
@@ -76,6 +82,7 @@ function entryOf(project: Project, group: ProjectEntry["group"], waiting: number
     open: live.tasks.filter((task) => !FINISHED.has(task.status) && !task.group && !live.tasks.some((child) => child.parent === task.ref)).length,
     risk: deadline?.risk ?? false,
     paused: project.status === "pausado",
+    unreleased: group !== "avulsas" && isProjectOpen(project) && isUnreleasedProject(live),
     ...(currentSprintLabel(project) ? { sprint: currentSprintLabel(project)! } : {}),
   };
 }

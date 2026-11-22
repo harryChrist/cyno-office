@@ -594,6 +594,76 @@
   color: var(--ui-text-2);
 }
 
+/* Aprovação de planos: lista vertical de opções em rádio, discreta e escura. */
+.settings__radios {
+  display: grid;
+  gap: 8px;
+}
+
+.settings__radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  cursor: pointer;
+  transition:
+    background-color var(--ui-fast),
+    border-color var(--ui-fast);
+}
+
+.settings__radio:hover {
+  border-color: var(--ui-border-strong);
+}
+
+.settings__radio--on {
+  background: var(--ui-accent-bg);
+  border-color: color-mix(in srgb, var(--ui-accent) 45%, transparent);
+}
+
+.settings__radio input {
+  flex: none;
+  margin-top: 3px;
+  accent-color: var(--ui-accent);
+}
+
+.settings__radio-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings__radio-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ui-text);
+}
+
+.settings__radio-desc {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+}
+
+.settings__approval-note {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--ui-surface-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.settings__approval-note-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ui-text-2);
+  overflow-wrap: anywhere;
+}
+
 /* ---------- Acesso (senha do app) ---------- */
 .settings__card--warn {
   border-color: color-mix(in srgb, var(--ui-warn) 45%, transparent);

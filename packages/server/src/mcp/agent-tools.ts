@@ -6,6 +6,7 @@ import {
   isMaestroTask,
   isPlanProject,
   isPlanTaskFinished,
+  requestIdOf,
   subtasksOf,
   type AgentEngine,
   type AgentLogEntry,
@@ -182,8 +183,13 @@ export function agentTools(deps: AgentToolsDeps): McpTool[] {
           requests
             .map((request) => {
               const subtasks = subtasksOf(state.tasks, request.id);
-              const plan = plans.find((candidate) => candidate.id === request.id);
-              const planText = plan ? `; plan: ${planStatusInput(plan.status)} (${plan.tasks.filter(isPlanTaskFinished).length}/${plan.tasks.length} tasks)` : "";
+              const reqPlans = plans.filter((candidate) => requestIdOf(candidate) === request.id && isPlanProject(candidate));
+              const planText =
+                reqPlans.length === 1
+                  ? `; plan: ${planStatusInput(reqPlans[0]!.status)} (${reqPlans[0]!.tasks.filter(isPlanTaskFinished).length}/${reqPlans[0]!.tasks.length} tasks)`
+                  : reqPlans.length > 1
+                    ? `; projects: ${reqPlans.map((p) => `${p.id} (${planStatusInput(p.status)})`).join(", ")}`
+                    : "";
               const subs = subtasks.length > 0 ? `; subtasks: ${subtasks.map((sub) => `${names.get(sub.agentId ?? "") ?? "?"} ${sub.status}`).join(", ")}` : "";
               const waiting = request.waiting ? `; waiting: ${oneLine(request.waiting, 80)}` : "";
               return `- ${request.id} — ${request.status} — “${titleOf(request)}” (opened ${request.createdAt.slice(0, 16).replace("T", " ")})${planText}${subs}${waiting}`;
@@ -194,7 +200,7 @@ export function agentTools(deps: AgentToolsDeps): McpTool[] {
     }),
     defineTool({
       name: "list_projects",
-      description: "Lists the requests' projects: project id, request id, status and progress (use get_project(request_id) for the detail).",
+      description: "Lists the workspace's projects: project id, request id, status and progress (use get_project(project_id) for the detail).",
       input: z.object({ status: z.enum(PLAN_STATUS_IDS).optional().describe(`${PLAN_STATUS_IDS.join(", ")} (default: all)`) }),
       call: ({ status }) => {
         const plans = (deps.plans?.list() ?? []).filter(isPlanProject).filter((plan) => !status || plan.status === PLAN_STATUS_INPUTS[status]);
@@ -205,7 +211,7 @@ export function agentTools(deps: AgentToolsDeps): McpTool[] {
             .reverse()
             .map((plan) => {
               const failed = plan.tasks.filter((task) => task.status === "falhou").map((task) => task.ref);
-              return `- ${plan.id} — request ${plan.id} — ${planStatusInput(plan.status)} — “${oneLine(plan.title, 80)}”: ${plan.tasks.filter(isPlanTaskFinished).length}/${plan.tasks.length} tasks finished${failed.length > 0 ? `; FAILED: ${failed.join(", ")}` : ""}`;
+              return `- ${plan.id} — request ${requestIdOf(plan)} — ${planStatusInput(plan.status)} — “${oneLine(plan.title, 80)}”: ${plan.tasks.filter(isPlanTaskFinished).length}/${plan.tasks.length} tasks finished${failed.length > 0 ? `; FAILED: ${failed.join(", ")}` : ""}`;
             })
             .join("\n"),
         );

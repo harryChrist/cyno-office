@@ -243,13 +243,12 @@ describe("DELETE /projects/:id/tasks/:ref (uma tarefa avulsa terminada)", () => 
     expect(busy.json<Reply>().error).toMatch(/execução em andamento/);
     expect(t.taskIds()).toContain(running.taskId);
 
-    // Projeto comum: 409 (apagar no meio quebraria os "Depois de"); projeto que não existe: 404.
+    // Projeto comum: também apaga a tarefa (se não estiver rodando/esperando você); projeto que não existe: 404.
     const project = (await t.ctx.app.inject({ method: "POST", url: `${API}/projects`, payload: { title: "Campanha" } })).json<Reply>().project;
     const task = (await t.ctx.app.inject({ method: "POST", url: `${API}/projects/${project.id}/tasks`, payload: { title: "Post" } })).json<Reply>().ref!;
     const common = await t.del(`/projects/${project.id}/tasks/${task}`);
-    expect(common.statusCode).toBe(409);
-    expect(common.json<Reply>().error).toMatch(/Avulsas/);
-    expect(t.runtime.plans.get(project.id).tasks.map((candidate) => candidate.ref)).toEqual([task]);
+    expect(common.statusCode, common.body).toBe(200);
+    expect(t.runtime.plans.get(project.id).tasks).toEqual([]);
     expect((await t.del(`/projects/nao-existe/tasks/${task}`)).statusCode).toBe(404);
   });
 
@@ -279,7 +278,10 @@ describe("DELETE /projects/:id (um projeto inteiro)", () => {
   const addTask = async (t: Awaited<ReturnType<typeof setup>>, id: string, title: string, extra: object = {}): Promise<string> => {
     const response = await t.ctx.app.inject({ method: "POST", url: `${API}/projects/${id}/tasks`, payload: { title, ...extra } });
     expect(response.statusCode, response.body).toBe(201);
-    return response.json<Reply>().ref!;
+    const ref = response.json<Reply>().ref!;
+    // Criar não executa: estes testes querem a tarefa rodando, então liberam logo (a regra nova tem os testes dela em release.test.ts).
+    expect((await t.ctx.app.inject({ method: "POST", url: `${API}/projects/${id}/release`, payload: { refs: [ref] } })).statusCode).toBe(200);
+    return ref;
   };
   const stepTasks = (t: Awaited<ReturnType<typeof setup>>, id: string) => t.ctx.store.snapshot().tasks.filter((task) => task.work?.projectId === id);
 

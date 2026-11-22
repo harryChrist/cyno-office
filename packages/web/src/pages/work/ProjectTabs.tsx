@@ -8,7 +8,7 @@ import { AgentTag } from "./Agent";
 import { DeliverySummary } from "./DeliverySummary";
 import { deliveryGroups, type DeliveryGroup } from "./deliveryView";
 import { SPRINT_STATUS_LABEL } from "./sprintsView";
-import { projectTimeline, workedLabel } from "./workView";
+import { projectApprovalBadge, projectTimeline, workedLabel } from "./workView";
 
 const noWiki = () => null;
 
@@ -135,38 +135,52 @@ function SprintDeliveries({ group, project, agents, onOpenTask, defaultOpen }: {
 /** Aba Atividade: a linha do tempo do projeto por dia (criado, aprovado, entregas, repasses, prazo e horas trabalhadas). */
 export function ActivityTab({ project, agents }: { project: Project; agents: ReadonlyMap<string, Agent> }) {
   const days = projectTimeline(project, (id) => agents.get(id)?.name ?? id);
+  const approvalBadge = projectApprovalBadge(project.approval);
+  const badgeNode = approvalBadge ? (
+    <div className="pt-approval" data-testid="activity-approval-badge">
+      <span className="w-kind w-kind--approval" title={approvalBadge.title}>
+        {approvalBadge.label}
+      </span>
+    </div>
+  ) : null;
   if (days.length === 0) {
     return (
-      <div className="pt-empty">
-        <p className="pt-empty__title">Sem atividade ainda</p>
+      <div className="pt-activity">
+        {badgeNode}
+        <div className="pt-empty">
+          <p className="pt-empty__title">Sem atividade ainda</p>
+        </div>
       </div>
     );
   }
   return (
-    <ol className="w-timeline pt-timeline" data-testid="work-timeline">
-      {[...days].reverse().map((day) => {
-        const [year, month, date] = day.day.split("-");
-        return (
-          <li key={day.day} className="w-timeline__day">
-            <span className="w-timeline__date">
-              {date}/{month}
-              <small>{year}</small>
-            </span>
-            <div className="w-timeline__body">
-              <ul className="w-timeline__entries">
-                {day.entries.map((entry, index) => (
-                  <li key={index} className={`w-timeline__entry w-timeline__entry--${entry.kind}`}>
-                    <span className="w-timeline__dot" aria-hidden="true" />
-                    <span>{entry.text}</span>
-                    <time dateTime={entry.at}>{formatDateTime(entry.at).slice(-5)}</time>
-                  </li>
-                ))}
-              </ul>
-              {day.workedMs > 0 && <p className="w-timeline__worked">{workedLabel(day.workedMs)} trabalhadas</p>}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="pt-activity">
+      {badgeNode}
+      <ol className="w-timeline pt-timeline" data-testid="work-timeline">
+        {[...days].reverse().map((day) => {
+          const [year, month, date] = day.day.split("-");
+          return (
+            <li key={day.day} className="w-timeline__day">
+              <span className="w-timeline__date">
+                {date}/{month}
+                <small>{year}</small>
+              </span>
+              <div className="w-timeline__body">
+                <ul className="w-timeline__entries">
+                  {day.entries.map((entry, index) => (
+                    <li key={index} className={`w-timeline__entry w-timeline__entry--${entry.kind}`}>
+                      <span className="w-timeline__dot" aria-hidden="true" />
+                      <span title={entry.title}>{entry.text}</span>
+                      <time dateTime={entry.at}>{formatDateTime(entry.at).slice(-5)}</time>
+                    </li>
+                  ))}
+                </ul>
+                {day.workedMs > 0 && <p className="w-timeline__worked">{workedLabel(day.workedMs)} trabalhadas</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }

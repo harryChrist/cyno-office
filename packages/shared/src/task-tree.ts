@@ -1,10 +1,11 @@
 import type { Project, ProjectTask, ProjectTaskStatus } from "./projects";
-import { PROJECT_LIMITS } from "./projects";
+import { findDependencyCycle, PROJECT_LIMITS, PROJECT_SAFETY } from "./projects";
+import { effectiveDeps } from "./task-flow";
 
 /**
  * Árvore de tarefas do projeto: funções puras sobre `Project.tasks` (cada tarefa guarda `parent`, o
- * `ref` do pai; ausente = filha direta do projeto). Só as FOLHAS executam; entregável (`group`) e pai
- * têm estado e responsáveis calculados aqui, nunca gravados. Sem `parent` em ninguém (todos os
+ * `ref` do pai; ausente = filha direta do projeto). Só as FOLHAS executam; módulo (`group`, em qualquer
+ * profundidade) e pai têm estado e responsáveis calculados aqui, nunca gravados. Sem `parent` em ninguém (todos os
  * projetos gravados até hoje), toda tarefa é folha e nada muda.
  */
 
@@ -38,18 +39,39 @@ export function isLeaf(project: Tasks, task: Pick<ProjectTask, "ref" | "group">)
   return !task.group && !project.tasks.some((candidate) => candidate.parent === task.ref);
 }
 
+/** Filhas diretas por pai (`""` = o projeto), já na ordem da árvore: um índice só, em vez de varrer a lista a cada nó. */
+function childIndex(tasks: readonly ProjectTask[]): Map<string, ProjectTask[]> {
+  const groups = new Map<string, { task: ProjectTask; index: number }[]>();
+  tasks.forEach((task, index) => {
+    const key = task.parent ?? "";
+    const list = groups.get(key);
+    if (list) list.push({ task, index });
+    else groups.set(key, [{ task, index }]);
+  });
+  const out = new Map<string, ProjectTask[]>();
+  for (const [key, list] of groups) {
+    list.sort((a, b) => sortKey(a.task, a.index) - sortKey(b.task, b.index) || a.index - b.index);
+    out.set(
+      key,
+      list.map(({ task }) => task),
+    );
+  }
+  return out;
+}
+
 /** Folhas do projeto inteiro ou da subárvore de `ref` (uma folha devolve ela mesma). Na ordem da árvore. */
 export function leavesOf(project: Tasks, ref?: string): ProjectTask[] {
   const out: ProjectTask[] = [];
-  const parents = parentRefs(project.tasks);
+  const index = childIndex(project.tasks);
   const seen = new Set<string>();
   const walk = (node: ProjectTask) => {
     if (seen.has(node.ref)) return;
     seen.add(node.ref);
-    if (!node.group && !parents.has(node.ref)) out.push(node);
-    else for (const child of childrenOf(project, node.ref)) walk(child);
+    const kids = index.get(node.ref);
+    if (!node.group && !kids) out.push(node);
+    else for (const child of kids ?? []) walk(child);
   };
-  if (ref === undefined) for (const top of childrenOf(project)) walk(top);
+  if (ref === undefined) for (const top of index.get("") ?? []) walk(top);
   else {
     const node = project.tasks.find((task) => task.ref === ref);
     if (node) walk(node);
@@ -121,14 +143,65 @@ export function statusOf(project: Tasks, task: ProjectTask): ProjectTaskStatus {
   return walk(task, new Set());
 }
 
+/** A folha terminou: concluída (inclui a pulada), cancelada ou arquivada. */
+function leafFinished(task: ProjectTask): boolean {
+  return task.archived === true || task.status === "concluida" || task.status === "cancelada";
+}
+
+/** A tarefa/módulo tem filhas ou é um módulo vazio (`group`): é contêiner, não executa. */
+export function isContainer(project: Tasks, node: ProjectTask): boolean {
+  return !isLeaf(project, node);
+}
+
 /**
- * `ref` das tarefas "prontas" para quem depende delas: a folha concluída e o pai/entregável cujas folhas
- * terminaram (todas concluídas ou canceladas, ao menos uma concluída). Uma dependência que aponta para
- * um pai espera todas as folhas dele.
+ * O nó terminou: a folha concluída (a pulada é concluída), cancelada ou arquivada; o contêiner (módulo ou mãe) quando TODAS as
+ * folhas dele terminaram. Contêiner sem nenhuma folha (módulo vazio) ainda não terminou. `ref` desconhecido: false.
+ */
+export function nodeDone(project: Tasks, ref: string): boolean {
+  const node = project.tasks.find((task) => task.ref === ref);
+  if (!node) return false;
+  if (isLeaf(project, node)) return leafFinished(node);
+  const leaves = leavesOf(project, ref);
+  return leaves.length > 0 && leaves.every(leafFinished);
+}
+
+/**
+ * `ref` dos nós "prontos" para quem depende deles: a folha concluída (ou pulada) e o contêiner (módulo ou mãe) em que toda folha terminou
+ * (`nodeDone`) sem nenhuma cancelada: uma folha cancelada ou que falhou segura quem depende (fica "travada", `deadDependencies`), como sempre.
  */
 export function completedRefs(project: Tasks): Set<string> {
+  const index = childIndex(project.tasks);
   const out = new Set<string>();
-  for (const task of project.tasks) if (statusOf(project, task) === "concluida") out.add(task.ref);
+  const memo = new Map<string, { leaves: number; open: number; cancelled: number }>();
+  const tally = (node: ProjectTask, seen: Set<string>): { leaves: number; open: number; cancelled: number } => {
+    const known = memo.get(node.ref);
+    if (known) return known;
+    const kids = (index.get(node.ref) ?? []).filter((child) => !seen.has(child.ref));
+    let result: { leaves: number; open: number; cancelled: number };
+    if (!node.group && !index.has(node.ref)) {
+      const cancelled = node.status === "cancelada" ? 1 : 0;
+      result = { leaves: 1, open: leafFinished(node) ? 0 : 1, cancelled };
+    } else {
+      const next = new Set(seen).add(node.ref);
+      result = { leaves: 0, open: 0, cancelled: 0 };
+      for (const child of kids) {
+        const part = tally(child, next);
+        result.leaves += part.leaves;
+        result.open += part.open;
+        result.cancelled += part.cancelled;
+      }
+    }
+    memo.set(node.ref, result);
+    return result;
+  };
+  for (const task of project.tasks) {
+    if (!task.group && !index.has(task.ref)) {
+      if (task.status === "concluida") out.add(task.ref);
+      continue;
+    }
+    const total = tally(task, new Set());
+    if (total.leaves > 0 && total.open === 0 && total.cancelled === 0) out.add(task.ref);
+  }
   return out;
 }
 
@@ -162,55 +235,65 @@ export function assigneesOf(project: Tasks, node: ProjectTask, max: number = 3):
 export type TreeProblems = { errors: string[]; warnings: string[] };
 
 /** `ref` de todos os descendentes de `ref` (sem repetir, tolera ciclo). */
-function descendantRefs(project: Tasks, ref: string): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>([ref]);
+function descendantRefs(index: Map<string, ProjectTask[]>, ref: string): Set<string> {
+  const out = new Set<string>();
   const stack = [ref];
   while (stack.length > 0) {
     const current = stack.pop()!;
-    for (const task of project.tasks) {
-      if (task.parent !== current || seen.has(task.ref)) continue;
-      seen.add(task.ref);
-      out.push(task.ref);
-      stack.push(task.ref);
+    for (const child of index.get(current) ?? []) {
+      if (out.has(child.ref) || child.ref === ref) continue;
+      out.add(child.ref);
+      stack.push(child.ref);
     }
   }
   return out;
 }
 
 /**
- * Confere a árvore (erros em inglês, para o modelo corrigir): `group` só em profundidade 1 e sem
- * `steps`; folha com `steps` vazios; `parent` inexistente ou ciclo; profundidade acima de 3; mais de
- * 200 nós ou 40 filhas; `sprintId` inexistente ou em quem não é folha; mais de 12 subtarefas numa
- * tarefa (teto técnico contra erro); mais de 5 etiquetas; `dependsOn` que aponta para um descendente. Dependência
- * de uma sprint posterior vira aviso (não bloqueia).
+ * Confere a árvore (erros em inglês, para o modelo corrigir): `group` (módulo) em QUALQUER profundidade, mas sem `steps`; folha com `steps` vazios;
+ * `parent` inexistente ou ciclo; `sprintId` inexistente ou em quem não é folha; mais de 5 etiquetas; `dependsOn` que aponta para um descendente;
+ * dependências que formam um ciclo (também por módulos e tarefas-mãe). Sem teto de itens, de níveis nem de filhas: só a rede de segurança
+ * `PROJECT_SAFETY` (itens e profundidade) contra erro grosseiro. Dependência de uma sprint posterior vira aviso (não bloqueia).
  */
 export function validateTree(project: Pick<Project, "tasks" | "sprints" | "labels">): TreeProblems {
   const errors: string[] = [];
   const warnings: string[] = [];
   const tasks = project.tasks;
   const byRef = new Map(tasks.map((task) => [task.ref, task]));
-  if (tasks.length > PROJECT_LIMITS.nodes) errors.push(`At most ${PROJECT_LIMITS.nodes} nodes per project (deliverables count)`);
+  if (tasks.length > PROJECT_SAFETY.nodes) errors.push(`The project would have ${tasks.length} items (safety net: at most ${PROJECT_SAFETY.nodes} items per project). Split it into more than one project`);
   const parents = parentRefs(tasks);
   const sprints = new Map((project.sprints ?? []).map((sprint) => [sprint.id, sprint]));
   const labelIds = project.labels ? new Set(project.labels.map((label) => label.id)) : undefined;
   const cyclic = new Set<string>();
-  const children = new Map<string, number>();
+  let tooDeep = 0;
+  const depthIn = (ref: string): number => {
+    const seen = new Set<string>();
+    let depth = 0;
+    let current = byRef.get(ref);
+    while (current) {
+      if (seen.has(current.ref)) return Number.POSITIVE_INFINITY;
+      seen.add(current.ref);
+      depth += 1;
+      current = current.parent ? byRef.get(current.parent) : undefined;
+    }
+    return depth;
+  };
   for (const task of tasks) {
-    children.set(task.parent ?? "", (children.get(task.parent ?? "") ?? 0) + 1);
     const label = `Task ${task.ref}`;
     if (task.parent !== undefined && !byRef.has(task.parent)) errors.push(`${label}: parent "${task.parent}" does not exist`);
     if (task.parent === task.ref) errors.push(`${label}: cannot be its own parent`);
-    const depth = depthOf(project, task.ref);
+    const depth = depthIn(task.ref);
     if (depth === Number.POSITIVE_INFINITY) {
       cyclic.add(task.ref);
       if (task.parent !== task.ref) errors.push(`${label}: the parent chain forms a cycle`);
       continue;
     }
-    if (depth > PROJECT_LIMITS.depth) errors.push(`${label}: nested ${depth} levels deep (at most ${PROJECT_LIMITS.depth} below the project: deliverable > task > subtask)`);
+    if (depth > PROJECT_SAFETY.depth) {
+      tooDeep += 1;
+      if (tooDeep === 1) errors.push(`${label}: nested ${depth} levels deep (safety net: at most ${PROJECT_SAFETY.depth} levels below the project). Flatten the structure`);
+    }
     if (task.group) {
-      if (depth !== 1) errors.push(`${label}: a deliverable (group) can only sit directly under the project`);
-      if (task.steps.length > 0) errors.push(`${label}: a deliverable (group) has no steps; it never runs`);
+      if (task.steps.length > 0) errors.push(`${label}: a module (group) has no steps; it never runs`);
     } else if (!parents.has(task.ref) && task.steps.length === 0) {
       errors.push(`${label}: a leaf task needs at least one step`);
     }
@@ -221,24 +304,40 @@ export function validateTree(project: Pick<Project, "tasks" | "sprints" | "label
     if ((task.labels?.length ?? 0) > PROJECT_LIMITS.labelsPerTask) errors.push(`${label}: at most ${PROJECT_LIMITS.labelsPerTask} labels per task`);
     if (labelIds) for (const id of task.labels ?? []) if (!labelIds.has(id)) errors.push(`${label}: label "${id}" does not exist in the project`);
   }
-  for (const [ref, count] of children) if (count > PROJECT_LIMITS.children) errors.push(`${ref === "" ? "The project" : `Task ${ref}`} has ${count} children (at most ${PROJECT_LIMITS.children})`);
+  const index = tasks.some((task) => task.dependsOn.length > 0) ? childIndex(tasks) : new Map<string, ProjectTask[]>();
   for (const task of tasks) {
-    if (cyclic.has(task.ref)) continue;
-    const depth = depthOf(project, task.ref);
-    if (depth >= 2 && depth <= PROJECT_LIMITS.depth) {
-      const total = childrenOf(project, task.ref).length;
-      if (total > PROJECT_LIMITS.subtasksPerTask) errors.push(`Task ${task.ref}: ${total} subtasks (at most ${PROJECT_LIMITS.subtasksPerTask} per task; group the work into fewer subtasks or split the task)`);
-    }
-    const descendants = new Set(descendantRefs(project, task.ref));
+    if (cyclic.has(task.ref) || task.dependsOn.length === 0) continue;
+    const descendants = descendantRefs(index, task.ref);
+    const ancestors = new Set<string>();
+    for (let up = task.parent ? byRef.get(task.parent) : undefined; up && !ancestors.has(up.ref); up = up.parent ? byRef.get(up.parent) : undefined) ancestors.add(up.ref);
     for (const dep of task.dependsOn) {
       if (descendants.has(dep)) errors.push(`Task ${task.ref}: depends on its own descendant "${dep}"`);
+      if (ancestors.has(dep)) errors.push(`Task ${task.ref}: depends on its own ancestor "${dep}" (it only finishes after this one)`);
       const mine = task.sprintId ? sprints.get(task.sprintId) : undefined;
       const other = byRef.get(dep);
       const theirs = other?.sprintId ? sprints.get(other.sprintId) : undefined;
       if (mine && theirs && theirs.order > mine.order) warnings.push(`${task.ref} is in ${mine.name} and depends on ${dep}, which is in ${theirs.name}`);
     }
   }
+  if (cyclic.size === 0 && errors.length === 0 && index.size > 0) {
+    const cycle = dependencyCycle(project);
+    if (cycle) errors.push(`The dependencies form a cycle: ${cycle.join(" → ")}. Remove one of them`);
+  }
   return { errors, warnings };
+}
+
+/**
+ * Ciclo de dependências no grafo EFETIVO das folhas (cada folha espera as folhas das suas dependências e das do módulo/mãe de que é entrada),
+ * ou `null`. Pega "A espera B e B espera A" também por módulos e tarefas-mãe. Devolve os refs das folhas, a primeira repetida no fim.
+ */
+export function dependencyCycle(project: Tasks): string[] | null {
+  const graph = new Map<string, string[]>();
+  for (const leaf of leavesOf(project)) {
+    const waits = new Set<string>();
+    for (const dep of effectiveDeps(project, leaf)) for (const found of leavesOf(project, dep)) if (found.ref !== leaf.ref) waits.add(found.ref);
+    graph.set(leaf.ref, [...waits]);
+  }
+  return findDependencyCycle(graph);
 }
 
 type Progress = { done: number; total: number; skipped: number };
@@ -253,6 +352,54 @@ function progressOf(all: readonly ProjectTask[]): Progress {
 /** Progresso de uma subárvore (ou do projeto): folhas concluídas e total, sem canceladas nem puladas (que contam à parte). "3 de 5". */
 export function treeProgress(project: Tasks, ref?: string): Progress {
   return progressOf(leavesOf(project, ref));
+}
+
+/** Progresso de um módulo (ou de uma tarefa-mãe): as folhas dentro dele, submódulos incluídos (= `treeProgress(project, ref)`). */
+export function moduleProgress(project: Tasks, ref: string): { done: number; total: number; skipped: number } {
+  return treeProgress(project, ref);
+}
+
+/** Progresso do PROJETO na unidade que ele usa: módulos de primeiro nível ou tarefas. */
+export type UnitProgress = { done: number; total: number; skipped: number; unit: "modulos" | "tarefas" };
+
+/**
+ * Progresso do projeto por unidade. Sem nenhum módulo na raiz: as tarefas (folhas), como sempre ("12 de 40 tarefas"). Com módulos na raiz
+ * (`group` ou tarefa com filhas): cada módulo e cada tarefa solta na raiz conta como uma unidade ("3 de 8 módulos", unidade `modulos` também no
+ * misto). Módulo concluído = todas as folhas contáveis dele concluídas; módulo vazio conta como unidade pendente. Fora da conta, como sempre:
+ * canceladas, puladas (contam em `skipped`) e arquivadas; módulo cujas folhas todas caíram fora também sai.
+ */
+export function projectUnitProgress(project: Tasks): UnitProgress {
+  const index = childIndex(project.tasks);
+  const roots = (index.get("") ?? []).filter((task) => !task.archived);
+  const hasContainer = roots.some((task) => task.group || index.has(task.ref));
+  if (!hasContainer) return { ...treeProgress(project), unit: "tarefas" };
+  let done = 0;
+  let total = 0;
+  let skipped = 0;
+  for (const root of roots) {
+    if (!root.group && !index.has(root.ref)) {
+      if (root.status === "cancelada") continue;
+      if (root.status === "concluida" && root.skipped) skipped += 1;
+      else {
+        total += 1;
+        if (root.status === "concluida") done += 1;
+      }
+      continue;
+    }
+    const leaves = leavesOf(project, root.ref);
+    if (leaves.length === 0) {
+      total += 1;
+      continue;
+    }
+    const progress = progressOf(leaves);
+    if (progress.total === 0) {
+      if (progress.skipped > 0) skipped += 1;
+      continue;
+    }
+    total += 1;
+    if (progress.done === progress.total) done += 1;
+  }
+  return { done, total, skipped, unit: "modulos" };
 }
 
 /** Progresso de uma sprint: as folhas com aquele `sprintId`. */

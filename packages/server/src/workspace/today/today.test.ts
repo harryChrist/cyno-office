@@ -99,6 +99,91 @@ describe("buildToday", () => {
     expect(renderToday(view)).toContain("DEADLINE AT RISK (due 11/11 17:00)");
   });
 
+  it("projeto em árvore: o N/M conta só as folhas e o estado gravado do pai/entregável não prende a etapa", () => {
+    // O estado do pai e do entregável é calculado das folhas: o que fica gravado neles é só o valor de quando nasceram.
+    const tasks = [
+      planTask({ ref: "E1", title: "Entregável", group: true, steps: [], status: "backlog" }),
+      planTask({ ref: "M1", title: "Mãe", parent: "E1", steps: [], status: "backlog" }),
+      planTask({ ref: "F1", title: "Pesquisa", parent: "M1", status: "concluida" }),
+      planTask({ ref: "F2", title: "Roteiro", parent: "M1", status: "em_andamento" }),
+      planTask({ ref: "F3", title: "Velha", parent: "M1", status: "concluida", archived: true }),
+      planTask({ ref: "F4", title: "Cortada", parent: "M1", status: "cancelada" }),
+    ];
+    const view = buildToday(input({ projects: [project({ tasks })] }));
+    expect(view.projects[0]).toMatchObject({ stage: { index: 2, total: 2, title: "Roteiro" } });
+    // Terminadas todas as folhas, não sobra "etapa" aberta presa ao pai.
+    const finished = tasks.map((task) => (task.ref === "F2" ? { ...task, status: "concluida" as const } : task));
+    const after = buildToday(input({ projects: [project({ tasks: finished })] }));
+    expect(after.projects[0]!.stage).toBeUndefined();
+  });
+
+  it("folha travada (dependência cancelada) aparece como esperando o dono e a etapa seguinte reflete a mudança de estado", () => {
+    const base = [planTask({ ref: "T1", title: "Pesquisa", status: "cancelada" }), planTask({ ref: "T2", title: "Roteiro", status: "a_fazer", dependsOn: ["T1"] })];
+    const stuck = buildToday(input({ projects: [project({ tasks: base })] }));
+    expect(stuck.projects[0]).toMatchObject({ stage: { title: "Roteiro" }, blocked: { type: "voce" } });
+    // Reabrir a dependência: o painel volta a mostrar a mesma etapa sem o bloqueio (reflete, não acumula).
+    const reopened = buildToday(input({ projects: [project({ tasks: [{ ...base[0]!, status: "concluida" }, base[1]!] })] }));
+    expect(reopened.projects[0]!.blocked).toBeUndefined();
+  });
+
+  it("projeto todo planejado: sem etapa nem próximo, e planned traz o total de folhas aguardando liberação", () => {
+    const tasks = [
+      planTask({ ref: "M1", title: "Site", group: true, steps: [], status: "backlog", released: false }),
+      planTask({ ref: "T1", title: "Home", parent: "M1", status: "backlog", released: false }),
+      planTask({ ref: "T2", title: "Preços", parent: "M1", status: "a_fazer", released: false }),
+      planTask({ ref: "T3", title: "Contato", parent: "M1", status: "backlog", released: false }),
+    ];
+    const view = buildToday(input({ projects: [project({ tasks })] }));
+    expect(view.projects[0]!.stage).toBeUndefined();
+    expect(view.projects[0]!.next).toBeUndefined();
+    expect(view.projects[0]!.planned).toBe(3);
+    expect(renderToday(view)).toContain("3 planned tasks awaiting release");
+    expect(renderToday(view)).not.toContain("stage ");
+  });
+
+  it("projeto misto: etapa e total contam só as liberadas e concluídas; planejada nunca vira próximo", () => {
+    const tasks = [
+      planTask({ ref: "T1", title: "Pesquisa", status: "concluida", released: true }),
+      planTask({ ref: "T2", title: "Home", status: "em_andamento", released: true }),
+      planTask({ ref: "T3", title: "Preços", status: "backlog", released: false }),
+      planTask({ ref: "T4", title: "Contato", status: "a_fazer", released: false }),
+    ];
+    const view = buildToday(input({ projects: [project({ tasks })] }));
+    expect(view.projects[0]).toMatchObject({ stage: { index: 2, total: 2, title: "Home" }, planned: 2 });
+    expect(view.projects[0]!.next).toBeUndefined();
+
+    // Com outra folha liberada depois da planejada, o "próximo" pula a planejada e aponta para a liberada.
+    const withNext = buildToday(
+      input({
+        projects: [
+          project({
+            tasks: [
+              ...tasks,
+              planTask({ ref: "T5", title: "Revisão", status: "backlog", released: true }),
+            ],
+          }),
+        ],
+      }),
+    );
+    expect(withNext.projects[0]).toMatchObject({ stage: { index: 2, total: 3, title: "Home" }, next: "Revisão", planned: 2 });
+
+    // Sem nenhuma folha planejada, o campo planned é omitido.
+    const allReleased = buildToday(input({ projects: [project({ tasks: tasks.slice(0, 2) })] }));
+    expect(allReleased.projects[0]).not.toHaveProperty("planned");
+  });
+
+  it("projeto só com concluídas e planejadas abertas: sem etapa em andamento e com planned", () => {
+    const tasks = [
+      planTask({ ref: "T1", title: "Pesquisa", status: "concluida", released: true }),
+      planTask({ ref: "T2", title: "Preços", status: "backlog", released: false }),
+    ];
+    const view = buildToday(input({ projects: [project({ tasks })] }));
+    expect(view.projects[0]!.stage).toBeUndefined();
+    expect(view.projects[0]!.next).toBeUndefined();
+    expect(view.projects[0]!.planned).toBe(1);
+    expect(renderToday(view)).toContain("1 planned task awaiting release");
+  });
+
   it("projeto com sprint fechando mostra que a entrega espera o OK (e some quando ela fecha)", () => {
     const sprint = { id: "S1", name: "Sprint 1 · Marca", startAt: AT("01:00"), endAt: AT("12:00"), order: 1, status: "fechando" as const };
     const view = buildToday(input({ projects: [project({ sprints: [sprint] })] }));

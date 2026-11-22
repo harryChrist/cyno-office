@@ -39,8 +39,9 @@ export function renderTodaySections(view: TodayView, options: { agenda?: boolean
     out.push("Projects:");
     for (const project of view.projects) {
       const parts = [
-        project.stage ? `stage ${project.stage.index}/${project.stage.total} "${project.stage.title}"${project.stage.agent ? ` (${project.stage.agent})` : ""}` : project.status,
+        project.stage ? `stage ${project.stage.index}/${project.stage.total} "${project.stage.title}"${project.stage.agent ? ` (${project.stage.agent})` : ""}` : project.planned ? undefined : project.status,
         project.next ? `next: ${project.next}` : undefined,
+        project.planned ? `${plural(project.planned, "planned task", "planned tasks")} awaiting release` : undefined,
         project.blocked ? `BLOCKED, ${BLOCK_LABELS[project.blocked.type]}: ${project.blocked.note}` : undefined,
         project.deliveryWaiting ? `sprint delivery summary "${project.deliveryWaiting}" waits for the owner's OK` : undefined,
         project.atRisk ? `DEADLINE AT RISK${project.dueAt ? ` (due ${dayHourLabel(project.dueAt)})` : ""}` : undefined,

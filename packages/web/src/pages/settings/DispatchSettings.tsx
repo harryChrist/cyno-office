@@ -52,7 +52,7 @@ export function DispatchSettings({ workspace }: { workspace: Workspace }) {
       />
       <details className="settings__more">
         <summary>Subir ou descer o limite</summary>
-        <p>Quando você aprova um projeto, o servidor distribui as tarefas sozinho. Subir deixa o trabalho mais rápido, mas gasta mais da sua assinatura de uma vez. Descer deixa mais calmo e mais lento. As tarefas que esperam você não contam.</p>
+        <p>Quando um projeto começa, o servidor distribui as tarefas sozinho. Subir deixa o trabalho mais rápido, mas gasta mais da sua assinatura de uma vez. Descer deixa mais calmo e mais lento. As tarefas que esperam você não contam.</p>
       </details>
       <ResetDefaultButton workspaceId={workspace.id} fields={["dispatch.maxRunning", "dispatch.perAgent"]} own={!untouched} testId="settings-dispatch-reset" />
       {!showControls && (

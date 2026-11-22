@@ -1,6 +1,6 @@
 import { projectDefaults, type Project, type ProjectTask } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { dependsChoices, dependsOverview, dependsSummary, filterDependsChoices, flowItems, flowOrder } from "./flowView";
+import { dependsChoices, dependsOverview, dependsSummary, filterDependsChoices, flowItems, flowOrder, pendingWaitsText } from "./flowView";
 
 const AT = "2026-11-10T12:00:00.000Z";
 const NAMES: Record<string, string> = { sonia: "Sônia", davi: "Davi", hugo: "Hugo", ana: "Ana" };
@@ -52,7 +52,8 @@ describe("lista \"Depois de\"", () => {
   it("as opções são as irmãs, sem ela mesma, sem a mãe nem as de dentro; as marcadas vêm marcadas", () => {
     const p = flow();
     const choices = dependsChoices(p, p.tasks.find((t) => t.ref === "c")!);
-    expect(choices.map((choice) => [choice.ref, choice.checked])).toEqual([["b", true], ["a", false], ["d", false]]);
+    // A "d" espera a "c": oferecê-la criaria um ciclo, então não aparece.
+    expect(choices.map((choice) => [choice.ref, choice.checked])).toEqual([["b", true], ["a", false]]);
     // A mãe não oferece as próprias filhas.
     const forMother = dependsChoices(p, p.tasks[0]!);
     expect(forMother).toEqual([]);
@@ -90,5 +91,80 @@ describe("\"Depois de\" resumido", () => {
   it("busca sem acento nem caixa", () => {
     const list = [{ ref: "a", title: "Pesquisar ação", ownerId: "", checked: false }, { ref: "b", title: "Outra", ownerId: "", checked: false }];
     expect(filterDependsChoices(list, "ACAO", (id) => id).map((c) => c.ref)).toEqual(["a"]);
+  });
+});
+
+describe("\"Depois de\" entre módulos", () => {
+  const group = (ref: string, extra: Partial<ProjectTask> = {}) => task(ref, { group: true, steps: [], ownerId: "", status: "backlog", title: `Módulo ${ref}`, ...extra });
+  /** A (módulo) > a1, a2; B (módulo) > b1; C (módulo) > D (módulo) > d1; x (tarefa solta). */
+  const tree = (extra: Record<string, Partial<ProjectTask>> = {}) =>
+    project([
+      group("A", extra.A),
+      task("a1", { parent: "A", ...extra.a1 }),
+      task("a2", { parent: "A", ...extra.a2 }),
+      group("B", extra.B),
+      task("b1", { parent: "B", ...extra.b1 }),
+      group("C", extra.C),
+      group("D", { parent: "C", ...extra.D }),
+      task("d1", { parent: "D", ...extra.d1 }),
+      task("x", extra.x),
+    ]);
+
+  it("um módulo oferece os módulos irmãos (e as tarefas irmãs), e os outros módulos de outros lugares", () => {
+    const p = tree();
+    const choices = dependsChoices(p, p.tasks.find((t) => t.ref === "B")!);
+    expect(choices.map((c) => [c.ref, c.sibling])).toEqual([["A", true], ["C", true], ["x", true], ["D", false]]);
+    expect(choices.find((c) => c.ref === "D")).toMatchObject({ path: "Módulo C", container: true });
+  });
+
+  it("uma tarefa também pode esperar um módulo (de outro lugar), mas não o módulo em que está nem os de dentro", () => {
+    const p = tree();
+    const refs = dependsChoices(p, p.tasks.find((t) => t.ref === "b1")!).map((c) => c.ref);
+    expect(refs).toEqual(expect.arrayContaining(["A", "C", "D"]));
+    expect(refs).not.toContain("B");
+    const forModule = dependsChoices(p, p.tasks.find((t) => t.ref === "C")!).map((c) => c.ref);
+    expect(forModule).not.toContain("D");
+    expect(forModule).not.toContain("d1");
+  });
+
+  it("não oferece quem criaria ciclo (direto, por outro módulo ou por quem está dentro)", () => {
+    // B espera A: A não pode esperar B. C espera B: então A também não pode esperar C (A espera C, C espera B, B espera A).
+    const p = tree({ B: { dependsOn: ["A"] }, C: { dependsOn: ["B"] } });
+    const forA = dependsChoices(p, p.tasks.find((t) => t.ref === "A")!).map((c) => c.ref);
+    expect(forA).not.toContain("B");
+    expect(forA).not.toContain("C");
+    expect(forA).toContain("x");
+    // Uma tarefa dentro de B que o módulo C espera (C espera B): b1 não pode esperar C.
+    const forB1 = dependsChoices(p, p.tasks.find((t) => t.ref === "b1")!).map((c) => c.ref);
+    expect(forB1).not.toContain("C");
+  });
+
+  it("o que já está marcado continua na lista para dar para tirar", () => {
+    const p = tree({ x: { dependsOn: ["D"] } });
+    expect(dependsChoices(p, p.tasks.find((t) => t.ref === "x")!).find((c) => c.ref === "D")).toMatchObject({ checked: true });
+  });
+
+  it("nova subtarefa só oferece as irmãs", () => {
+    const p = tree();
+    const refs = dependsChoices(p, { ref: "", parent: "A", dependsOn: [] }, { siblingsOnly: true }).map((c) => c.ref);
+    expect(refs).toEqual(["a1", "a2"]);
+  });
+
+  it("o resumo conta o módulo como feito só quando tudo dentro terminou", () => {
+    const pending = tree({ x: { dependsOn: ["A"] }, a1: { status: "concluida" } });
+    const o = dependsOverview(pending, pending.tasks.find((t) => t.ref === "x")!);
+    expect(o.rows).toEqual([expect.objectContaining({ ref: "A", done: false, stateLabel: "fazendo" })]);
+    expect(o.summary).toBe("Esperando 1 de 1");
+    expect(pendingWaitsText(pending, pending.tasks.find((t) => t.ref === "x")!)).toBe("espera Módulo A");
+    const finished = tree({ x: { dependsOn: ["A"] }, a1: { status: "concluida" }, a2: { status: "concluida" } });
+    const f = dependsOverview(finished, finished.tasks.find((t) => t.ref === "x")!);
+    expect(f.rows).toEqual([expect.objectContaining({ ref: "A", done: true, stateLabel: "feita" })]);
+    expect(pendingWaitsText(finished, finished.tasks.find((t) => t.ref === "x")!)).toBe("");
+  });
+
+  it("a busca da lista acha pelo caminho também", () => {
+    const p = tree();
+    const choices = dependsChoices(p, p.tasks.find((t) => t.ref === "B")!);
+    expect(filterDependsChoices(choices, "modulo c", (id) => id).map((c) => c.ref)).toEqual(["C", "D"]);
   });
 });

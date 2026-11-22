@@ -87,7 +87,8 @@ describe("POST /projects/:id/tasks/:ref/reassign", () => {
     const { ctx, id, first, second, add, reassign } = await setup();
     const ref = await add("Resumo", { assignee: first.id });
     const task = rawTask(ctx, id, ref);
-    Object.assign(task, { status: "falhou", failure: "motor caiu", finishedAt: "2026-11-12T10:00:00.000Z" });
+    // Simula uma tarefa que já havia sido liberada, rodou e falhou.
+    Object.assign(task, { released: true, status: "falhou", failure: "motor caiu", finishedAt: "2026-11-12T10:00:00.000Z" });
     Object.assign(task.steps[0]!, { status: "falhou", taskId: "t-velha", startedAt: "2026-11-12T09:00:00.000Z", finishedAt: "2026-11-12T10:00:00.000Z", result: "erro" });
     const response = await reassign(ref, { agentId: second.id });
     expect(response.statusCode, response.body).toBe(200);

@@ -3,10 +3,12 @@ import {
   AVULSAS_ID,
   compareWork,
   handoffLabel,
+  hasSprints,
   isProjectOpen,
   parseAddress,
   PRIORITY_RANK,
-  projectProgress,
+  projectUnitProgress,
+  type UnitProgress,
   type BlockedType,
   type ForYouItem,
   type Project,
@@ -309,7 +311,7 @@ export function projectAgents(project: Pick<Project, "tasks">): string[] {
 
 /** Dono atual: o agente da etapa que roda (ou espera) agora; sem nenhuma, o da próxima tarefa a fazer; por fim, o da última. */
 export function currentOwner(project: Pick<Project, "tasks">): string | undefined {
-  // Só as folhas executam: uma tarefa-mãe ou um entregável (sem passos) nunca é "quem está com a vez".
+  // Só as folhas executam: uma tarefa-mãe ou um módulo (sem passos) nunca é "quem está com a vez".
   const tasks = leafTasks(project.tasks);
   const live = tasks.find((task) => task.status === "em_andamento") ?? tasks.find((task) => task.status === "esperando_voce");
   const pick = live ?? tasks.find((task) => task.status === "a_fazer") ?? tasks.find((task) => task.status === "backlog") ?? tasks.at(-1);
@@ -321,7 +323,8 @@ export function currentOwner(project: Pick<Project, "tasks">): string | undefine
 
 export type WorkRow = {
   project: Project;
-  progress: { done: number; total: number; skipped: number };
+  /** Progresso por unidade: módulos de primeiro nível ("3 de 8 módulos") ou, sem módulo, tarefas. */
+  progress: UnitProgress;
   owner?: string;
   state: StateInfo;
   /** Quanto espera você neste projeto (item pendente, plano, tarefa). */
@@ -337,6 +340,13 @@ export type WorkRow = {
   failed: boolean;
 };
 
+/** "3 de 8 módulos" / "1 de 1 módulo" / "12 de 40 tarefas": o progresso do projeto na unidade que ele usa (singular só com total 1). */
+export function unitProgressText(progress: Pick<UnitProgress, "done" | "total" | "unit">): string {
+  if (progress.total <= 0) return progress.unit === "modulos" ? "Sem módulos" : "Sem tarefas";
+  const noun = progress.unit === "modulos" ? (progress.total === 1 ? "módulo" : "módulos") : progress.total === 1 ? "tarefa" : "tarefas";
+  return `${progress.done} de ${progress.total} ${noun}`;
+}
+
 /** Monta as linhas (uma por Projeto ou tarefa avulsa) já na ordem de urgência: abertos primeiro, fechados do mais novo ao mais velho. */
 export function buildRows(projects: readonly Project[], forYou: readonly ForYouItem[] | null | undefined, now: Date): WorkRow[] {
   const awaiting = awaitingUser(projects, forYou);
@@ -347,7 +357,7 @@ export function buildRows(projects: readonly Project[], forYou: readonly ForYouI
     const block = projectBlock(project, n, items);
     return {
       project,
-      progress: projectProgress(project),
+      progress: projectUnitProgress({ tasks: project.tasks.filter((task) => !task.archived) }),
       owner: currentOwner(project),
       state: projectState(project),
       awaiting: n,
@@ -398,7 +408,7 @@ export function buildWorkBoard(rows: readonly WorkRow[]): WorkBoardColumn[] {
   const buckets = new Map<WorkColumnId, WorkCard[]>(WORK_COLUMNS.map((column) => [column.id, []]));
   const order = new Map(rows.map((row, index) => [row.project.id, index]));
   for (const row of rows) {
-    // Só as folhas viram cartão: a tarefa-mãe e o entregável são o resumo delas (contá-los seria contar em dobro).
+    // Só as folhas viram cartão: a tarefa-mãe e o módulo são o resumo delas (contá-los seria contar em dobro).
     for (const task of leafTasks(row.project.tasks.filter((candidate) => !candidate.archived))) {
       const column = workColumn(task, row.project);
       if (!column) continue;
@@ -438,9 +448,33 @@ export function stepMark(task: Pick<ProjectTask, "steps" | "current" | "status" 
   return "proxima";
 }
 
+// ---------- Aprovação do plano (selo e cartão) ----------
+
+export type ApprovalBadge = { label: string; title?: string };
+
+/**
+ * Selo discreto quando o projeto começou sem pedir aprovação do dono (regra do workspace ou escolha do Maestro).
+ * Quando foi aprovado pelo dono (`by === "dono"`) ou não há registro, devolve null (nenhum selo).
+ */
+export function projectApprovalBadge(approval: Project["approval"]): ApprovalBadge | null {
+  if (!approval || approval.by === "dono") return null;
+  const label = approval.by === "regra" ? "Começou sem aprovação (regra do workspace)" : "Começou sem aprovação (escolha do Maestro)";
+  const quote = approval.quote?.trim();
+  return quote ? { label, title: quote } : { label };
+}
+
+/** Título e texto do cartão de aprovação pedida pelo Maestro (aprovação é opcional conforme a regra do workspace). */
+export function planCardCopy(project: Pick<Project, "version" | "sprints">): { title: string; text: string } {
+  const title = `Aprovação pedida pelo Maestro${project.version > 1 ? ` · versão ${project.version}` : ""}`;
+  const text = hasSprints(project)
+    ? "O Maestro pediu a sua confirmação antes de começar. Você pode ajustar as tarefas, os responsáveis e as sprints antes de aprovar; a primeira sprint começa na data dela (ou agora, se a data já passou)."
+    : "O Maestro pediu a sua confirmação antes de começar. Você pode ajustar as tarefas e os responsáveis antes de aprovar.";
+  return { title, text };
+}
+
 // ---------- Linha do tempo ----------
 
-export type TimelineEntry = { kind: "criado" | "aprovado" | "comeca" | "entrega" | "repasse" | "prazo" | "fim"; text: string; at: string };
+export type TimelineEntry = { kind: "criado" | "aprovado" | "comeca" | "entrega" | "repasse" | "prazo" | "fim"; text: string; at: string; title?: string };
 
 /** "Crivo passou para Eco" (de quem para quem) de uma tarefa criada por repasse; undefined se não nasceu de um. */
 export function handoffText(task: Pick<ProjectTask, "origin" | "ownerId">, agentName: (id: string) => string): string | undefined {
@@ -459,7 +493,15 @@ export function localDay(iso: string): string {
 /** Linha do tempo por dia: pedido, aprovação, começo, entregas (tarefas feitas), prazo, fim e as horas trabalhadas (`worked`). Do dia mais antigo ao mais novo. */
 export function projectTimeline(project: Project, agentName: (id: string) => string = (id) => id): TimelineDay[] {
   const events: TimelineEntry[] = [{ kind: "criado", text: project.kind === "tarefa" ? "Tarefa criada" : "Projeto criado", at: project.createdAt }];
-  if (project.approvedAt && project.kind === "projeto") events.push({ kind: "aprovado", text: "Plano aprovado", at: project.approvedAt });
+  if (project.kind === "projeto") {
+    const badge = projectApprovalBadge(project.approval);
+    if (badge) {
+      const at = project.approval?.at || project.approvedAt;
+      if (at) events.push({ kind: "aprovado", text: badge.label, at, ...(badge.title ? { title: badge.title } : {}) });
+    } else if (project.approvedAt) {
+      events.push({ kind: "aprovado", text: "Plano aprovado", at: project.approvedAt });
+    }
+  }
   if (project.startAt) events.push({ kind: "comeca", text: "Começa", at: project.startAt });
   for (const task of project.tasks) {
     const handoff = handoffText(task, agentName);

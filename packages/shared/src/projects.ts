@@ -1,7 +1,7 @@
 import { parseAddress } from "./address";
 import type { Sprint } from "./sprints";
-import { leafTasks } from "./task-tree";
 import { effectiveDeps } from "./task-flow";
+import { completedRefs, dependencyCycle, leafTasks } from "./task-tree";
 import type { Agent, Task } from "./types";
 
 /**
@@ -64,6 +64,42 @@ export const PROJECT_PRIORITY_LABELS: Record<ProjectPriority, string> = { alta: 
 export const PROJECT_INPUT_PRIORITIES = ["high", "normal", "low"] as const;
 export type ProjectInputPriority = (typeof PROJECT_INPUT_PRIORITIES)[number];
 const PRIORITY_FROM_INPUT: Record<ProjectInputPriority, ProjectPriority> = { high: "alta", normal: "normal", low: "baixa" };
+
+/** Liberação como o Maestro manda pelo MCP (contrato em inglês): "now" = liberada, "later" = Planejada. */
+export const PROJECT_INPUT_RELEASES = ["now", "later"] as const;
+export type ProjectInputRelease = (typeof PROJECT_INPUT_RELEASES)[number];
+
+/** Escolha de aprovação do Maestro em `create_project` (contrato MCP, em inglês): "ask" = pedir OK, "skip" = começar sem pedir. */
+export const PROJECT_INPUT_APPROVALS = ["ask", "skip"] as const;
+export type ProjectInputApproval = (typeof PROJECT_INPUT_APPROVALS)[number];
+
+/** Regra de aprovação de projetos do workspace: "maestro" (padrão), "always" (sempre pedir) ou "never" (nunca pedir). */
+export const PLAN_APPROVAL_RULES = ["maestro", "always", "never"] as const;
+export type PlanApprovalRule = (typeof PLAN_APPROVAL_RULES)[number];
+export const DEFAULT_PLAN_APPROVAL: PlanApprovalRule = "maestro";
+export const PLAN_APPROVAL_LABELS: Record<PlanApprovalRule, string> = {
+  maestro: "o Maestro decide",
+  always: "sempre pedir",
+  never: "nunca pedir",
+};
+
+/** Quem gravou a nota da regra de aprovação do workspace. */
+export const PLAN_APPROVAL_NOTE_BY = ["dono", "maestro"] as const;
+export type PlanApprovalNoteBy = (typeof PLAN_APPROVAL_NOTE_BY)[number];
+export type PlanApprovalNote = { quote: string; at: string; by: PlanApprovalNoteBy };
+
+/** Regra efetiva de aprovação do workspace (ausente = "maestro"). */
+export function planApprovalRule(value: PlanApprovalRule | undefined): PlanApprovalRule {
+  return value ?? DEFAULT_PLAN_APPROVAL;
+}
+
+/** Resposta de GET/PUT /api/w/:ws/settings/plan-approval. */
+export type PlanApprovalSettings = { rule: PlanApprovalRule; note?: PlanApprovalNote };
+
+/** Quem aprovou ou dispensou a aprovação do projeto ("dono" = cartão; "regra" = workspace "never"; "maestro" = escolha "skip"). */
+export const PROJECT_APPROVAL_BY = ["dono", "regra", "maestro"] as const;
+export type ProjectApprovalBy = (typeof PROJECT_APPROVAL_BY)[number];
+export type ProjectApproval = { by: ProjectApprovalBy; at: string; quote?: string };
 
 /** Uma etapa: um participante e o que ele faz. `taskId` = a subtarefa que executa a etapa (quando começa). */
 export type ProjectStep = {
@@ -201,7 +237,7 @@ export type ProjectTask = {
   parent?: string;
   /** Posição entre irmãos (passo de 1000); ausente = a ordem da lista. */
   order?: number;
-  /** ENTREGÁVEL: só em profundidade 1, sem `steps`, nunca executa (o estado dele é calculado das filhas). */
+  /** MÓDULO (antes "entregável"): em qualquer profundidade, sem `steps`, nunca executa (o estado dele é calculado das filhas); pode conter módulos. */
   group?: true;
   /** Sprint da folha (id em `Project.sprints`); o pai mostra as sprints das filhas. */
   sprintId?: string;
@@ -217,7 +253,21 @@ export type ProjectTask = {
   archived?: true;
   /** "Isso primeiro" numa tarefa avulsa (folha do Avulsas, que não tem projeto próprio para fixar). */
   pinnedAt?: string;
+  /**
+   * LIBERAÇÃO ("criar não executa"): true = liberada (entra na fila), false = Planejada (existe, mas o agendador não a despacha).
+   * AUSENTE = liberada (o que já está gravado continua rodando como sempre). Em módulo e tarefa-mãe o campo só serve para a herança:
+   * o item novo dentro de um contêiner com `released === true` nasce liberado. Veja release.ts.
+   */
+  released?: boolean;
 };
+
+/**
+ * Liberação diária do projeto: o código (sem acordar o Maestro) libera `perDay` tarefas ou módulos por dia, na ordem de prioridade e depois
+ * na da árvore, com os pré-requisitos junto. `startsOn` = dia local (AAAA-MM-DD) em que começa; `given` = o que já saiu hoje (zera na virada do dia).
+ */
+export type ReleasePace = { perDay: number; unit: "tarefas" | "modulos"; startsOn?: string; given?: { day: string; count: number } };
+export const RELEASE_PACE_UNITS = ["tarefas", "modulos"] as const;
+export const RELEASE_PACE_LIMITS = { perDay: { min: 1, max: 500 } } as const;
 
 /** Origem de uma folha do "Avulsas": o pedido (Task do Maestro) que a gerou e o que o projeto antigo guardava. */
 export type ProjectTaskMeta = {
@@ -239,8 +289,10 @@ export type ProjectRoutineRef = { routineId: string; scheduleId?: string; slot?:
 export type Label = { id: string; name: string; color: string };
 
 export type Project = {
-  /** == id do pedido do Maestro (Task com `role: "request"`). */
+  /** Id do projeto: no primeiro projeto de um pedido é o mesmo id do pedido; nos extras (`new_project: true`) e nos criados à mão é um UUID próprio. */
   id: string;
+  /** Id do pedido do Maestro de origem, quando diferente de `id` (2º+ projeto no mesmo pedido). Ausente = `id` (veja `requestIdOf`). */
+  requestId?: string;
   kind: ProjectKind;
   title: string;
   /** Resumo do Maestro para o usuário (topo do plano). */
@@ -272,6 +324,8 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;
+  /** Quem aprovou ou dispensou a aprovação do plano (ausente em projetos antigos). */
+  approval?: ProjectApproval;
   finishedAt?: string;
   /** O Maestro já recebeu o resumo do fim (uma vez). */
   doneNotified?: boolean;
@@ -292,6 +346,8 @@ export type Project = {
   pinnedAt?: string;
   /** Só no Avulsas: o próximo número do `ref` das folhas (`A<n>`). */
   nextRef?: number;
+  /** Liberação diária (ausente = nada é liberado sozinho: só à mão ou pelo Maestro). */
+  releasePace?: ReleasePace;
 };
 
 /** Teto do briefing que o Cyno entrega com o pedido. */
@@ -322,6 +378,11 @@ export function isPlanned(project: Pick<Project, "kind" | "approvedAt">): boolea
   return project.kind === "projeto" && project.approvedAt !== undefined;
 }
 
+/** Id do pedido do Maestro a que o projeto pertence (`requestId` nos projetos extras do mesmo pedido, ou `id` no primeiro). */
+export function requestIdOf(project: Pick<Project, "id" | "requestId">): string {
+  return project.requestId ?? project.id;
+}
+
 /** Limites de paralelismo da distribuição (por workspace). */
 export type DispatchSettings = { maxRunning: number; perAgent: number };
 
@@ -345,24 +406,25 @@ export function dispatchSettings(partial: Partial<DispatchSettings> | undefined)
   return { ...DEFAULT_DISPATCH, ...Object.fromEntries(Object.entries(partial ?? {}).filter(([, value]) => value !== undefined)) };
 }
 
-/** Tetos do plano (o que o Maestro manda). */
+/** Tetos do plano (o que o Maestro manda). Não há teto de tarefas, módulos, níveis nem subtarefas: o dono decide o tamanho do projeto. */
 export const PROJECT_LIMITS = {
-  tasks: 60,
   steps: 6,
   title: 120,
   briefing: 3000,
   stepWhat: 1000,
   ref: 12,
-  /** Árvore: nós por projeto (entregáveis contam), profundidade abaixo do projeto, filhas por nó e subtarefas por tarefa (só um teto técnico contra erro: quem entra e em que ordem é decisão do Maestro). */
-  nodes: 200,
-  depth: 3,
-  children: 40,
-  subtasksPerTask: 12,
   /** Etiquetas por tarefa, etiquetas e sprints por projeto. */
   labelsPerTask: 5,
   labels: 12,
   sprints: 20,
 } as const;
+
+/**
+ * Rede de segurança (NÃO é um limite de produto): só barra erro grosseiro, como um laço que cria itens sem parar ou uma árvore
+ * ridiculamente funda. `nodes` = itens por projeto, `depth` = níveis abaixo do projeto, `perCall` = itens (ou responsáveis) por chamada de
+ * ferramenta. Um lote de 100 capítulos cabe com folga.
+ */
+export const PROJECT_SAFETY = { nodes: 5000, depth: 50, perCall: 500 } as const;
 
 // ---------- Urgência (agendador e tela Trabalho) ----------
 
@@ -571,17 +633,23 @@ export function kanbanColumn(task: Pick<ProjectTask, "status">): KanbanColumnId 
  * parte, para o resumo não dizer "3 de 3 concluídas" quando uma foi pulada).
  */
 export function projectProgress(plan: Pick<Project, "tasks">): { done: number; total: number; skipped: number } {
-  // Só as folhas contam (pai e entregável têm estado calculado); sem árvore, são todas as tarefas.
+  // Só as folhas contam (pai e módulo têm estado calculado); sem árvore, são todas as tarefas.
   const leaves = leafTasks(plan.tasks).filter((task) => !task.archived);
   const skipped = leaves.filter((task) => task.status === "concluida" && task.skipped).length;
   const counted = leaves.filter((task) => task.status !== "cancelada" && !(task.status === "concluida" && task.skipped));
   return { done: counted.filter((task) => task.status === "concluida").length, total: counted.length, skipped };
 }
 
-/** "2 de 3 concluídas" (+ ", 1 pulada"): o texto do progresso, sem contar as puladas como feitas. */
-export function progressLabel(progress: { done: number; total: number; skipped?: number }): string {
+/**
+ * "2 de 3 concluídas" (+ ", 1 pulada"): o texto do progresso, sem contar as puladas como feitas. Com `unit` (veja `projectUnitProgress`) diz a
+ * unidade do projeto: "3 de 8 módulos concluídos" / "12 de 40 tarefas concluídas".
+ */
+export function progressLabel(progress: { done: number; total: number; skipped?: number; unit?: "modulos" | "tarefas" }): string {
   const skipped = progress.skipped ?? 0;
-  return `${progress.done} de ${progress.total} concluídas${skipped > 0 ? `, ${skipped} ${skipped === 1 ? "pulada" : "puladas"}` : ""}`;
+  const tail = skipped > 0 ? `, ${skipped} ${skipped === 1 ? "pulada" : "puladas"}` : "";
+  if (progress.unit === "modulos") return `${progress.done} de ${progress.total} ${progress.total === 1 ? "módulo concluído" : "módulos concluídos"}${tail}`;
+  if (progress.unit === "tarefas") return `${progress.done} de ${progress.total} ${progress.total === 1 ? "tarefa concluída" : "tarefas concluídas"}${tail}`;
+  return `${progress.done} de ${progress.total} concluídas${tail}`;
 }
 
 /** O plano ainda pode ter trabalho (não terminou nem foi cancelado)? */
@@ -625,8 +693,10 @@ export type ProjectTaskInput = {
   due_at?: string;
   /** `ref` do pai (outro item da mesma chamada ou uma tarefa que já existe); ausente = direto no projeto. */
   parent?: string;
-  /** "group" = entregável (só em profundidade 1, sem dono nem etapas, nunca executa); padrão "task". */
-  kind?: "task" | "group";
+  /** "module" (ou o apelido antigo "group") = módulo (em qualquer profundidade, sem dono nem etapas, nunca executa; pode conter outros módulos); padrão "task". */
+  kind?: "task" | "module" | "group";
+  /** Liberação do item (opcional): "now" = entra na fila, "later" = Planejada. Num módulo, vale para os filhos que não definirem o próprio. */
+  release?: ProjectInputRelease;
   /** Sprint da folha: o `ref`, o id ("S1") ou o nome de uma sprint (da mesma chamada ou já existente). */
   sprint?: string;
   /** Nomes de etiquetas (criadas no projeto se faltarem). */
@@ -720,7 +790,8 @@ export function buildProjectTasks(
 ): { ok: true; tasks: ProjectTask[] } | { ok: false; errors: string[] } {
   const errors: string[] = [];
   if (input.length === 0) errors.push("The plan needs at least one task");
-  if (input.length + existing.length > PROJECT_LIMITS.tasks) errors.push(`At most ${PROJECT_LIMITS.tasks} tasks per plan`);
+  if (input.length > PROJECT_SAFETY.perCall) errors.push(`At most ${PROJECT_SAFETY.perCall} items per call (safety net): send the rest in another call`);
+  if (input.length + existing.length > PROJECT_SAFETY.nodes) errors.push(`The project would have ${input.length + existing.length} items (safety net: at most ${PROJECT_SAFETY.nodes} items per project)`);
   const taken = new Set(existing.map((task) => task.ref));
   let auto = existing.length;
   const nextAuto = () => {
@@ -755,16 +826,16 @@ export function buildProjectTasks(
     const briefing = item.briefing.trim();
     if (!title) errors.push(`${label}: missing title`);
     if (!briefing) errors.push(`${label}: missing briefing`);
-    const group = item.kind === "group";
+    const group = item.kind === "module" || item.kind === "group";
     const mother = !group && parentRefs.has(ref);
     let ownerId: string | undefined;
     const steps: ProjectStep[] = [];
     if (group) {
-      if (item.owner || item.steps?.length) errors.push(`${label}: a deliverable (kind "group") has no owner or steps; it never runs. Put the owners on the tasks inside it`);
+      if (item.owner || item.steps?.length) errors.push(`${label}: a module (kind "module") has no owner or steps; it never runs. Put the owners on the tasks inside it`);
     } else if (mother) {
       // Tarefa-mãe (tem filhas na mesma chamada): quem executa são as filhas; o dono e as etapas dela não valem.
     } else if (!item.owner?.trim()) {
-      errors.push(`${label}: a leaf task needs an owner (the agent responsible; see get_team). Parent tasks and deliverables have none, their subtasks do`);
+      errors.push(`${label}: a leaf task needs an owner (the agent responsible; see get_team). Parent tasks and modules have none, the tasks inside them do`);
     } else {
       ownerId = resolve(item.owner, `${label}, owner`);
       const rawSteps = item.steps && item.steps.length > 0 ? item.steps : [{ agent: item.owner, does: briefing }];
@@ -812,12 +883,19 @@ export function buildProjectTasks(
   }
   const cycle = findDependencyCycle(new Map([...known.values()].map((task) => [task.ref, task.dependsOn])));
   if (cycle) errors.push(`The dependencies form a cycle: ${cycle.join(" → ")}. Remove one of them.`);
+  else {
+    // Ciclo pelo grafo efetivo: a dependência de um módulo ou de uma mãe vale para as folhas de entrada dela.
+    const effective = dependencyCycle({ tasks: [...known.values()] });
+    if (effective) errors.push(`The dependencies form a cycle: ${effective.join(" → ")}. Remove one of them.`);
+  }
   if (errors.length > 0) return { ok: false, errors };
   const parentsNow = new Set([...parentRefs]);
+  const all = { tasks: [...known.values()] };
+  const done = completedRefs(all);
   for (const task of tasks) {
     if (task.group || parentsNow.has(task.ref)) continue;
-    // Dependência da mãe vale para as subtarefas de entrada dela.
-    const ready = effectiveDeps({ tasks: [...known.values()] }, task).every((dep) => known.get(dep)?.status === "concluida");
+    // Dependência da mãe ou do módulo vale para as folhas de entrada dela; módulo/mãe conta como pronto quando todas as folhas terminaram.
+    const ready = effectiveDeps(all, task).every((dep) => done.has(dep));
     task.status = ready ? "a_fazer" : "backlog";
   }
   return { ok: true, tasks };

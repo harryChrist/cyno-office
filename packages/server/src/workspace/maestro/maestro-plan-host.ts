@@ -27,6 +27,7 @@ export class MaestroPlanHost implements ProjectHost {
   }
 
   wake(requestId: string, kind: ProjectWakeKind, build: () => string): void {
+    // Pedido já fechado (ex.: projeto estacionado que foi liberado depois): wake é ignorado.
     if (!this.core.isOpen(requestId)) return;
     const labels: Record<ProjectWakeKind, string> = {
       done: "O Maestro está juntando os resultados do plano",

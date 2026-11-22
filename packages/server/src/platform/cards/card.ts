@@ -3,9 +3,12 @@ import {
   DAY_MS,
   expandAvulsas,
   isDeadlineAtRisk,
+  isProjectTaskFinished,
+  leavesOf,
   findMaestroAgent,
   nextSlots,
   pendingForYou,
+  releaseHold,
   type AgentTerminalInfo,
   type Card,
   type CardAgent,
@@ -53,7 +56,11 @@ export type CardInput = {
  */
 export function cardMetrics(snapshot: MetricsSnapshot, now: number): CardMetrics {
   const report = computeMetrics(snapshot, { now, light: true });
-  const atRisk = expandAvulsas([...snapshot.projects]).filter((project) => isDeadlineAtRisk(project, now)).length;
+  const atRisk = expandAvulsas([...snapshot.projects]).filter((project) => {
+    if (!isDeadlineAtRisk(project, now)) return false;
+    const open = leavesOf(project).filter((leaf) => !isProjectTaskFinished(leaf) && !leaf.archived);
+    return open.length === 0 || open.some((leaf) => !releaseHold(leaf));
+  }).length;
   return {
     throughput7d: report.throughput.n,
     throughputPrev7d: report.throughput.prevN,
@@ -85,9 +92,9 @@ const terminalOf = (status: string | undefined): CardAgent["terminal"] => {
   }
 };
 
-/** Etapa atual de um projeto: o que a primeira tarefa em curso faz agora (ou a próxima a rodar). */
+/** Etapa atual de um projeto: o que a primeira tarefa em curso faz agora (ou a próxima liberada a rodar). */
 function stageOf(project: Project): string | undefined {
-  const task = project.tasks.find((candidate) => candidate.status === "em_andamento" || candidate.status === "esperando_voce") ?? project.tasks.find((candidate) => candidate.status === "a_fazer" || candidate.status === "backlog");
+  const task = project.tasks.find((candidate) => candidate.status === "em_andamento" || candidate.status === "esperando_voce") ?? project.tasks.find((candidate) => (candidate.status === "a_fazer" || candidate.status === "backlog") && !releaseHold(candidate));
   if (!task) return undefined;
   const step = task.steps[task.current];
   return step?.what ? `${task.title}: ${step.what}` : task.title;

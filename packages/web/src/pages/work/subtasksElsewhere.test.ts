@@ -13,7 +13,7 @@ const task = (ref: string, extra: Partial<ProjectTask> = {}): ProjectTask => {
 };
 const mother = (ref: string, extra: Partial<ProjectTask> = {}) => task(ref, { steps: [], ownerId: "", status: "backlog", ...extra });
 
-/** Entregável G > mãe P > três subtarefas de agentes diferentes (a do meio espera você), com a sprint S1. */
+/** Módulo G > mãe P > três subtarefas de agentes diferentes (a do meio espera você), com a sprint S1. */
 const project = (): Project => ({
   ...projectDefaults(),
   id: "p",
@@ -34,7 +34,7 @@ const project = (): Project => ({
 });
 
 describe("subtarefas nas outras telas: todos aparecem e nada conta em dobro", () => {
-  it("Todas as tarefas: uma linha por subtarefa (a mãe e o entregável não entram), cada uma com o seu responsável e o caminho", () => {
+  it("Todas as tarefas: uma linha por subtarefa (a mãe e o módulo não entram), cada uma com o seu responsável e o caminho", () => {
     const entries = collectEntries([project()], NOW.getTime());
     expect(entries.map((entry) => [entry.task.ref, entry.assignees, entry.path])).toEqual([
       ["a", ["sonia"], "Campanha › Tarefa G › Tarefa P"],
@@ -43,7 +43,7 @@ describe("subtarefas nas outras telas: todos aparecem e nada conta em dobro", ()
     ]);
   });
 
-  it("o quadro do Trabalho: um cartão por subtarefa (sem cartão da mãe nem do entregável)", () => {
+  it("o quadro do Trabalho: um cartão por subtarefa (sem cartão da mãe nem do módulo)", () => {
     const rows = buildRows([project()], [], NOW);
     const columns = buildWorkBoard(rows);
     const cards = columns.flatMap((column) => column.cards.map((card) => [column.id, card.task.ref]));
@@ -51,7 +51,7 @@ describe("subtarefas nas outras telas: todos aparecem e nada conta em dobro", ()
     expect(columns.reduce((sum, column) => sum + column.count, 0)).toBe(3);
   });
 
-  it("Esperando você: a subtarefa parada conta uma vez, a mãe e o entregável não", () => {
+  it("Esperando você: a subtarefa parada conta uma vez, a mãe e o módulo não", () => {
     const awaiting = awaitingUser([project()], []);
     expect(awaiting.count).toBe(1);
     expect(awaiting.byProject.get("p")).toBe(1);

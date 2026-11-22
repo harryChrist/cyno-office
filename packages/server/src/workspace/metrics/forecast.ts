@@ -8,6 +8,7 @@ import {
   leavesOf,
   nextWorkDayStart,
   parseClock,
+  releaseHold,
   usageWindowState,
   windowState,
   workClock,
@@ -238,9 +239,9 @@ export function forecastSentence(input: { at: number; low: number; high: number;
 
 type Remaining = { task: ProjectTask; steps: { agentId: string; elapsed: number }[]; approval: boolean; waiting: boolean };
 
-/** As folhas que ainda faltam: não concluídas, não canceladas, não arquivadas. */
+/** As folhas que ainda faltam (liberadas ou já em curso): Planejada ainda não entrou na fila e não conta como esperando vaga. */
 function remainingLeaves(project: Project): ProjectTask[] {
-  return leavesOf(project).filter((task) => task.group !== true && !task.archived && task.status !== "concluida" && task.status !== "cancelada");
+  return leavesOf(project).filter((task) => task.group !== true && !task.archived && task.status !== "concluida" && task.status !== "cancelada" && !releaseHold(task));
 }
 
 /** Dependências de uma folha que ainda faltam (uma dependência numa mãe espera as folhas dela que faltam). */

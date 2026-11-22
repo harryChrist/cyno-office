@@ -1,3 +1,4 @@
+import { PLAN_APPROVAL_SETTINGS_PATH, updatePlanApprovalBodySchema, type PlanApprovalSettings } from "@cyno/shared";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Services } from "../workspace/office";
 import type { WorkspaceManager } from "../platform/workspaces/manager";
@@ -72,6 +73,11 @@ export function registerWorkspaceScopedRoutes(app: FastifyInstance, manager: Wor
       registerForYouRoutes(scope, servicesOf);
       registerForYouTypeRoutes(scope, (request) => runtimeOf(request).forYouTypes);
       registerPlanRoutes(scope, (request) => runtimeOf(request).plans);
+      scope.get(PLAN_APPROVAL_SETTINGS_PATH, async (request): Promise<PlanApprovalSettings> => manager.planApproval(runtimeOf(request).id));
+      scope.put(PLAN_APPROVAL_SETTINGS_PATH, async (request): Promise<PlanApprovalSettings> => {
+        const { rule } = updatePlanApprovalBodySchema.parse(request.body ?? {});
+        return manager.setPlanApproval(runtimeOf(request).id, rule);
+      });
       registerBrainRoutes(scope, (request) => runtimeOf(request).brain);
       registerAgentRulesRoutes(scope, runtimeOf);
       registerBrainOrganizeRoute(scope, runtimeOf);

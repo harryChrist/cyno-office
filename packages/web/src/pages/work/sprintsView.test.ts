@@ -123,7 +123,7 @@ describe("rótulos de sprint", () => {
 });
 
 describe("a árvore e a entrada leem a sprint", () => {
-  it("a linha da folha traz 'Começa em' e o selo da sobra; pai e entregável não", () => {
+  it("a linha da folha traz 'Começa em' e o selo da sobra; pai e módulo não", () => {
     const rows = buildTreeRows(sample(), new Set(), { now: NOW }).filter((row): row is TreeNodeRow => row.kind === "node");
     const by = (ref: string) => rows.find((row) => row.ref === ref)!;
     expect(by("T4").startsIn).toBe("Começa em 18/11");
