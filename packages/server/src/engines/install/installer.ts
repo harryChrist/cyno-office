@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { EngineInstallJob, OneShotEngineId } from "@cyno/shared";
+import type { EngineInstallJob, InstallableEngineId } from "@cyno/shared";
 import { sanitizeChildEnv } from "../terminals/env";
 import { errorMessage } from "../../util/text";
 import type { InstallRecipe } from "./recipes";
@@ -70,7 +70,7 @@ export class EngineInstaller {
   }
 
   /** Começa a instalação (devolve o job na hora; a instalação segue em segundo plano). Lança se já há uma. */
-  start(engine: OneShotEngineId, recipe: InstallRecipe): EngineInstallJob {
+  start(engine: InstallableEngineId, recipe: InstallRecipe): EngineInstallJob {
     if (this.closed) throw new Error("O servidor está fechando.");
     if (this.running) throw new Error("Já há uma instalação em andamento. Espere terminar.");
     if (this.otherInstallRunning()) throw new Error("Já há uma instalação em andamento (iniciada antes de o servidor reiniciar). Espere terminar.");
@@ -176,7 +176,9 @@ export class EngineInstaller {
     this.note(job, `Baixado: ${to} (${text.length} bytes)`);
   }
 
-  private exec(job: EngineInstallJob, command: string, args: string[], cwd?: string, env?: Record<string, string>): Promise<void> {
+  private async exec(job: EngineInstallJob, command: string, args: string[], cwd?: string, env?: Record<string, string>): Promise<void> {
+    if (cwd) await mkdir(cwd, { recursive: true });
+    if (env?.HOME) await mkdir(env.HOME, { recursive: true });
     return new Promise((resolve, reject) => {
       // `detached`: o filho lidera um grupo, para o tempo máximo e o fechamento do servidor derrubarem a árvore inteira (uv, pip, git…).
       const child = spawn(command, args, { ...(cwd ? { cwd } : {}), env: { ...sanitizeChildEnv(this.options.env ?? process.env), ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });

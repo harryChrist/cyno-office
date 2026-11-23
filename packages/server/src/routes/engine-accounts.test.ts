@@ -45,8 +45,17 @@ describe("API: contas extras por motor (/api/engines/accounts)", () => {
       engineAccounts: { realHomeDir: fakeHome },
     });
 
-    // Lista inicial vazia
-    expect(await call<EngineAccountsResponse>(test.app, "GET", ENGINE_ACCOUNTS_PATH)).toEqual({ accounts: [] });
+    // Lista inicial traz só as contas padrão sintéticas (`padrao`, `isDefault: true`, `loggedIn: false`).
+    expect(await call<EngineAccountsResponse>(test.app, "GET", ENGINE_ACCOUNTS_PATH)).toEqual({
+      accounts: [
+        { id: "padrao", engine: "claude", label: "Padrão", isDefault: true, loggedIn: false },
+        { id: "padrao", engine: "gemini", label: "Padrão", isDefault: true, loggedIn: false },
+      ],
+    });
+
+    // Conta padrão não pode ser renomeada nem apagada.
+    await call(test.app, "PATCH", engineAccountItemPath("padrao"), { label: "Outro" }, 400);
+    await call(test.app, "DELETE", engineAccountItemPath("padrao"), undefined, 400);
 
     // Validação do body (motor inválido, rótulo vazio, campo desconhecido)
     await call(test.app, "POST", ENGINE_ACCOUNTS_PATH, { engine: "freebuff", label: "X" }, 400);

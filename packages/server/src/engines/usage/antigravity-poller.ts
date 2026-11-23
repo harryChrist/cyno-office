@@ -20,9 +20,9 @@ export const ANTIGRAVITY_STALE_REASONS = {
 export type RunCli = (command: string, args: string[], options: { timeoutMs: number; env: NodeJS.ProcessEnv; cwd: string }) => Promise<string>;
 
 export type AntigravityUsagePollerOptions = UsagePollerOptions & {
-  /** Executável (padrão "agy"); nos testes, o node com `prefixArgs` = [script falso]. */
-  command?: string;
-  prefixArgs?: string[];
+  /** Executável (padrão "agy"), ou função que resolve o binário atual; nos testes, o node com `prefixArgs` = [script falso]. */
+  command?: string | (() => string);
+  prefixArgs?: string[] | (() => string[] | undefined);
   /** Tempo máximo da consulta (ms). Padrão: 30 s. */
   timeoutMs?: number;
   /** Variáveis extras do perfil da conta (ex.: `{ HOME }` isolado); aplicadas via `sanitizeChildEnv`. */
@@ -50,16 +50,18 @@ const LOGIN_TEXT = /not logged|log ?in|sign ?in|authenticat|unauthori[sz]ed|cred
  * gravado no ~/.gemini além do que o agy já grava sozinho (log). Mesmo intervalo/backoff do Claude.
  */
 export class AntigravityUsagePoller extends UsagePoller {
-  private readonly command: string;
-  private readonly prefixArgs: string[];
+  private readonly resolveCommand: () => string;
+  private readonly resolvePrefixArgs: () => string[];
   private readonly timeoutMs: number;
   private readonly env: Record<string, string> | undefined;
   private readonly run: RunCli;
 
   constructor(options: AntigravityUsagePollerOptions) {
     super("gemini", options, { intervalMs: DEFAULT_ANTIGRAVITY_POLL_MS, fallbackReason: ANTIGRAVITY_STALE_REASONS.failed });
-    this.command = options.command ?? "agy";
-    this.prefixArgs = options.prefixArgs ?? [];
+    const command = options.command ?? "agy";
+    this.resolveCommand = typeof command === "function" ? command : () => command;
+    const prefixArgs = options.prefixArgs;
+    this.resolvePrefixArgs = typeof prefixArgs === "function" ? () => prefixArgs() ?? [] : () => prefixArgs ?? [];
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.env = options.env;
     this.run = options.run ?? defaultRun;
@@ -68,7 +70,7 @@ export class AntigravityUsagePoller extends UsagePoller {
   protected async fetchWindows(): Promise<UsageWindow[]> {
     let stdout: string;
     try {
-      stdout = await this.run(this.command, [...this.prefixArgs, "-p", "/usage", "--output-format", "json"], {
+      stdout = await this.run(this.resolveCommand(), [...this.resolvePrefixArgs(), "-p", "/usage", "--output-format", "json"], {
         timeoutMs: this.timeoutMs,
         env: sanitizeChildEnv(process.env, this.env),
         cwd: os.tmpdir(),

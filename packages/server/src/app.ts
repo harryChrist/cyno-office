@@ -1,7 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import websocket from "@fastify/websocket";
-import { ENGINE_RETRY_PATH, WS_HEARTBEAT_MS, agentEngine, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EnginesResponse, type ModelDefaults, type OneShotEngineId, type RunMode, type ServerEvent } from "@cyno/shared";
+import { ENGINE_LABELS, ENGINE_RETRY_PATH, WS_HEARTBEAT_MS, agentEngine, engineRetryBodySchema, INITIAL_MODEL_DEFAULTS, isActiveTaskStatus, isOneShotEngineId, PUSH_OWNER_PRESENT_MS, type EngineInfo, type EngineInstallJob, type EnginesResponse, type InstallableEngineId, type ModelDefaults, type OneShotEngineId, type RunMode, type ServerEvent, type SupportedEngineId } from "@cyno/shared";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 import { AgendaService } from "./platform/agenda/agenda-service";
@@ -45,6 +45,7 @@ import { pauseAppliesTo } from "./platform/usage-guard/rules";
 import { registerUsageGuardRoutes } from "./routes/usage-guard";
 import { registerEngineRoutes, type EngineRoutesDeps } from "./routes/engines";
 import { registerEngineAccountRoutes } from "./routes/engine-accounts";
+import { registerEngineLoginRoutes } from "./routes/engine-login";
 import { EngineSettingsStore } from "./platform/models/engine-settings";
 import { registerSettingsRoutes } from "./routes/settings";
 import { PlatformSettings } from "./platform/settings/platform-settings";
@@ -56,11 +57,14 @@ import { EngineStorage } from "./platform/engine-storage/engine-storage";
 import { RetentionService } from "./platform/retention/retention";
 import { McpTokens } from "./mcp/tokens";
 import { ModelDefaultsStore } from "./platform/models/defaults-store";
-import { defaultProbe, detectEngines, EngineCatalog, type OneShotDetect } from "./engines/terminals/engines";
+import { defaultProbe, detectEngines, EngineCatalog, findPrivateEngineBinary, resolveEngineBinary, type EngineBinary, type OneShotDetect } from "./engines/terminals/engines";
 import { errorMessage } from "./util/text";
 import { DEFAULT_TERMINALS_CONFIG, type TerminalsConfig } from "./engines/terminals/manager";
 import type { AgentRunner } from "./engines/runner/types";
 import { EngineAccountStore } from "./engines/accounts/account-store";
+import { AccountLoginChecker } from "./engines/accounts/login-status";
+import { LoginSessionManager, type LoginClock } from "./engines/terminals/login-session";
+import type { PtySpawnFn } from "./engines/terminals/pty-terminal";
 import { AccountUsagePoller, type AccountUsagePollerOptions } from "./engines/usage/account-poller";
 import { AccountPollerManager } from "./engines/usage/account-pollers";
 import { AntigravityUsagePoller, type AntigravityUsagePollerOptions } from "./engines/usage/antigravity-poller";
@@ -70,8 +74,7 @@ import type { FreebuffRuntime } from "./engines/freebuff/runtime";
 import { FreebuffService } from "./engines/freebuff/service";
 import { findExecutable } from "./engines/terminals/engine-status";
 import { EngineInstaller, type InstallFetch } from "./engines/install/installer";
-import type { InstallRecipe } from "./engines/install/recipes";
-import { engineDirs } from "./engines/install/recipes";
+import { engineDirs, installRecipeFor, type InstallRecipe } from "./engines/install/recipes";
 import { sweepEngineHomes } from "./engines/terminals/engine-homes";
 import { GatewaySlots } from "./engines/terminals/gateway-slots";
 import { stopAllGateways } from "./engines/terminals/hermes-adapter";
@@ -158,7 +161,23 @@ export type AppDeps = {
    */
   antigravityUsage?: Omit<AntigravityUsagePollerOptions, "tracker" | "now" | "log">;
   /** Contas extras dos motores: `realHomeDir` falso nos testes para nunca tocar o HOME real. */
-  engineAccounts?: { realHomeDir?: string };
+  engineAccounts?: { realHomeDir?: string; defaultClaudeConfigDir?: string; loginCacheTtlMs?: number };
+  /** Sessão de login pelo mini terminal (PTY avulso): injeções de teste (spawn, relógio, flag explícita sem senha). */
+  engineLogin?: {
+    spawn?: PtySpawnFn;
+    clock?: LoginClock;
+    env?: NodeJS.ProcessEnv;
+    replayBytes?: number;
+    idleTimeoutMs?: number;
+    maxLifetimeMs?: number;
+    pollIntervalMs?: number;
+    successGraceMs?: number;
+    detachGraceMs?: number;
+    /** Flag explícita só para testes sem senha (`CYNO_AUTH=off`). */
+    allowWithoutAuth?: boolean;
+  };
+  /** Receita falsa de instalação para qualquer motor instalável (claude, gemini, openclaw, hermes) nos testes. */
+  installRecipe?: (engine: InstallableEngineId) => InstallRecipe;
   /** Tela Motores: sondas e testes falsos nos testes (o estado e o "Testar" de verdade são o padrão). */
   /**
    * Freebuff (motor de agente de time, cobrado por hora aberta). Padrão: o executável `freebuff` do PATH (ou de
@@ -242,15 +261,78 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const usage = new SubscriptionUsageTracker(now);
   usage.restore(await loadUsageFile(usageFile));
   const usagePersistence = persistUsage(usage, usageFile, (error) => app.log.warn({ err: error }, "não foi possível gravar usage.json"));
+  const engineSettings = await EngineSettingsStore.load(path.join(deps.dataDir, "platform", "engines.json"), app.log);
+  const engineHomeDir = deps.engineTools?.homeDir ?? os.homedir();
+  const realHomeDir = deps.engineAccounts?.realHomeDir ?? engineHomeDir;
+  const terminals: TerminalsConfig = { ...DEFAULT_TERMINALS_CONFIG, ...deps.terminals };
+  const baseBinaries: Record<SupportedEngineId, EngineBinary> = {
+    claude: { command: terminals.claude.command ?? "claude", prefixArgs: terminals.claude.prefixArgs },
+    gemini: { command: terminals.gemini?.command ?? "agy", prefixArgs: terminals.gemini?.prefixArgs },
+  };
+  const supportedRecipe = (engine: SupportedEngineId): InstallRecipe =>
+    deps.installRecipe?.(engine) ?? installRecipeFor(engine, deps.dataDir, engineHomeDir);
+  // Ponto único de resolução de binários (`claude`/`gemini`): caminho salvo -> cópia privada do Cyno -> programa da máquina.
+  const resolveBinary = (engine: SupportedEngineId): EngineBinary =>
+    resolveEngineBinary(engine, {
+      dataDir: deps.dataDir,
+      base: baseBinaries[engine],
+      configured: engineSettings.paths()[engine],
+      privateCandidates: supportedRecipe(engine).binaryCandidates,
+    });
+  const syncBinary = (engine: SupportedEngineId): EngineBinary => {
+    const resolved = resolveBinary(engine);
+    if (engine === "claude") terminals.claude = { ...terminals.claude, command: resolved.command, prefixArgs: resolved.prefixArgs };
+    else terminals.gemini = { ...terminals.gemini, command: resolved.command, prefixArgs: resolved.prefixArgs };
+    return resolved;
+  };
+  syncBinary("claude");
+  syncBinary("gemini");
+
   const accountUsage = deps.accountUsage ? new AccountUsagePoller({ ...deps.accountUsage, tracker: usage, now, log: app.log }) : undefined;
-  const antigravityUsage = deps.antigravityUsage ? new AntigravityUsagePoller({ ...deps.antigravityUsage, tracker: usage, now, log: app.log }) : undefined;
+  const agyPollerBase: EngineBinary | undefined = deps.antigravityUsage
+    ? {
+        command: deps.antigravityUsage.command
+          ? typeof deps.antigravityUsage.command === "function"
+            ? deps.antigravityUsage.command()
+            : deps.antigravityUsage.command
+          : baseBinaries.gemini.command,
+        prefixArgs: deps.antigravityUsage.prefixArgs
+          ? typeof deps.antigravityUsage.prefixArgs === "function"
+            ? deps.antigravityUsage.prefixArgs()
+            : deps.antigravityUsage.prefixArgs
+          : baseBinaries.gemini.prefixArgs,
+      }
+    : undefined;
+  const resolveAgyPollerBin = (): EngineBinary =>
+    resolveEngineBinary("gemini", {
+      dataDir: deps.dataDir,
+      base: agyPollerBase ?? baseBinaries.gemini,
+      configured: engineSettings.paths().gemini,
+      privateCandidates: supportedRecipe("gemini").binaryCandidates,
+    });
+  const antigravityUsage = deps.antigravityUsage
+    ? new AntigravityUsagePoller({
+        ...deps.antigravityUsage,
+        command: () => resolveAgyPollerBin().command,
+        prefixArgs: () => resolveAgyPollerBin().prefixArgs,
+        tracker: usage,
+        now,
+        log: app.log,
+      })
+    : undefined;
   const engineAccounts = await EngineAccountStore.open(deps.dataDir, {
-    realHomeDir: deps.engineAccounts?.realHomeDir ?? deps.engineTools?.homeDir ?? os.homedir(),
+    realHomeDir,
     now,
     log: app.log,
   });
   const claudeAccountPoller = deps.accountUsage ? (({ credentialsFile: _credentialsFile, ...rest }) => rest)(deps.accountUsage) : undefined;
-  const geminiAccountPoller = deps.antigravityUsage ? (({ env: _env, ...rest }) => rest)(deps.antigravityUsage) : undefined;
+  const geminiAccountPoller = deps.antigravityUsage
+    ? {
+        ...(({ env: _env, ...rest }) => rest)(deps.antigravityUsage),
+        command: () => resolveAgyPollerBin().command,
+        prefixArgs: () => resolveAgyPollerBin().prefixArgs,
+      }
+    : undefined;
   const accountPollers = new AccountPollerManager({
     store: engineAccounts,
     tracker: usage,
@@ -264,7 +346,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const spendSettings = await SpendSettingsStore.load(path.join(deps.dataDir, "spend.json"), app.log);
   app.decorate("spendSettings", spendSettings);
   const modelDefaults = await ModelDefaultsStore.load(path.join(deps.dataDir, "models.json"), deps.initialModelDefaults ?? INITIAL_MODEL_DEFAULTS, app.log);
-  const engineSettings = await EngineSettingsStore.load(path.join(deps.dataDir, "platform", "engines.json"), app.log);
   const mcpTokens = new McpTokens();
   // As horas abertas do Freebuff (uma só para todos os workspaces: a hora é da conta) e o estado vai para o uso da assinatura.
   const freebuffService = await FreebuffService.open(path.join(deps.dataDir, "platform", "engine-sessions.json"), {
@@ -275,7 +356,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   usage.reportFreebuff(freebuffService.detail());
   // Modo simulado: só quando o chamador injeta um runner (AGENT_RUNNER=mock; testes, e2e e laboratório).
   const simulated = deps.runner !== undefined;
-  const terminals: TerminalsConfig = { ...DEFAULT_TERMINALS_CONFIG, ...deps.terminals };
   // OpenClaw e Hermes: um processo por turno; o modelo vem do OpenRouter, com a chave do painel (só estes dois processos a recebem).
   const openrouterKey = await OpenRouterKeyStore.open(path.join(deps.dataDir, "platform", "openrouter-key.json"));
   const openrouterModels = await OpenRouterModelsCache.open(path.join(deps.dataDir, "platform", "openrouter-models.json"));
@@ -309,11 +389,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     (() =>
       detectEngines(
         {
-          claude: { command: terminals.claude.command ?? "claude", prefixArgs: terminals.claude.prefixArgs },
-          gemini: { command: terminals.gemini?.command ?? "agy", prefixArgs: terminals.gemini?.prefixArgs },
+          claude: resolveBinary("claude"),
+          gemini: resolveBinary("gemini"),
         },
         undefined,
-        { command: terminals.freebuff?.command ?? "freebuff", homeDir: deps.engineTools?.homeDir ?? os.homedir(), ...(deps.engineTools?.pathEnv ? { pathEnv: deps.engineTools.pathEnv } : {}), models: () => freebuffService.models().models },
+        { command: terminals.freebuff?.command ?? "freebuff", homeDir: engineHomeDir, ...(deps.engineTools?.pathEnv ? { pathEnv: deps.engineTools.pathEnv } : {}), models: () => freebuffService.models().models },
         oneShotDetect,
       ));
   // Uma detecção nova (ex.: "Detectar de novo" depois de instalar a CLI) pode liberar as filas paradas.
@@ -671,27 +751,75 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     { getAccount: (id) => engineAccounts.get(id), getPoller: (id) => accountPollers.getPoller(id) },
   );
   registerUsageGuardRoutes(app, usageGuard);
-  // OpenClaw e Hermes: o passo a passo, o Verificar e a instalação (com confirmação) da tela Motores.
+  const record = (action: string, summary: string, data?: Record<string, unknown>) => activity({ category: "sistema", action, actor: "usuario", summary, ...(data ? { data } : {}) });
+  // OpenClaw, Hermes, Claude Code e Antigravity: instalador compartilhado (uma instalação por vez em todo o servidor).
   // eslint-disable-next-line prefer-const -- atribuído logo abaixo (a instalação pede o serviço de volta ao terminar)
   let oneShotEngines: OneShotEngines;
+  const afterSupportedInstall = async (engine: SupportedEngineId, job: EngineInstallJob): Promise<void> => {
+    syncBinary(engine);
+    const found = findPrivateEngineBinary(deps.dataDir, engine, supportedRecipe(engine).binaryCandidates);
+    record(
+      job.status === "done" && found ? "motor_instalado" : "motor_instalacao_falhou",
+      job.status === "done" && found ? `${ENGINE_LABELS[engine]} instalado` : `A instalação do ${ENGINE_LABELS[engine]} não terminou`,
+      { engine, ...(job.error ? { error: job.error } : {}), ...(found ? { path: found } : {}) },
+    );
+  };
   const engineInstaller = new EngineInstaller({
     lockFile: path.join(deps.dataDir, "platform", "engines", "install.lock"),
     now,
     ...(deps.oneShot?.installFetch ? { fetch: deps.oneShot.installFetch } : {}),
     onChange: (job) => {
-      if (job.status !== "running") void oneShotEngines.afterInstall(job.engine).then(() => engines.list(true)).catch(() => undefined);
+      if (job.status === "running") return;
+      if (isOneShotEngineId(job.engine)) {
+        void oneShotEngines.afterInstall(job.engine).then(() => engines.list(true)).catch(() => undefined);
+      } else {
+        void afterSupportedInstall(job.engine, job).then(() => engines.list(true)).catch(() => undefined);
+      }
     },
   });
-  const record = (action: string, summary: string, data?: Record<string, unknown>) => activity({ category: "sistema", action, actor: "usuario", summary, ...(data ? { data } : {}) });
+  const loginChecker = new AccountLoginChecker({
+    store: engineAccounts,
+    resolveBinary,
+    realHomeDir,
+    ...(deps.engineAccounts?.defaultClaudeConfigDir ? { defaultClaudeConfigDir: deps.engineAccounts.defaultClaudeConfigDir } : {}),
+    ...(deps.engineAccounts?.loginCacheTtlMs !== undefined ? { cacheTtlMs: deps.engineAccounts.loginCacheTtlMs } : {}),
+    probe: deps.engineTools?.probe ?? defaultProbe,
+    now: () => now().getTime(),
+  });
+  const loginSessions = new LoginSessionManager({
+    dataDir: deps.dataDir,
+    ...(deps.engineLogin?.spawn ? { spawn: deps.engineLogin.spawn } : {}),
+    ...(deps.engineLogin?.clock ? { clock: deps.engineLogin.clock } : {}),
+    ...(deps.engineLogin?.env ? { env: deps.engineLogin.env } : {}),
+    ...(deps.engineLogin?.replayBytes !== undefined ? { replayBytes: deps.engineLogin.replayBytes } : {}),
+    ...(deps.engineLogin?.idleTimeoutMs !== undefined ? { idleTimeoutMs: deps.engineLogin.idleTimeoutMs } : {}),
+    ...(deps.engineLogin?.maxLifetimeMs !== undefined ? { maxLifetimeMs: deps.engineLogin.maxLifetimeMs } : {}),
+    ...(deps.engineLogin?.pollIntervalMs !== undefined ? { pollIntervalMs: deps.engineLogin.pollIntervalMs } : {}),
+    ...(deps.engineLogin?.successGraceMs !== undefined ? { successGraceMs: deps.engineLogin.successGraceMs } : {}),
+    ...(deps.engineLogin?.detachGraceMs !== undefined ? { detachGraceMs: deps.engineLogin.detachGraceMs } : {}),
+    record,
+  });
   registerEngineAccountRoutes(app, {
     store: engineAccounts,
+    loginChecker,
     onCreated: (account) => accountPollers.add(account),
     onRemoved: (account) => accountPollers.remove(account),
     record,
   });
+  registerEngineLoginRoutes(app, {
+    store: engineAccounts,
+    loginChecker,
+    sessions: loginSessions,
+    resolveBinary,
+    pathEnv: () => deps.engineTools?.pathEnv ?? process.env.PATH ?? "",
+    homeDir: engineHomeDir,
+    authOff: deps.auth?.open === true,
+    authEnabled: () => authStore.enabled(),
+    ...(deps.engineLogin?.allowWithoutAuth ? { allowWithoutAuth: true } : {}),
+  });
   oneShotEngines = new OneShotEngines({
     dataDir: deps.dataDir,
-    homeDir: deps.engineTools?.homeDir ?? os.homedir(),
+    homeDir: engineHomeDir,
     ...(deps.engineTools?.pathEnv ? { pathEnv: deps.engineTools.pathEnv } : {}),
     now,
     settings: engineSettings,
@@ -730,7 +858,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
     installer: engineInstaller,
     gateways: () => ({ max: hermesSlots.limit(), inUse: hermesSlots.inUse(), waiting: hermesSlots.waiting() }),
-    ...(deps.oneShot?.recipe ? { recipe: deps.oneShot.recipe } : {}),
+    ...(deps.installRecipe || deps.oneShot?.recipe ? { recipe: (engine: OneShotEngineId) => deps.installRecipe?.(engine) ?? deps.oneShot?.recipe?.(engine) ?? installRecipeFor(engine, deps.dataDir, engineHomeDir) } : {}),
     ...(deps.oneShot?.turn ? { turn: deps.oneShot.turn } : {}),
     ...(deps.oneShot?.turnTimeoutMs ? { turnTimeoutMs: deps.oneShot.turnTimeoutMs } : {}),
     ...(deps.oneShot?.fenceSupport ? { fenceSupport: deps.oneShot.fenceSupport } : {}),
@@ -740,6 +868,24 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     record,
   });
   oneShotRef.current = oneShotEngines;
+  const installHandler = {
+    plan: (engine: InstallableEngineId) =>
+      isOneShotEngineId(engine) ? oneShotEngines.installPlan(engine) : supportedRecipe(engine).plan,
+    start: (engine: InstallableEngineId) => {
+      if (isOneShotEngineId(engine)) return oneShotEngines.startInstall(engine);
+      const recipe = supportedRecipe(engine);
+      record("motor_instalacao_confirmada", `Você confirmou instalar o ${ENGINE_LABELS[engine]}`, {
+        engine,
+        command: recipe.plan.command,
+        destination: recipe.plan.destination,
+      });
+      return engineInstaller.start(engine, recipe);
+    },
+    current: (engine: InstallableEngineId) => {
+      const job = engineInstaller.current();
+      return job?.engine === engine ? job : null;
+    },
+  };
   // Boot: gateways do Hermes que sobraram de uma queda do servidor anterior (achados pelo caminho das pastas `agent-homes`, nunca pelo nome do processo).
   void stopAllGateways(engineDirs(deps.dataDir, "hermes").root)
     // Pastas de motor de agentes que não existem mais (token do MCP, configuração, sessões): saem depois dos gateways.
@@ -750,10 +896,18 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerEngineRoutes(app, {
     ...(terminals.freebuff ? { freebuff: terminals.freebuff } : {}),
     record,
+    resolveBinary,
+    syncBinary,
+    installable: true,
+    installJob: (id) => {
+      const job = engineInstaller.current();
+      return job?.engine === id ? job : undefined;
+    },
     oneShot: {
       engines: oneShotEngines,
       key: openrouterKey,
       models: openrouterModels,
+      install: installHandler,
       setCommand: (engine, command) => {
         const config = terminals[engine];
         if (config) config.command = command ?? engine;
@@ -828,6 +982,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await installer.close();
     // A instalação de motor em curso (e o que ela abriu) sai junto, e a trava é solta.
     await engineInstaller.close();
+    loginSessions.close();
     await appRunner.close();
     await library.close();
     await agenda.idle();

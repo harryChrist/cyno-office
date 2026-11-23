@@ -2,11 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   ACCOUNT_ENGINES,
   createEngineAccountSchema,
+  DEFAULT_ACCOUNT_ID,
   ENGINE_ACCOUNTS_PATH,
   engineAccountItemPath,
   engineAccountSchema,
   patchEngineAccountSchema,
 } from "./engine-accounts";
+import {
+  engineAccountLoginPath,
+  engineLoginClientMessageSchema,
+  engineLoginServerMessageSchema,
+} from "./engine-login";
+import { INSTALLABLE_ENGINE_IDS, isInstallableEngineId } from "./engine-status";
 import { subscriptionUsageSchema, usageKey, usageRefreshBodySchema } from "./usage";
 
 describe("engine-accounts e usageKey", () => {
@@ -50,5 +57,27 @@ describe("engine-accounts e usageKey", () => {
     expect(usageRefreshBodySchema.parse({})).toEqual({ provider: "claude" });
     expect(usageRefreshBodySchema.parse({ provider: "gemini", accountId: "pessoal" })).toEqual({ provider: "gemini", accountId: "pessoal" });
     expect(usageRefreshBodySchema.safeParse({ provider: "claude", accountId: "ab" }).success).toBe(false);
+  });
+
+  it("protocolo de login (engine-login) e motores instaláveis", () => {
+    expect(DEFAULT_ACCOUNT_ID).toBe("padrao");
+    expect(INSTALLABLE_ENGINE_IDS).toEqual(["claude", "gemini", "openclaw", "hermes"]);
+    expect(isInstallableEngineId("claude")).toBe(true);
+    expect(isInstallableEngineId("gemini")).toBe(true);
+    expect(isInstallableEngineId("freebuff")).toBe(false);
+
+    expect(engineAccountLoginPath("trabalho")).toBe("/api/engines/accounts/trabalho/login");
+    expect(engineAccountLoginPath("padrao", "gemini")).toBe("/api/engines/accounts/padrao/login?engine=gemini");
+
+    expect(engineLoginClientMessageSchema.parse({ type: "in", data: "abc\r" })).toEqual({ type: "in", data: "abc\r" });
+    expect(engineLoginClientMessageSchema.parse({ type: "resize", cols: 100, rows: 30 })).toEqual({ type: "resize", cols: 100, rows: 30 });
+    expect(engineLoginClientMessageSchema.safeParse({ type: "resize", cols: 5, rows: 30 }).success).toBe(false);
+    expect(engineLoginClientMessageSchema.safeParse({ type: "shell" }).success).toBe(false);
+
+    expect(engineLoginServerMessageSchema.parse({ type: "hello", engine: "claude", label: "Padrão" })).toEqual({ type: "hello", engine: "claude", label: "Padrão" });
+    expect(engineLoginServerMessageSchema.parse({ type: "replay", data: "oi" })).toEqual({ type: "replay", data: "oi" });
+    expect(engineLoginServerMessageSchema.parse({ type: "out", data: "url" })).toEqual({ type: "out", data: "url" });
+    expect(engineLoginServerMessageSchema.parse({ type: "login", loggedIn: true })).toEqual({ type: "login", loggedIn: true });
+    expect(engineLoginServerMessageSchema.parse({ type: "exit", code: 0 })).toEqual({ type: "exit", code: 0 });
   });
 });

@@ -940,7 +940,7 @@ async function exists(file: string): Promise<boolean> {
 }
 
 /** node-pty só é carregado quando um terminal interativo sobe (binário nativo pré-compilado). */
-async function loadNodePty(): Promise<PtySpawnFn> {
+export async function loadNodePty(): Promise<PtySpawnFn> {
   const pty = await import("@lydell/node-pty");
   return (file, args, options) => pty.spawn(file, args, options);
 }

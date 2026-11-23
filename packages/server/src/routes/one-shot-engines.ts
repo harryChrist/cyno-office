@@ -10,6 +10,8 @@ import {
   engineInstallPlanPath,
   engineInstallPath,
   engineVerifyPath,
+  INSTALLABLE_ENGINE_IDS,
+  isOneShotEngineId,
   OPENROUTER_KEY_PATH,
   OPENROUTER_MODELS_PATH,
   ONE_SHOT_ENGINE_IDS,
@@ -21,6 +23,7 @@ import {
   type EngineInstallPlan,
   type EngineStatusResponse,
   type EngineVerifyResult,
+  type InstallableEngineId,
   type OneShotEngineId,
   type OpenRouterKeyInfo,
   type OpenRouterModelsResponse,
@@ -32,6 +35,12 @@ import type { EngineSettingsStore } from "../platform/models/engine-settings";
 import type { OpenRouterModelsCache } from "../platform/openrouter/client";
 import type { OpenRouterKeyStore } from "../platform/openrouter/key-store";
 import { errorMessage } from "../util/text";
+
+export type EngineInstallRoutesHandler = {
+  plan: (engine: InstallableEngineId) => EngineInstallPlan;
+  start: (engine: InstallableEngineId) => EngineInstallJob;
+  current: (engine: InstallableEngineId) => EngineInstallJob | null;
+};
 
 export type OneShotRoutesDeps = {
   engines: OneShotEngines;
@@ -45,6 +54,8 @@ export type OneShotRoutesDeps = {
   homeDir: string;
   now: () => Date;
   record?: (action: string, summary: string, data?: Record<string, unknown>) => void;
+  /** Instalação privada unificada para `claude`, `gemini`, `openclaw` e `hermes`. */
+  install?: EngineInstallRoutesHandler;
 };
 
 /**
@@ -135,10 +146,17 @@ export function registerOneShotEngineRoutes(app: FastifyInstance, deps: OneShotR
         verifying = undefined;
       }
     });
+  }
 
-    app.post(engineInstallPlanPath(id), async (): Promise<{ plan: EngineInstallPlan }> => ({ plan: deps.engines.installPlan(id) }));
+  // Plano, início e estado da instalação privada para todos os motores instaláveis (claude, gemini, openclaw, hermes).
+  const installTargets: readonly InstallableEngineId[] = deps.install ? INSTALLABLE_ENGINE_IDS : ONE_SHOT_ENGINE_IDS;
+  for (const id of installTargets) {
+    app.post(engineInstallPlanPath(id), async (): Promise<{ plan: EngineInstallPlan }> => ({
+      plan: deps.install ? deps.install.plan(id) : deps.engines.installPlan(id as OneShotEngineId),
+    }));
 
     app.get(engineInstallPath(id), async (): Promise<{ job: EngineInstallJob | null }> => {
+      if (deps.install) return { job: deps.install.current(id) };
       const status = (await deps.status()).engines.find((engine) => engine.id === id);
       return { job: status?.installJob ?? null };
     });
@@ -148,7 +166,9 @@ export function registerOneShotEngineRoutes(app: FastifyInstance, deps: OneShotR
       // Instalar baixa e roda código: só depois de o dono ver o plano e confirmar na tela.
       if (body.confirm !== true) return reply.code(409).send({ error: `Instalar o ${ENGINE_LABELS[id]} baixa e roda um instalador. Veja o plano e confirme para instalar.` } satisfies ApiErrorBody);
       try {
-        return { job: deps.engines.startInstall(id) };
+        const job = deps.install ? deps.install.start(id) : isOneShotEngineId(id) ? deps.engines.startInstall(id) : undefined;
+        if (!job) return reply.code(404).send({ error: `Este motor não tem instalador disponível.` } satisfies ApiErrorBody);
+        return { job };
       } catch (error) {
         return reply.code(409).send({ error: errorMessage(error) } satisfies ApiErrorBody);
       }

@@ -12,6 +12,9 @@ export function isAccountEngine(value: string): value is AccountEngine {
   return (ACCOUNT_ENGINES as readonly string[]).includes(value);
 }
 
+/** Identificador sintético da conta padrão (a do HOME real do servidor), uma por motor. */
+export const DEFAULT_ACCOUNT_ID = "padrao";
+
 /** Teto técnico de contas extras por motor (só contra abuso por engano; o uso normal nunca chega perto). */
 export const MAX_ACCOUNTS_PER_ENGINE = 100;
 
@@ -44,8 +47,15 @@ export const patchEngineAccountSchema = z.strictObject({
 });
 export type PatchEngineAccountBody = z.input<typeof patchEngineAccountSchema>;
 
-export type EngineAccountsResponse = { accounts: EngineAccount[] };
-export type EngineAccountResponse = { account: EngineAccount };
+/** Conta de um motor devolvida pela API (com estado de login e `isDefault` na conta padrão). */
+export type EngineAccountView = Omit<EngineAccount, "createdAt"> & {
+  createdAt?: string;
+  loggedIn: boolean;
+  isDefault?: true;
+};
+
+export type EngineAccountsResponse = { accounts: EngineAccountView[] };
+export type EngineAccountResponse = { account: EngineAccountView };
 
 /** Rota da lista e criação de contas dos motores. */
 export const ENGINE_ACCOUNTS_PATH = "/api/engines/accounts";

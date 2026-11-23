@@ -7,6 +7,7 @@ import {
   engineBlock,
   freebuffBlock,
   type EngineCatalogId,
+  type EngineInstallJob,
   type OneShotEngineId,
   type EnginePathSource,
   type EngineState,
@@ -64,6 +65,10 @@ export type EngineStatusDeps = {
   freebuff?: { service: FreebuffService; manicodeDir: string; command: string };
   /** OpenClaw e Hermes: o estado de cada um (ausente = só detectados, "em breve", como antes). */
   oneShot?: (id: OneShotEngineId) => Promise<EngineStatus>;
+  /** Instalação privada de `claude`/`gemini` em andamento ou concluída. */
+  installJob?: (id: SupportedEngineId) => EngineInstallJob | undefined;
+  /** Quando verdadeiro, motores `claude`/`gemini` não instalados expõem `installable: true`. */
+  installable?: boolean;
 };
 
 async function isExecutable(file: string): Promise<boolean> {
@@ -111,7 +116,7 @@ export async function npmPackageVersion(executable: string, packageName: string)
 const firstLine = (text: string) => text.trim().split(/\r?\n/)[0]?.trim().slice(0, 80) || undefined;
 
 /** `claude auth status` imprime JSON com `loggedIn`: só esse campo é lido (nada de e-mail ou plano). */
-function parseLoggedIn(stdout: string): boolean | undefined {
+export function parseLoggedIn(stdout: string): boolean | undefined {
   try {
     const value = (JSON.parse(stdout) as { loggedIn?: unknown }).loggedIn;
     return typeof value === "boolean" ? value : undefined;
@@ -147,6 +152,7 @@ async function detectSupported(id: SupportedEngineId, deps: EngineStatusDeps): P
   const lastTest = deps.tests()[id];
   const testedOk = Boolean(lastTest?.ok && deps.now() - Date.parse(lastTest.at) < ENGINE_TEST_FRESH_MS);
   const described = DESCRIBED[id];
+  const installJob = deps.installJob?.(id);
   return {
     id,
     label: described.label,
@@ -160,6 +166,8 @@ async function detectSupported(id: SupportedEngineId, deps: EngineStatusDeps): P
     loginCommand: described.loginCommand,
     ...(block?.reason === "quota" && block.resetsAt ? { resetsAt: block.resetsAt } : {}),
     ...(lastTest ? { lastTest } : {}),
+    ...(!installed && deps.installable ? { installable: true } : {}),
+    ...(installJob ? { installJob } : {}),
     ...(!installed && version && !version.ok ? { notice: version.error ?? "não respondeu ao --version" } : {}),
   };
 }

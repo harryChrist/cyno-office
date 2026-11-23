@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   ACCOUNT_ENGINES,
+  DEFAULT_ACCOUNT_ID,
   ENGINE_ACCOUNT_ID_PATTERN,
   MAX_ACCOUNTS_PER_ENGINE,
   engineAccountSchema,
@@ -157,7 +158,7 @@ export class EngineAccountStore {
     if (sameEngine.some((account) => account.label.toLowerCase() === label.toLowerCase())) {
       throw new HttpError(409, `Já existe uma conta chamada "${label}" neste motor.`);
     }
-    const taken = new Set(this.accounts.map((account) => account.id));
+    const taken = new Set([DEFAULT_ACCOUNT_ID, ...this.accounts.map((account) => account.id)]);
     const account: EngineAccount = {
       id: makeAccountId(label, taken, this.randomSuffix),
       engine: validEngine,

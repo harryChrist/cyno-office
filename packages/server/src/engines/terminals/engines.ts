@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
-import { ENGINE_LABELS, type EngineInfo, type EngineModel, type FreebuffModel } from "@cyno/shared";
+import { accessSync, constants as fsConstants, statSync } from "node:fs";
+import { ENGINE_LABELS, type EngineInfo, type EngineModel, type FreebuffModel, type SupportedEngineId } from "@cyno/shared";
 import { errorMessage } from "../../util/text";
+import { privateBinaryCandidates } from "../install/recipes";
 import { sanitizeChildEnv } from "./env";
 import { findExecutable, npmPackageVersion } from "./engine-status";
 
@@ -14,10 +16,47 @@ import { findExecutable, npmPackageVersion } from "./engine-status";
 /** Roda um comando curto e devolve a saída (nunca lança). */
 export type EngineProbe = (command: string, args: string[], timeoutMs: number, env?: Record<string, string>) => Promise<{ ok: boolean; stdout: string; error?: string; timedOut?: boolean }>;
 
+export type EngineBinary = { command: string; prefixArgs?: string[] | undefined };
+
 export type EngineBinaries = {
-  claude: { command: string; prefixArgs?: string[] };
-  gemini: { command: string; prefixArgs?: string[] };
+  claude: EngineBinary;
+  gemini: EngineBinary;
 };
+
+function isExecutableSync(file: string): boolean {
+  try {
+    if (!statSync(file).isFile()) return false;
+    accessSync(file, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Cópia privada instalada pelo Cyno em `DATA_DIR/platform/engines/<motor>/`, se existir e for executável. */
+export function findPrivateEngineBinary(dataDir: string, engine: SupportedEngineId, candidates?: readonly string[]): string | undefined {
+  for (const candidate of candidates ?? privateBinaryCandidates(dataDir, engine)) {
+    if (isExecutableSync(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
+ * Ponto único de resolução do binário de `claude` e `gemini` (usado por detecção de versão,
+ * adaptadores, poller de cota e login):
+ * 1. caminho explicitamente salvo na tela (`configured`), se houver;
+ * 2. cópia privada instalada pelo Cyno (`DATA_DIR/platform/engines/<motor>/`), se existir;
+ * 3. comando base (variável de ambiente `CLAUDE_BIN`/`AGY_BIN` ou padrão da máquina).
+ */
+export function resolveEngineBinary(
+  engine: SupportedEngineId,
+  options: { dataDir: string; base: EngineBinary; configured?: string; privateCandidates?: readonly string[] },
+): EngineBinary {
+  if (options.configured) return { command: options.configured };
+  const privateBin = findPrivateEngineBinary(options.dataDir, engine, options.privateCandidates);
+  if (privateBin) return { command: privateBin };
+  return options.base;
+}
 
 /** Apelidos do Claude Code para o seletor (o campo aceita qualquer modelo/alias da CLI). */
 export const CLAUDE_MODEL_ALIASES: EngineModel[] = [

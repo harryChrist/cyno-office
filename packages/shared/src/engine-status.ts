@@ -30,6 +30,14 @@ export function isOneShotEngineId(value: string): value is OneShotEngineId {
   return (ONE_SHOT_ENGINE_IDS as readonly string[]).includes(value);
 }
 
+/** Motores que o Cyno sabe instalar em cópia privada (opcional; nunca altera a instalação global do sistema). */
+export const INSTALLABLE_ENGINE_IDS = ["claude", "gemini", "openclaw", "hermes"] as const satisfies readonly EngineCatalogId[];
+export type InstallableEngineId = (typeof INSTALLABLE_ENGINE_IDS)[number];
+
+export function isInstallableEngineId(value: string): value is InstallableEngineId {
+  return (INSTALLABLE_ENGINE_IDS as readonly string[]).includes(value);
+}
+
 /**
  * not_installed: executável não achado; installed: achado (com versão, se deu para ler);
  * no_login: achado, mas a conta não está entrada; working: o "Testar" passou nas últimas 24 h;
@@ -120,7 +128,7 @@ export type ProgramModelsResponse = { models: { id: string; label?: string }[]; 
 
 /** Plano de instalação mostrado ANTES de instalar (o dono confirma na tela). */
 export type EngineInstallPlan = {
-  engine: OneShotEngineId;
+  engine: InstallableEngineId;
   title: string;
   /** O comando exato que o servidor roda (já com as pastas). */
   command: string;
@@ -160,7 +168,7 @@ export type EngineVerifyResult = {
 
 export type EngineInstallJob = {
   id: string;
-  engine: OneShotEngineId;
+  engine: InstallableEngineId;
   status: "running" | "done" | "failed";
   startedAt: string;
   finishedAt?: string;

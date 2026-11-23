@@ -11,6 +11,7 @@ import {
   freebuffTestBodySchema,
   isSupportedEngineId,
   type ApiErrorBody,
+  type EngineInstallJob,
   type EngineStatusResponse,
   type EngineTestResult,
   type SubscriptionUsage,
@@ -18,7 +19,7 @@ import {
   type TurnUsage,
 } from "@cyno/shared";
 import type { FastifyInstance } from "fastify";
-import { defaultProbe, type EngineProbe } from "../engines/terminals/engines";
+import { defaultProbe, type EngineBinary, type EngineProbe } from "../engines/terminals/engines";
 import { detectEngineStatuses, findExecutable } from "../engines/terminals/engine-status";
 import { EngineTester, runEngineTest, ENGINE_TEST_MIN_GAP_MS } from "../engines/terminals/engine-test";
 import type { TerminalsConfig } from "../engines/terminals/manager";
@@ -57,7 +58,15 @@ export type EngineRoutesDeps = {
   /** Registro na Atividade (ações do dono: instalar um motor, guardar a chave do OpenRouter). */
   record?: (action: string, summary: string, data?: Record<string, unknown>) => void;
   /** OpenClaw e Hermes (o passo a passo, a chave do OpenRouter, o Verificar e a instalação); ausente = só detectados. */
-  oneShot?: Pick<OneShotRoutesDeps, "engines" | "key" | "models" | "setCommand">;
+  oneShot?: Pick<OneShotRoutesDeps, "engines" | "key" | "models" | "setCommand" | "install">;
+  /** Resolução unificada de binário (`claude`/`gemini`: caminho configurado → cópia privada → padrão). */
+  resolveBinary?: (engine: SupportedEngineId) => EngineBinary;
+  /** Reaplica o binário resolvido em `terminals` após trocar ou limpar o caminho configurado. */
+  syncBinary?: (engine: SupportedEngineId) => EngineBinary;
+  /** Job de instalação privada em andamento ou concluído para `claude`/`gemini`. */
+  installJob?: (id: SupportedEngineId) => EngineInstallJob | undefined;
+  /** Quando `true`, expõe `installable: true` para `claude`/`gemini` quando não instalados. */
+  installable?: boolean;
 };
 
 /** O comando de cada motor agora (o que `terminals` diz). */
@@ -86,14 +95,21 @@ export function registerEngineRoutes(app: FastifyInstance, deps: EngineRoutesDep
   const base: Record<SupportedEngineId, Bin> = { claude: binOf(deps.terminals, "claude"), gemini: binOf(deps.terminals, "gemini") };
   const pathEnv = () => deps.pathEnv ?? process.env.PATH ?? "";
 
+  const currentBin = (engine: SupportedEngineId): Bin => deps.resolveBinary?.(engine) ?? binOf(deps.terminals, engine);
+
   const applySavedPaths = () => {
+    if (deps.syncBinary) {
+      deps.syncBinary("claude");
+      deps.syncBinary("gemini");
+      return;
+    }
     for (const [engine, value] of Object.entries(deps.settings.paths()) as [SupportedEngineId, string][]) applyPath(deps.terminals, base, engine, value);
   };
 
   const tester = new EngineTester(
     deps.testRunner ??
       ((engine) => {
-        const bin = binOf(deps.terminals, engine);
+        const bin = currentBin(engine);
         return runEngineTest({
           engine,
           command: bin.command,
@@ -111,7 +127,7 @@ export function registerEngineRoutes(app: FastifyInstance, deps: EngineRoutesDep
 
   const status = async (): Promise<EngineStatusResponse> => ({
     engines: await detectEngineStatuses({
-      binaries: { claude: binOf(deps.terminals, "claude"), gemini: binOf(deps.terminals, "gemini") },
+      binaries: { claude: currentBin("claude"), gemini: currentBin("gemini") },
       defaultCommands: DEFAULT_COMMANDS,
       configured: deps.settings.paths(),
       pathEnv: pathEnv(),
@@ -120,6 +136,8 @@ export function registerEngineRoutes(app: FastifyInstance, deps: EngineRoutesDep
       usage: deps.usage,
       tests: () => deps.settings.tests(),
       now: () => deps.now().getTime(),
+      ...(deps.installJob ? { installJob: deps.installJob } : {}),
+      ...(deps.installable ? { installable: true } : {}),
       ...(deps.freebuff ? { freebuff: { service: deps.freebuff.service, manicodeDir: deps.freebuff.manicodeDir, command: deps.freebuff.command } } : {}),
       ...(deps.oneShot ? { oneShot: (id) => deps.oneShot!.engines.status(id) } : {}),
     }),
@@ -144,7 +162,8 @@ export function registerEngineRoutes(app: FastifyInstance, deps: EngineRoutesDep
       return reply.code(400).send({ error: `Não achei um executável em "${value}".` } satisfies ApiErrorBody);
     }
     await deps.settings.setPath(id, value);
-    applyPath(deps.terminals, base, id, value ?? undefined);
+    if (deps.syncBinary) deps.syncBinary(id);
+    else applyPath(deps.terminals, base, id, value ?? undefined);
     await deps.redetect();
     return status();
   });
