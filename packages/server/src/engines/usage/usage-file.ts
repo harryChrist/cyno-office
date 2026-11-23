@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
-import { subscriptionUsageSchema, type SubscriptionUsage } from "@cyno/shared";
+import { subscriptionUsageSchema, usageKey, type SubscriptionUsage } from "@cyno/shared";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import type { SubscriptionUsageTracker } from "./subscription-usage";
 
 /**
- * `DATA_DIR/usage.json`: o último uso conhecido de cada provedor, para o medidor não voltar vazio
- * depois de um restart (o web mostra "atualizado há X min"). Formato `{ version: 1, usage: [...] }`.
- * Nunca guarda token nem credencial — só o que já vai para o web.
+ * `DATA_DIR/usage.json`: o último uso conhecido de cada provedor/conta, para o medidor não voltar
+ * vazio depois de um restart (o web mostra "atualizado há X min"). Formato `{ version: 1, usage: [...] }`.
+ * Itens antigos (sem `accountId`) continuam válidos como conta padrão. Nunca guarda token nem credencial.
  */
 type UsageFile = { version: 1; usage: SubscriptionUsage[] };
 
@@ -20,9 +20,14 @@ export async function loadUsageFile(file: string): Promise<SubscriptionUsage[]> 
   }
   const list = typeof data === "object" && data !== null && Array.isArray((data as { usage?: unknown }).usage) ? (data as { usage: unknown[] }).usage : [];
   const result: SubscriptionUsage[] = [];
+  const seen = new Set<string>();
   for (const item of list) {
     const parsed = subscriptionUsageSchema.safeParse(item);
-    if (parsed.success && parsed.data.provider !== "mock" && !result.some((usage) => usage.provider === parsed.data.provider)) result.push(parsed.data);
+    if (!parsed.success || parsed.data.provider === "mock") continue;
+    const key = usageKey(parsed.data.provider, parsed.data.accountId);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(parsed.data);
   }
   return result;
 }
@@ -33,8 +38,8 @@ export function saveUsageFile(file: string, usage: SubscriptionUsage[]): Promise
 }
 
 /**
- * Grava o estado do tracker a cada `usage:updated` (em série: uma gravação por vez, e só a
- * última pendente vale). Devolve `flush` (espera a gravação em andamento) e `stop`.
+ * Grava o estado do tracker a cada mudança (`usage:updated` ou `forget`), em série (uma gravação por
+ * vez, e só a última pendente vale). Devolve `flush` (espera a gravação em andamento) e `stop`.
  */
 export function persistUsage(
   tracker: SubscriptionUsageTracker,
@@ -55,6 +60,6 @@ export function persistUsage(
       }
     });
   };
-  const unsubscribe = tracker.hub.subscribe(schedule);
+  const unsubscribe = tracker.onChange(schedule);
   return { flush: () => running, stop: unsubscribe };
 }

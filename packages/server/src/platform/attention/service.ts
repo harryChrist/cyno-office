@@ -704,6 +704,7 @@ export class AttentionService {
   // ---------- Limite de uso ----------
 
   private evaluateUsage(usage: SubscriptionUsage, seed: boolean): void {
+    if (usage.accountId) return;
     for (const window of usage.windows) {
       const id = `${usage.provider}:${window.id}${window.group ? `:${window.group}` : ""}`;
       const current = this.usageLevels.get(id) ?? 0;

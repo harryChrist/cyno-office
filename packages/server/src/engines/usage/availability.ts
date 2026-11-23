@@ -31,7 +31,7 @@ export class EngineAvailability {
 
   constructor(private readonly deps: EngineAvailabilityDeps) {
     this.unsubscribe = deps.usage.hub.subscribe((event) => {
-      if (event.type !== "usage:updated") return;
+      if (event.type !== "usage:updated" || event.usage.accountId) return;
       this.retrying.delete(event.usage.provider);
       this.arm();
       this.notify();
@@ -91,6 +91,7 @@ export class EngineAvailability {
     const now = this.deps.now().getTime();
     const resets = this.deps.usage
       .snapshot()
+      .filter((usage) => !usage.accountId)
       .map((usage) => quotaBlock(usage, now)?.resetsAt)
       .filter((iso): iso is string => iso !== undefined)
       .map((iso) => Date.parse(iso))

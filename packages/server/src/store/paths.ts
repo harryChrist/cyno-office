@@ -192,6 +192,8 @@ export type PlatformPaths = {
   ownerFile: string;
   /** `push.json` (modo 0600): as chaves VAPID e os aparelhos inscritos no aviso com o site fechado. Nunca sai por rota (só a chave pública). */
   pushFile: string;
+  /** `engine-accounts.json`: contas extras dos motores (Claude Code e Antigravity); pastas ficam em `platform/engines/<motor>/accounts/<id>/`. */
+  engineAccountsFile: string;
   /** `data/platform/reports/week/AAAA-Www.json`: a semana da plataforma (a soma e um bloco por workspace). */
   reportsDir: string;
 };
@@ -226,6 +228,7 @@ export function platformPaths(dataRoot: string): PlatformPaths {
     usageGuardFile: path.join(root, "usage-guard.json"),
     ownerFile: path.join(root, "owner.json"),
     pushFile: path.join(root, "push.json"),
+    engineAccountsFile: path.join(root, "engine-accounts.json"),
     reportsDir: path.join(root, "reports"),
   };
 }

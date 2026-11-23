@@ -31,4 +31,19 @@ describe("usageStore", () => {
     expect(useUsageStore.getState().byProvider.claude?.windows[0]?.utilization).toBe(0.9);
     expect(useOfficeStore.getState().office).toBe(office);
   });
+
+  it("ignora eventos e entradas do snapshot com accountId para não sobrescrever a conta padrão", () => {
+    const padrao = usage(0.25);
+    const extra: SubscriptionUsage = { ...usage(0.95), accountId: "trabalho" };
+
+    const fromSnapshot = applyUsageEvent({}, { type: "office:snapshot", office: makeOffice(), usage: [padrao, extra] });
+    expect(fromSnapshot).toEqual({ claude: padrao });
+
+    const onlyExtra = applyUsageEvent({}, { type: "office:snapshot", office: makeOffice(), usage: [extra] });
+    expect(onlyExtra).toEqual({});
+
+    const ignoredEvent = applyUsageEvent(fromSnapshot, { type: "usage:updated", usage: extra });
+    expect(ignoredEvent).toBe(fromSnapshot);
+    expect(ignoredEvent.claude?.windows[0]?.utilization).toBe(0.25);
+  });
 });

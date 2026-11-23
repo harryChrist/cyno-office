@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AGENT_PROVIDERS, type AgentProvider } from "./agent-log";
+import { engineAccountIdSchema } from "./engine-accounts";
 import type { FreebuffUsageDetail } from "./freebuff";
 
 /**
@@ -46,9 +47,11 @@ export type UsageStale = {
   since: string;
 };
 
-/** Último uso conhecido da assinatura de um provedor (evento usage:updated e office:snapshot). */
+/** Último uso conhecido da assinatura de um provedor ou conta (evento usage:updated e office:snapshot). */
 export type SubscriptionUsage = {
   provider: AgentProvider;
+  /** Id da conta extra do motor; ausente = conta padrão (a do HOME real). */
+  accountId?: string;
   /** Janelas conhecidas, na ordem: 5 horas, semana e as outras. */
   windows: UsageWindow[];
   /** Estado geral segundo a CLI (ex.: "allowed", "rejected"). */
@@ -168,9 +171,10 @@ export const usageWindowSchema = z.object({
   appliesTo: z.array(z.string().min(1).max(40)).max(12).optional(),
 });
 
-/** Validação do uso de um provedor (ex.: ao ler data/usage.json no boot). */
+/** Validação do uso de um provedor ou conta (ex.: ao ler data/usage.json no boot). */
 export const subscriptionUsageSchema = z.object({
   provider: z.enum(AGENT_PROVIDERS),
+  accountId: engineAccountIdSchema.optional(),
   windows: z.array(usageWindowSchema).max(40),
   status: z.string().max(40).optional(),
   updatedAt: isoString,
@@ -178,6 +182,11 @@ export const subscriptionUsageSchema = z.object({
   fetchedAt: isoString.optional(),
   stale: z.object({ reason: z.string().max(200), since: isoString }).optional(),
 });
+
+/** Chave única de uso no tracker/persistência: conta ausente = conta padrão (só o provedor). */
+export function usageKey(provider: AgentProvider, accountId?: string): string {
+  return accountId ? `${provider}:${accountId}` : provider;
+}
 
 /** Ordem de exibição das janelas conhecidas (as desconhecidas vão no fim, em ordem alfabética). */
 const WINDOW_ORDER = ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"];
@@ -210,14 +219,17 @@ export function usageProviderLabel(provider: AgentProvider): string {
 /** Rota do pedido manual de nova consulta do uso da conta. */
 export const USAGE_REFRESH_PATH = "/api/usage/refresh";
 
-/** Corpo (opcional) de `POST /api/usage/refresh`: de qual motor (padrão: "claude"). */
-export const usageRefreshBodySchema = z.object({ provider: z.enum(["claude", "gemini"]).default("claude") });
+/** Corpo (opcional) de `POST /api/usage/refresh`: de qual motor (padrão: "claude") e conta (ausente = conta padrão). */
+export const usageRefreshBodySchema = z.object({
+  provider: z.enum(["claude", "gemini"]).default("claude"),
+  accountId: engineAccountIdSchema.optional(),
+});
 
 /**
  * Resposta de `POST /api/usage/refresh`: `refreshed` = consultou de verdade agora (falso quando a
  * última consulta foi há menos de 30 s). O estado novo também chega por `usage:updated`.
  */
-export type UsageRefreshResponse = { refreshed: boolean; usage: SubscriptionUsage | null };
+export type UsageRefreshResponse = { refreshed: boolean; usage: SubscriptionUsage | null; accountId?: string };
 
 /**
  * Uso de um turno informado pela CLI ao terminar (no Claude Code, o `usage` do evento `result`).

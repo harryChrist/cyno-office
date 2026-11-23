@@ -103,4 +103,38 @@ describe("SubscriptionUsageTracker", () => {
     expect(other.usage.snapshot()).toEqual(usage.snapshot());
     expect(other.events).toHaveLength(0);
   });
+
+  it("separa conta padrão e contas extras por usageKey, lista por provedor e remove com forget", () => {
+    const { usage, events } = tracker();
+    usage.reportAccount("claude", [{ id: "five_hour", utilization: 0.2 }], "2026-11-08T12:00:00.000Z");
+    usage.reportAccount("claude", [{ id: "five_hour", utilization: 0.7 }], "2026-11-08T12:00:00.000Z", "trabalho");
+    usage.report("claude", { windows: [{ id: "seven_day", utilization: 0.4 }] }, "trabalho");
+    usage.markStale("gemini", "Login do Antigravity expirado", "google-2");
+
+    expect(usage.get("claude")?.accountId).toBeUndefined();
+    expect(usage.get("claude")?.windows[0]?.utilization).toBe(0.2);
+    expect(usage.get("claude", "trabalho")).toMatchObject({
+      provider: "claude",
+      accountId: "trabalho",
+      windows: [
+        { id: "five_hour", utilization: 0.7 },
+        { id: "seven_day", utilization: 0.4 },
+      ],
+    });
+    expect(usage.listAccounts("claude").map((item) => item.accountId ?? "padrao")).toEqual(["padrao", "trabalho"]);
+    expect(usage.listAccounts("gemini").map((item) => item.accountId)).toEqual(["google-2"]);
+    expect(events.some((event) => event.type === "usage:updated" && event.usage.accountId === "trabalho")).toBe(true);
+
+    const eventsBeforeForget = events.length;
+    expect(usage.forget("claude", "trabalho")).toBe(true);
+    expect(usage.forget("claude", "trabalho")).toBe(false);
+    expect(usage.get("claude", "trabalho")).toBeUndefined();
+    expect(usage.get("claude")?.windows[0]?.utilization).toBe(0.2);
+    // forget não inventa evento novo no hub; o snapshot reflete a remoção
+    expect(events).toHaveLength(eventsBeforeForget);
+    expect(usage.snapshot().map((item) => [item.provider, item.accountId])).toEqual([
+      ["claude", undefined],
+      ["gemini", "google-2"],
+    ]);
+  });
 });

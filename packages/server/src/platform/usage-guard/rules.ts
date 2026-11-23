@@ -75,6 +75,7 @@ function readingOf(window: UsageWindow, now: number): number | undefined {
 export function guardCandidates(usages: readonly SubscriptionUsage[], now: number): GuardCandidate[] {
   const out: GuardCandidate[] = [];
   for (const usage of usages) {
+    if (usage.accountId) continue;
     const engine = usage.provider as AgentEngine;
     if (usage.provider === "freebuff") {
       const daily = usage.windows.find((window) => window.id === "daily_hours");

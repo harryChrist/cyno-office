@@ -44,6 +44,7 @@ import { UsageGuard } from "./platform/usage-guard/service";
 import { pauseAppliesTo } from "./platform/usage-guard/rules";
 import { registerUsageGuardRoutes } from "./routes/usage-guard";
 import { registerEngineRoutes, type EngineRoutesDeps } from "./routes/engines";
+import { registerEngineAccountRoutes } from "./routes/engine-accounts";
 import { EngineSettingsStore } from "./platform/models/engine-settings";
 import { registerSettingsRoutes } from "./routes/settings";
 import { PlatformSettings } from "./platform/settings/platform-settings";
@@ -59,7 +60,9 @@ import { defaultProbe, detectEngines, EngineCatalog, type OneShotDetect } from "
 import { errorMessage } from "./util/text";
 import { DEFAULT_TERMINALS_CONFIG, type TerminalsConfig } from "./engines/terminals/manager";
 import type { AgentRunner } from "./engines/runner/types";
+import { EngineAccountStore } from "./engines/accounts/account-store";
 import { AccountUsagePoller, type AccountUsagePollerOptions } from "./engines/usage/account-poller";
+import { AccountPollerManager } from "./engines/usage/account-pollers";
 import { AntigravityUsagePoller, type AntigravityUsagePollerOptions } from "./engines/usage/antigravity-poller";
 import { EngineAvailability } from "./engines/usage/availability";
 import { manicodeDirOf } from "./engines/freebuff/files";
@@ -154,6 +157,8 @@ export type AppDeps = {
    * desligada (testes nunca rodam o agy de verdade); o index.ts liga com ANTIGRAVITY_USAGE_POLL_MS.
    */
   antigravityUsage?: Omit<AntigravityUsagePollerOptions, "tracker" | "now" | "log">;
+  /** Contas extras dos motores: `realHomeDir` falso nos testes para nunca tocar o HOME real. */
+  engineAccounts?: { realHomeDir?: string };
   /** Tela Motores: sondas e testes falsos nos testes (o estado e o "Testar" de verdade são o padrão). */
   /**
    * Freebuff (motor de agente de time, cobrado por hora aberta). Padrão: o executável `freebuff` do PATH (ou de
@@ -239,6 +244,21 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const usagePersistence = persistUsage(usage, usageFile, (error) => app.log.warn({ err: error }, "não foi possível gravar usage.json"));
   const accountUsage = deps.accountUsage ? new AccountUsagePoller({ ...deps.accountUsage, tracker: usage, now, log: app.log }) : undefined;
   const antigravityUsage = deps.antigravityUsage ? new AntigravityUsagePoller({ ...deps.antigravityUsage, tracker: usage, now, log: app.log }) : undefined;
+  const engineAccounts = await EngineAccountStore.open(deps.dataDir, {
+    realHomeDir: deps.engineAccounts?.realHomeDir ?? deps.engineTools?.homeDir ?? os.homedir(),
+    now,
+    log: app.log,
+  });
+  const claudeAccountPoller = deps.accountUsage ? (({ credentialsFile: _credentialsFile, ...rest }) => rest)(deps.accountUsage) : undefined;
+  const geminiAccountPoller = deps.antigravityUsage ? (({ env: _env, ...rest }) => rest)(deps.antigravityUsage) : undefined;
+  const accountPollers = new AccountPollerManager({
+    store: engineAccounts,
+    tracker: usage,
+    ...(claudeAccountPoller ? { claude: claudeAccountPoller } : {}),
+    ...(geminiAccountPoller ? { gemini: geminiAccountPoller } : {}),
+    now,
+    log: app.log,
+  });
 
   // Cotação USD→BRL da página Gastos (DATA_DIR/spend.json; as rotas de workspace leem pelo decorador).
   const spendSettings = await SpendSettingsStore.load(path.join(deps.dataDir, "spend.json"), app.log);
@@ -645,7 +665,11 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerMuralRoutes(app, mural, manager);
   registerPlatformTodayRoute(app, manager, agenda, now);
   registerPlatformDayStatsRoute(app, manager, now);
-  registerUsageRoutes(app, { claude: accountUsage, gemini: antigravityUsage });
+  registerUsageRoutes(
+    app,
+    { claude: accountUsage, gemini: antigravityUsage },
+    { getAccount: (id) => engineAccounts.get(id), getPoller: (id) => accountPollers.getPoller(id) },
+  );
   registerUsageGuardRoutes(app, usageGuard);
   // OpenClaw e Hermes: o passo a passo, o Verificar e a instalação (com confirmação) da tela Motores.
   // eslint-disable-next-line prefer-const -- atribuído logo abaixo (a instalação pede o serviço de volta ao terminar)
@@ -659,6 +683,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     },
   });
   const record = (action: string, summary: string, data?: Record<string, unknown>) => activity({ category: "sistema", action, actor: "usuario", summary, ...(data ? { data } : {}) });
+  registerEngineAccountRoutes(app, {
+    store: engineAccounts,
+    onCreated: (account) => accountPollers.add(account),
+    onRemoved: (account) => accountPollers.remove(account),
+    record,
+  });
   oneShotEngines = new OneShotEngines({
     dataDir: deps.dataDir,
     homeDir: deps.engineTools?.homeDir ?? os.homedir(),
@@ -765,6 +795,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     if (deps.bootOn !== "listen") await bootWorkspaces();
     accountUsage?.start();
     antigravityUsage?.start();
+    accountPollers.start();
     if (deps.retention?.autoRun) {
       retention.start();
       engineStorage.start();
@@ -773,14 +804,17 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   });
   app.addHook("onClose", async () => {
     await engineSettings.flush();
+    await engineAccounts.flush();
     await retention.stop();
     await engineStorage.stop();
     versionService.stop();
     unsubscribeSystemActivity?.();
     accountUsage?.stop();
     antigravityUsage?.stop();
+    accountPollers.stop();
     await accountUsage?.idle();
     await antigravityUsage?.idle();
+    await accountPollers.idle();
     // Boot no meio (listen recém-aberto): termina antes de fechar os workspaces.
     await booted?.catch(() => undefined);
     await budget.close();

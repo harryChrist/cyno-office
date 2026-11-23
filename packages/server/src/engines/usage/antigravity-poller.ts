@@ -25,6 +25,8 @@ export type AntigravityUsagePollerOptions = UsagePollerOptions & {
   prefixArgs?: string[];
   /** Tempo máximo da consulta (ms). Padrão: 30 s. */
   timeoutMs?: number;
+  /** Variáveis extras do perfil da conta (ex.: `{ HOME }` isolado); aplicadas via `sanitizeChildEnv`. */
+  env?: Record<string, string>;
   run?: RunCli;
 };
 
@@ -51,6 +53,7 @@ export class AntigravityUsagePoller extends UsagePoller {
   private readonly command: string;
   private readonly prefixArgs: string[];
   private readonly timeoutMs: number;
+  private readonly env: Record<string, string> | undefined;
   private readonly run: RunCli;
 
   constructor(options: AntigravityUsagePollerOptions) {
@@ -58,6 +61,7 @@ export class AntigravityUsagePoller extends UsagePoller {
     this.command = options.command ?? "agy";
     this.prefixArgs = options.prefixArgs ?? [];
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.env = options.env;
     this.run = options.run ?? defaultRun;
   }
 
@@ -66,7 +70,7 @@ export class AntigravityUsagePoller extends UsagePoller {
     try {
       stdout = await this.run(this.command, [...this.prefixArgs, "-p", "/usage", "--output-format", "json"], {
         timeoutMs: this.timeoutMs,
-        env: sanitizeChildEnv(process.env),
+        env: sanitizeChildEnv(process.env, this.env),
         cwd: os.tmpdir(),
       });
     } catch (error) {

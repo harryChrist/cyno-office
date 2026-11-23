@@ -5,15 +5,21 @@ import { create } from "zustand";
 export type UsageByProvider = Partial<Record<AgentProvider, SubscriptionUsage>>;
 
 /**
- * Aplica um evento ao uso conhecido (função pura): `usage:updated` troca o do provedor e o
- * `office:snapshot` com `usage` troca tudo. Outros eventos não mexem. Devolve o mesmo objeto se
- * nada mudou.
+ * Aplica um evento ao uso conhecido (função pura): `usage:updated` troca o do provedor (só a conta
+ * padrão: eventos com `accountId` são ignorados para não sobrescrever a conta padrão) e o
+ * `office:snapshot` com `usage` troca tudo (também só a conta padrão). Outros eventos não mexem.
+ * Devolve o mesmo objeto se nada mudou.
  */
 export function applyUsageEvent(state: UsageByProvider, event: ServerEvent): UsageByProvider {
-  if (event.type === "usage:updated") return { ...state, [event.usage.provider]: event.usage };
+  if (event.type === "usage:updated") {
+    if (event.usage.accountId) return state;
+    return { ...state, [event.usage.provider]: event.usage };
+  }
   if (event.type === "office:snapshot" && event.usage) {
     const next: UsageByProvider = {};
-    for (const usage of event.usage) next[usage.provider] = usage;
+    for (const usage of event.usage) {
+      if (!usage.accountId) next[usage.provider] = usage;
+    }
     return next;
   }
   return state;

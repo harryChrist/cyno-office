@@ -142,4 +142,23 @@ describe("AntigravityUsagePoller", () => {
     await app.close();
     expect(run).toHaveBeenCalledTimes(1);
   });
+
+  it("passa env (HOME da conta) via sanitizeChildEnv e separa o uso por accountId", async () => {
+    const run = vi.fn<RunCli>(async () => RAW);
+    const tracker = new SubscriptionUsageTracker(() => new Date("2026-11-09T05:00:00Z"));
+    const poller = new AntigravityUsagePoller({
+      tracker,
+      run,
+      command: "agy-falso",
+      accountId: "google-extra",
+      env: { HOME: "/tmp/perfil-google/home" },
+      intervalMs: 0,
+    });
+    expect(await poller.poll()).toBe(true);
+    const [, , options] = run.mock.calls[0]!;
+    expect(options.env.HOME).toBe("/tmp/perfil-google/home");
+    expect(tracker.get("gemini", "google-extra")).toMatchObject({ provider: "gemini", accountId: "google-extra", source: "account" });
+    expect(tracker.get("gemini")).toBeUndefined();
+    poller.stop();
+  });
 });

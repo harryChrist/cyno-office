@@ -141,7 +141,7 @@ async function detectSupported(id: SupportedEngineId, deps: EngineStatusDeps): P
     const auth = await run(["auth", "status"]);
     if (auth.stdout) loggedIn = parseLoggedIn(auth.stdout);
   }
-  const usage = deps.usage().find((candidate) => candidate.provider === id);
+  const usage = deps.usage().find((candidate) => candidate.provider === id && !candidate.accountId);
   if (installed && id === "gemini" && usage?.stale?.reason === ANTIGRAVITY_STALE_REASONS.login) loggedIn = false;
   const block = installed ? engineBlock(id, { usage: deps.usage(), now: deps.now() }) : undefined;
   const lastTest = deps.tests()[id];

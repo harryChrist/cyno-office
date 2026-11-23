@@ -237,7 +237,7 @@ export function engineBlock(engine: AgentEngine | undefined, context: Availabili
   // Freebuff: a cota é em horas abertas (o teto de horas e o saldo do dia estão no estado dele).
   if (engine === "freebuff") return freebuffBlock(context.usage.find((usage) => usage.provider === "freebuff")?.freebuff, agent, context.now);
   const quota = quotaBlock(
-    context.usage.find((usage) => usage.provider === engine),
+    context.usage.find((usage) => usage.provider === engine && !usage.accountId),
     context.now,
     quotaModel(engine, model),
   );

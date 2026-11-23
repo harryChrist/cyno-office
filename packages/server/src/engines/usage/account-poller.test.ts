@@ -196,6 +196,39 @@ describe("usage.json", () => {
     expect(await loadUsageFile(file)).toEqual([]);
   });
 
+  it("grava e lê múltiplas contas no usage.json e mantém compatibilidade com arquivo antigo sem accountId", async () => {
+    const dir = await tempDir();
+    const file = path.join(dir, "usage.json");
+    const padrao = {
+      provider: "claude" as const,
+      windows: [{ id: "five_hour", utilization: 0.15 }],
+      updatedAt: "2026-11-08T05:00:00.000Z",
+    };
+    const extra = {
+      provider: "claude" as const,
+      accountId: "trabalho",
+      windows: [{ id: "five_hour", utilization: 0.8 }],
+      updatedAt: "2026-11-08T05:05:00.000Z",
+    };
+
+    // Arquivo antigo (sem accountId) continua válido como conta padrão
+    await writeFile(file, JSON.stringify({ version: 1, usage: [padrao] }));
+    expect(await loadUsageFile(file)).toEqual([padrao]);
+
+    // Grava conta padrão + conta extra no mesmo provedor
+    await saveUsageFile(file, [padrao, extra]);
+    expect(await loadUsageFile(file)).toEqual([padrao, extra]);
+
+    // persistUsage também atualiza o arquivo após forget()
+    const tracker = new SubscriptionUsageTracker(() => new Date("2026-11-08T05:10:00.000Z"));
+    tracker.restore([padrao, extra]);
+    const persistence = persistUsage(tracker, file);
+    tracker.forget("claude", "trabalho");
+    await persistence.flush();
+    persistence.stop();
+    expect(await loadUsageFile(file)).toEqual([padrao]);
+  });
+
   it("o app carrega o último uso no boot e a rota de refresh consulta a conta (fetch falso)", async () => {
     const dataDir = await tempDir();
     await seedDataDir(dataDir);
