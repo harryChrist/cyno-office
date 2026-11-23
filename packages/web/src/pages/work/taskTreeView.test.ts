@@ -1,6 +1,6 @@
 import { assigneesOf, flowStatusOf, leavesOf, moduleProgress, projectDefaults, type Project, type ProjectTask } from "@cyno/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildTreeRows, defaultClosed, dueOf, hasSprintColumn, hasStateColumn, indentLevel, moveTargets, normalizeText, pathText, readClosedRefs, searchTree, TREE_PAGE, treeClosedKey, waitsText, writeClosedRefs, type TreeMoreRow, type TreeNodeRow } from "./taskTreeView";
+import { buildTreeRows, closedRefsOf, dueOf, hasSprintColumn, hasStateColumn, indentLevel, moveTargets, normalizeText, pathText, readOpenRefs, searchTree, TREE_PAGE, treeOpenKey, waitsText, writeOpenRefs, type TreeMoreRow, type TreeNodeRow } from "./taskTreeView";
 import { releaseFilterRefs } from "./releaseView";
 
 const AT = "2026-11-10T12:00:00.000Z";
@@ -168,37 +168,59 @@ describe("dueOf: a coluna Data", () => {
   });
 });
 
-describe("fechados lembrados", () => {
-  it("tudo nasce aberto; projeto grande fecha só as tarefas-mãe (os módulos ficam abertos)", () => {
-    expect([...defaultClosed(sample())]).toEqual([]);
-    const many = project([group("G"), parent("P", { parent: "G" }), ...Array.from({ length: 45 }, (_, i) => task(`X${i}`, { parent: "P" }))]);
-    expect([...defaultClosed(many)]).toEqual(["P"]);
+describe("árvore fechada por padrão e abertos lembrados", () => {
+  it("tudo nasce fechado por padrão (módulo vazio segue aberto para adicionar) e arquivadas não entram", () => {
+    const base = sample();
+    base.tasks.find((candidate) => candidate.ref === "T5")!.archived = true;
+    const closed = closedRefsOf(base, new Set());
+    expect(closed.has("G1")).toBe(true);
+    expect(closed.has("T1")).toBe(true);
+    expect(closed.has("T5")).toBe(false);
+    const rows = buildTreeRows(base, closed, { now: NOW, addRows: true });
+    expect(keys(rows)).toEqual(["G1", "G2", "add:G2", "add:root"]);
+    expect(nodes(rows).map((row) => row.open)).toEqual([false, true]);
   });
 
-  it("tarefa-mãe que aparece depois nasce aberta (não está na lista dos fechados)", () => {
+  it("abrir um nó mostra só os filhos diretos (os netos continuam fechados)", () => {
+    const base = sample();
+    const onlyGroup = buildTreeRows(base, closedRefsOf(base, new Set(["G1"])), { now: NOW });
+    expect(keys(onlyGroup)).toEqual(["G1", "T1", "T4", "G2", "T5"]);
+    expect(nodes(onlyGroup).find((row) => row.ref === "G1")!.open).toBe(true);
+    expect(nodes(onlyGroup).find((row) => row.ref === "T1")!.open).toBe(false);
+    const withMother = buildTreeRows(base, closedRefsOf(base, new Set(["G1", "T1"])), { now: NOW });
+    expect(keys(withMother)).toEqual(["G1", "T1", "T2", "T3", "T4", "G2", "T5"]);
+    expect(nodes(withMother).find((row) => row.ref === "T1")!.open).toBe(true);
+  });
+
+  it("nó novo e tarefa-mãe que aparece depois nascem fechados", () => {
     const base = project([group("G"), task("A", { parent: "G" })]);
-    const closed = defaultClosed(base);
-    base.tasks.push(task("B", { parent: "A" }));
-    expect(nodes(buildTreeRows(base, closed, { now: NOW })).find((row) => row.ref === "A")!.open).toBe(true);
+    const open = new Set(["G"]);
+    base.tasks.push(task("B", { parent: "A" }), group("G2"), task("C", { parent: "G2" }));
+    const rows = buildTreeRows(base, closedRefsOf(base, open), { now: NOW });
+    expect(keys(rows)).toEqual(["G", "A", "G2"]);
+    expect(nodes(rows).find((row) => row.ref === "A")!.open).toBe(false);
+    expect(nodes(rows).find((row) => row.ref === "G2")!.open).toBe(false);
   });
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("lê e grava no localStorage (e sobrevive sem ele)", () => {
+  it("lê e grava os abertos no localStorage (e sobrevive sem ele)", () => {
     const data = new Map<string, string>();
     vi.stubGlobal("localStorage", { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => void data.set(key, value) });
-    const key = treeClosedKey("ws", "p");
-    expect(readClosedRefs(key)).toBeNull();
-    writeClosedRefs(key, new Set(["G1", "T1"]));
-    expect([...readClosedRefs(key)!].sort()).toEqual(["G1", "T1"]);
+    const key = treeOpenKey("ws", "p");
+    expect(key).toBe("cyno:tree-open:ws:p");
+    expect(treeOpenKey(null, "p")).toBe("cyno:tree-open:-:p");
+    expect(readOpenRefs(key)).toBeNull();
+    writeOpenRefs(key, new Set(["G1", "T1"]));
+    expect([...readOpenRefs(key)!].sort()).toEqual(["G1", "T1"]);
     data.set(key, "{lixo");
-    expect(readClosedRefs(key)).toBeNull();
+    expect(readOpenRefs(key)).toBeNull();
     const blocked = () => {
       throw new Error("bloqueado");
     };
     vi.stubGlobal("localStorage", { getItem: blocked, setItem: blocked });
-    expect(readClosedRefs(key)).toBeNull();
-    expect(() => writeClosedRefs(key, new Set())).not.toThrow();
+    expect(readOpenRefs(key)).toBeNull();
+    expect(() => writeOpenRefs(key, new Set())).not.toThrow();
   });
 });
 
@@ -351,12 +373,9 @@ describe("dependência entre módulos", () => {
 describe("árvore grande: ver mais, recolher e busca", () => {
   const chapters = () => project([group("Lote", { title: "Lote 1" }), ...leaves("Lote", 100)]);
 
-  it("grupo com mais de 30 filhos começa recolhido (e quem tem até 30 fica aberto)", () => {
-    expect([...defaultClosed(chapters())]).toEqual(["Lote"]);
-    expect([...defaultClosed(project([group("G"), ...leaves("G", 30)]))]).toEqual([]);
-  });
-
-  it("projeto grande abre só o que cabe em umas 300 linhas, e o de dentro de um fechado também começa fechado", () => {
+  it("grupo começa recolhido independente do número de filhos, e abrir um módulo mantém submódulos fechados", () => {
+    expect(closedRefsOf(chapters(), new Set()).has("Lote")).toBe(true);
+    expect(closedRefsOf(project([group("G"), ...leaves("G", 30)]), new Set()).has("G")).toBe(true);
     const tasks: ProjectTask[] = [];
     for (let m = 0; m < 20; m += 1) {
       tasks.push(group(`M${m}`, { order: m }));
@@ -365,23 +384,29 @@ describe("árvore grande: ver mais, recolher e busca", () => {
         for (let t = 0; t < 9; t += 1) tasks.push(task(`M${m}S${s}T${t}`, { parent: `M${m}S${s}`, order: t }));
       }
     }
-    const closed = defaultClosed(project(tasks));
-    // Os módulos de primeiro nível abrem; os submódulos só enquanto couber no orçamento.
-    expect(closed.has("M0")).toBe(false);
-    expect(closed.has("M19")).toBe(false);
-    expect(closed.has("M19S9")).toBe(true);
-    expect(closed.size).toBeGreaterThan(150);
+    const base = project(tasks);
+    const closedAll = closedRefsOf(base, new Set());
+    expect(closedAll.has("M0")).toBe(true);
+    expect(closedAll.has("M19")).toBe(true);
+    expect(closedAll.has("M0S0")).toBe(true);
+    // Abrir só M0 mostra os 10 submódulos diretos, todos ainda fechados (20 raízes + 10 filhos = 30 linhas).
+    const rows = buildTreeRows(base, closedRefsOf(base, new Set(["M0"])), { now: NOW });
+    expect(rows).toHaveLength(30);
+    expect(nodes(rows).find((row) => row.ref === "M0")!.open).toBe(true);
+    expect(nodes(rows).find((row) => row.ref === "M0S0")!.open).toBe(false);
+    expect(nodes(rows).find((row) => row.ref === "M1")!.open).toBe(false);
   });
 
   it("aberto, mostra 30 filhos e a linha 'ver mais 70'; cada pedido soma 30 até acabar", () => {
     const base = chapters();
-    const first = buildTreeRows(base, new Set(), { now: NOW, addRows: true });
+    const closed = closedRefsOf(base, new Set(["Lote"]));
+    const first = buildTreeRows(base, closed, { now: NOW, addRows: true });
     expect(nodes(first).filter((row) => row.parentRef === "Lote")).toHaveLength(TREE_PAGE);
     expect(first.find((row) => row.kind === "more")).toMatchObject({ key: "more:Lote", parentRef: "Lote", remaining: 70 });
-    const second = buildTreeRows(base, new Set(), { now: NOW, shown: new Map([["Lote", 60]]) });
+    const second = buildTreeRows(base, closed, { now: NOW, shown: new Map([["Lote", 60]]) });
     expect(nodes(second).filter((row) => row.parentRef === "Lote")).toHaveLength(60);
     expect((second.find((row) => row.kind === "more") as TreeMoreRow).remaining).toBe(40);
-    const all = buildTreeRows(base, new Set(), { now: NOW, shown: new Map([["Lote", 120]]) });
+    const all = buildTreeRows(base, closed, { now: NOW, shown: new Map([["Lote", 120]]) });
     expect(all.some((row) => row.kind === "more")).toBe(false);
     expect(nodes(all).filter((row) => row.parentRef === "Lote")).toHaveLength(100);
     // A linha de adicionar segue depois do "ver mais".
@@ -389,7 +414,8 @@ describe("árvore grande: ver mais, recolher e busca", () => {
   });
 
   it("recolhido não gera linha dos filhos (desempenho), mas o progresso do grupo conta todos", () => {
-    const rows = buildTreeRows(chapters(), new Set(["Lote"]), { now: NOW });
+    const base = chapters();
+    const rows = buildTreeRows(base, closedRefsOf(base, new Set()), { now: NOW });
     expect(keys(rows)).toEqual(["Lote"]);
     expect(nodes(rows)[0]).toMatchObject({ open: false, childCount: 100, progress: { done: 0, total: 100 } });
   });
@@ -401,7 +427,7 @@ describe("árvore grande: ver mais, recolher e busca", () => {
     expect(rows.find((row) => row.kind === "more")).toMatchObject({ key: "more:root", remaining: 15, depth: 1 });
   });
 
-  it("projeto com 2.000 itens monta rápido e só desenha o que está aberto", () => {
+  it("projeto com 2.000 itens nasce fechado, gera só as raízes e monta rápido", () => {
     const tasks: ProjectTask[] = [];
     for (let m = 0; m < 20; m += 1) {
       tasks.push(group(`M${m}`, { order: m }));
@@ -413,9 +439,10 @@ describe("árvore grande: ver mais, recolher e busca", () => {
     const base = project(tasks);
     expect(tasks.length).toBe(2020);
     const started = Date.now();
-    const rows = buildTreeRows(base, defaultClosed(base), { now: NOW });
+    const rows = buildTreeRows(base, closedRefsOf(base, new Set()), { now: NOW });
     expect(Date.now() - started).toBeLessThan(3000);
-    expect(rows.length).toBeLessThan(600);
+    expect(rows).toHaveLength(20);
+    expect(nodes(rows).every((row) => !row.open)).toBe(true);
   });
 
   it("busca: acha por título (sem acento nem caixa) ou código, mantém os ancestrais abertos e não mostra o resto", () => {

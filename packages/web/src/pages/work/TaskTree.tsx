@@ -18,18 +18,18 @@ import {
 } from "./releaseView";
 import {
   buildTreeRows,
-  defaultClosed,
+  closedRefsOf,
   hasSprintColumn,
   indentLevel,
   MOBILE_INDENT_LEVELS,
   moveTargets,
   normalizeText,
   pathText,
-  readClosedRefs,
+  readOpenRefs,
   searchTree,
   TREE_PAGE,
-  treeClosedKey,
-  writeClosedRefs,
+  treeOpenKey,
+  writeOpenRefs,
   type FlowInfo,
   type TreeAddRow,
   type TreeMoreRow,
@@ -109,8 +109,10 @@ const started = (row: Pick<TreeNodeRow, "node">): boolean => (row.node.status !=
  * Clicar na linha abre o painel da tarefa; as colunas editam ali mesmo (no celular, a edição fica no painel).
  */
 export function TaskTree({ project, agents, workers, workspaceId, now, selectedRef, onSelect, editable, canCreate, actions, onConvert, onDelete }: TreeProps) {
-  const storageKey = treeClosedKey(workspaceId, project.id);
-  const [closedRefs, setClosedRefs] = useState<Set<string>>(() => readClosedRefs(storageKey) ?? defaultClosed(project));
+  const storageKey = treeOpenKey(workspaceId, project.id);
+  /** O que o dono abriu (a árvore nasce toda fechada); o resto é derivado em `closedRefs`. */
+  const [openRefs, setOpenRefs] = useState<Set<string>>(() => readOpenRefs(storageKey) ?? new Set());
+  const closedRefs = useMemo(() => closedRefsOf(project, openRefs), [project, openRefs]);
   const [adding, setAdding] = useState<{ parentRef?: string; group?: boolean } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
@@ -132,19 +134,19 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   /** Quantos filhos cada pai mostra ("ver mais" soma 30; chave "" é o projeto). */
   const [shown, setShown] = useState<ReadonlyMap<string, number>>(new Map());
 
-  // O que o dono fecha é lembrado por projeto (localStorage, com try/catch em writeClosedRefs); o resto nasce aberto.
+  // O que o dono abre é lembrado por projeto (localStorage, com try/catch em writeOpenRefs); o resto nasce fechado.
   const toggle = (ref: string) => {
-    const next = new Set(closedRefs);
+    const next = new Set(openRefs);
     if (!next.delete(ref)) next.add(ref);
-    setClosedRefs(next);
-    writeClosedRefs(storageKey, next);
+    setOpenRefs(next);
+    writeOpenRefs(storageKey, next);
   };
   const openRef = (ref: string) => {
-    if (!closedRefs.has(ref)) return;
-    const next = new Set(closedRefs);
-    next.delete(ref);
-    setClosedRefs(next);
-    writeClosedRefs(storageKey, next);
+    if (openRefs.has(ref)) return;
+    const next = new Set(openRefs);
+    next.add(ref);
+    setOpenRefs(next);
+    writeOpenRefs(storageKey, next);
   };
 
   /** Mostra todos os filhos de um pai (depois de criar ou mover para ele: o item novo vai para o fim e não pode ficar escondido). */

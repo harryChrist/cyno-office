@@ -25,7 +25,7 @@ import { spanLabel, shortDate } from "./workView";
  * Linhas da árvore de tarefas de um projeto (a lista em árvore do ClickUp): módulos, tarefas e subtarefas em
  * qualquer profundidade, com seta de abrir e fechar, contador, responsáveis, data e prioridade. Função pura: o
  * React só desenha o que sai daqui. Quem contém outros itens é contêiner e o estado dele é o calculado das
- * folhas (`rollupStatus`), nunca o gravado. Para a árvore grande: grupos com muitos filhos começam recolhidos,
+ * folhas (`rollupStatus`), nunca o gravado. Para a árvore grande: tudo nasce recolhido (o dono abre o que quiser),
  * cada nível mostra os filhos de 30 em 30 ("ver mais N") e a busca mostra só os achados com os ancestrais.
  */
 
@@ -195,37 +195,13 @@ export function dueOf(project: Pick<Project, "tasks">, node: ProjectTask, status
   return dueFrom(node, status, now, dues.sort().at(-1), finished.sort().at(-1));
 }
 
-/** Quantas linhas a árvore abre sozinha, no máximo, quando o dono nunca mexeu. */
-const OPEN_BUDGET = 300;
-
 /**
- * Quais nós começam fechados quando o dono nunca mexeu. Abre, nível por nível (na ordem da tela), enquanto a árvore
- * visível couber em umas 300 linhas; fecha todo grupo com mais de 30 filhos diretos (a lista de 100 capítulos não abre
- * sozinha) e, em projeto grande (mais de 40 itens), as tarefas-mãe. Projeto pequeno abre tudo. O que fica dentro de um
- * nó fechado também começa fechado (abrir o pai não abre a cascata). Pai novo (que aparece depois) nasce aberto.
+ * Quais nós ficam fechados: todos, menos os que o dono abriu (`openRefs`). A árvore sempre nasce fechada (projeto de
+ * centenas de itens não vira uma parede de linhas); o que o dono abre é lembrado por projeto, e um nó novo nasce fechado.
  */
-export function defaultClosed(project: Pick<Project, "tasks">): Set<string> {
-  const tasks = live(project).tasks;
-  const index = treeIndex(tasks);
-  const big = tasks.length > 40;
-  const opened = new Set<string>();
-  const roots = kidsOf(index).slice(0, TREE_PAGE);
-  let rows = roots.length;
-  let level: readonly ProjectTask[] = roots;
-  while (level.length > 0) {
-    const next: ProjectTask[] = [];
-    for (const node of level) {
-      const kids = kidsOf(index, node.ref);
-      if (kids.length === 0 || kids.length > TREE_PAGE || (big && !node.group)) continue;
-      if (rows + kids.length > OPEN_BUDGET) continue;
-      rows += kids.length;
-      opened.add(node.ref);
-      next.push(...kids);
-    }
-    level = next;
-  }
+export function closedRefsOf(project: Pick<Project, "tasks">, openRefs: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();
-  for (const task of tasks) if (kidsOf(index, task.ref).length > 0 && !opened.has(task.ref)) out.add(task.ref);
+  for (const task of live(project).tasks) if (!openRefs.has(task.ref)) out.add(task.ref);
   return out;
 }
 
@@ -581,11 +557,11 @@ export const TREE_STATUS_LABEL: Record<ProjectTaskStatus, string> = {
   cancelada: "Cancelada",
 };
 
-/** Chave do localStorage com os nós que o dono fechou num projeto. */
-export const treeClosedKey = (workspaceId: string | null, projectId: string): string => `cyno:tree-closed:${workspaceId ?? "-"}:${projectId}`;
+/** Chave do localStorage com os nós que o dono abriu num projeto. */
+export const treeOpenKey = (workspaceId: string | null, projectId: string): string => `cyno:tree-open:${workspaceId ?? "-"}:${projectId}`;
 
-/** Lê o que o dono deixou fechado (null = nunca mexeu). Com try/catch: sem armazenamento tudo funciona. */
-export function readClosedRefs(key: string): Set<string> | null {
+/** Lê o que o dono deixou aberto (null = nunca abriu nada). Com try/catch: sem armazenamento tudo funciona. */
+export function readOpenRefs(key: string): Set<string> | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -596,7 +572,7 @@ export function readClosedRefs(key: string): Set<string> | null {
   }
 }
 
-export function writeClosedRefs(key: string, refs: ReadonlySet<string>): void {
+export function writeOpenRefs(key: string, refs: ReadonlySet<string>): void {
   try {
     localStorage.setItem(key, JSON.stringify([...refs]));
   } catch {
