@@ -1,5 +1,5 @@
-import { assigneesOf, childrenOf, isAvulsas, isProjectOpen, leavesOf, projectUnitProgress, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type ForYouItem, type Project, type UnitProgress } from "@cyno/shared";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { isAvulsas, isProjectOpen, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type ForYouItem, type Project, type UnitProgress } from "@cyno/shared";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForYouFocus } from "../../store/forYouFocus";
 import { useNavStore } from "../../store/navStore";
 import { useOfficeStore } from "../../store/officeStore";
@@ -11,6 +11,7 @@ import { DeleteAvulsaTaskDialog, DeleteProjectDialog, DeleteTaskNodeDialog } fro
 import { ModeCard } from "./ModeCard";
 import { PlanDecision } from "./PlanDecision";
 import { canDeleteProject } from "./projectDeleteView";
+import { buildProjectIndex, type ProjectIndex } from "./projectIndex";
 import { canCompleteProject, canReopenProject, COMPLETE_PROJECT_MESSAGE, COMPLETE_PROJECT_TITLE, isProjectEditable } from "./projectLifecycleView";
 import { ProjectControls } from "./ProjectControls";
 import { DueForm } from "./TaskTree";
@@ -26,10 +27,12 @@ import { brasiliaShortDate } from "./workTime";
 import { openText } from "./projectsView";
 import { PACE_MAX_PER_DAY, paceBodyOf, paceFormOf, paceText, releaseSummaryText, todayKey, type PaceForm, type PaceStart } from "./releaseView";
 import { PROJECT_TAB_LABELS, projectTabsFor, resolveProjectTab, workSub, type ProjectTab } from "./workRoute";
-import { buildRows, buildWorkBoard, planCardCopy, projectApprovalBadge, projectState, unitProgressText } from "./workView";
+import { buildRows, buildWorkBoard, planCardCopy, projectApprovalBadge, projectState, unitProgressText, type WorkBoardColumn } from "./workView";
 import { api } from "../../api/client";
 import { PageTabs } from "../PageTabs";
 import { useAsyncAction } from "../../ui/useAsyncAction";
+
+const EMPTY_BOARD: WorkBoardColumn[] = [];
 
 type ScreenProps = {
   project: Project | undefined;
@@ -94,40 +97,49 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
   const [cleaning, setCleaning] = useState(false);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deletingTask, setDeletingTask] = useState<{ ref: string; title: string } | null>(null);
-  const askDelete = (ref: string) => setDeletingTask({ ref, title: project.tasks.find((candidate) => candidate.ref === ref)?.title ?? ref });
+  const index = useMemo(() => buildProjectIndex(project.tasks), [project.tasks]);
+  const indexRef = useRef(index);
+  useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+  const askDelete = useCallback((ref: string) => {
+    const title = indexRef.current.tree.byRef.get(ref)?.title ?? ref;
+    setDeletingTask({ ref, title });
+  }, []);
   const open = isProjectOpen(project);
   const editable = isProjectEditable(project);
-  const live = useMemo(() => ({ tasks: project.tasks.filter((task) => !task.archived) }), [project.tasks]);
-  const leaves = useMemo(() => leavesOf(live), [live]);
   // O cabeçalho conta módulos de primeiro nível ("3 de 8 módulos"); sem módulo, tarefas ("12 de 40 tarefas").
-  const unit = useMemo(() => projectUnitProgress(live), [live]);
-  const agentIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const root of childrenOf(live)) for (const id of assigneesOf(live, root, Number.POSITIVE_INFINITY)) if (!ids.includes(id)) ids.push(id);
-    return ids;
-  }, [live]);
+  const unit = index.unitProgress;
+  const agentIds = index.agentIds;
+  const openCount = index.openLeafCount;
   const state = projectState(project);
-  const planItem = forYou?.find((item) => item.status === "pendente" && item.kind === "plano" && item.projectId === project.id);
+  const planItem = useMemo(() => forYou?.find((item) => item.status === "pendente" && item.kind === "plano" && item.projectId === project.id), [forYou, project.id]);
   const pending = useMemo(
-    () => (forYou ?? []).filter((item) => item.status === "pendente" && item.kind !== "plano" && (item.projectId === project.id || project.tasks.some((task) => task.steps.some((step) => step.taskId !== undefined && step.taskId === item.taskId)))),
-    [forYou, project],
+    () => (forYou ?? []).filter((item) => item.status === "pendente" && item.kind !== "plano" && (item.projectId === project.id || (item.taskId !== undefined && index.stepTaskIds.has(item.taskId)))),
+    [forYou, project.id, index.stepTaskIds],
   );
   const effectiveTab = resolveProjectTab(tab, project);
   const visibleTabs = useMemo(() => projectTabsFor(project).map((id) => ({ id, label: PROJECT_TAB_LABELS[id] })), [project]);
   useEffect(() => {
     if (tab !== effectiveTab) go(project.id, effectiveTab, taskRef, true);
   }, [project.id, tab, effectiveTab, taskRef]);
-  const selected = taskRef ? project.tasks.find((task) => task.ref === taskRef && !task.archived) : undefined;
+  const selected = taskRef ? index.tree.byRef.get(taskRef) : undefined;
   const select = useCallback((ref: string) => go(project.id, "tarefas", ref), [project.id]);
   const closePanel = useCallback(() => go(project.id, effectiveTab), [project.id, effectiveTab]);
+  const onConvertToTask = useCallback(() => setConverting("projeto"), []);
+  const onCleanup = useCallback(() => setCleaning(true), []);
+  const onDeleteProject = useCallback(() => setDeletingProject(true), []);
+  const onConvertRow = useCallback((ref: string) => setConverting(ref), []);
   const works = office?.tasks ?? [];
   const planCard = planCardCopy(project);
+  const today = todayKey(now);
 
-  // Quadro: só as folhas (a tela de antes, agora dentro da aba Tarefas).
+  // Quadro: só calcula quando a visão Quadro está aberta (na visão Lista não percorre as folhas nem reage ao relógio).
   const board = useMemo(() => {
-    const flat: Project = { ...project, tasks: leaves };
+    if (effectiveTab !== "tarefas" || view !== "quadro") return EMPTY_BOARD;
+    const flat: Project = { ...project, tasks: [...index.leaves] };
     return buildWorkBoard(buildRows([flat], forYou, new Date(now)));
-  }, [project, leaves, forYou, now]);
+  }, [effectiveTab, view, project, index.leaves, forYou, now]);
   const boardAgents = agents;
 
   const convert = async (ref: string) => {
@@ -140,19 +152,20 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
       <BackButton />
       <ProjectHeader
         project={project}
+        index={index}
         fixed={fixed}
         editable={editable}
         stateLabel={state.label}
         stateTone={state.tone}
         unit={unit}
-        openCount={leaves.filter((task) => !["concluida", "cancelada", "falhou"].includes(task.status)).length}
+        openCount={openCount}
         agentIds={agentIds}
         agents={agents}
         waiting={pending.length}
-        now={now}
-        onConvertToTask={() => setConverting("projeto")}
-        onCleanup={() => setCleaning(true)}
-        onDelete={() => setDeletingProject(true)}
+        today={today}
+        onConvertToTask={onConvertToTask}
+        onCleanup={onCleanup}
+        onDelete={onDeleteProject}
       />
       <PageTabs
         flush
@@ -220,6 +233,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
                 )}
                 <TaskTree
                   project={project}
+                  index={index}
                   agents={agents}
                   workers={workers}
                   workspaceId={workspaceId}
@@ -230,7 +244,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
                   canCreate={!fixed}
                   actions={actions}
                   onDelete={askDelete}
-                  {...(fixed ? { onConvert: (ref: string) => setConverting(ref) } : {})}
+                  {...(fixed ? { onConvert: onConvertRow } : {})}
                 />
               </>
             ) : (
@@ -330,6 +344,7 @@ function ProjectBody({ project, tab, taskRef, agents, workers, forYou, workspace
 
 type HeaderProps = {
   project: Project;
+  index: ProjectIndex;
   fixed: boolean;
   editable: boolean;
   stateLabel: string;
@@ -339,7 +354,7 @@ type HeaderProps = {
   agentIds: readonly string[];
   agents: ReadonlyMap<string, Agent>;
   waiting: number;
-  now: number;
+  today: string;
   onConvertToTask: () => void;
   /** Só no Avulsas: abre o "Limpar avulsas". */
   onCleanup: () => void;
@@ -347,7 +362,7 @@ type HeaderProps = {
   onDelete: () => void;
 };
 
-function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, openCount, agentIds, agents, waiting, now, onConvertToTask, onCleanup, onDelete }: HeaderProps) {
+const ProjectHeader = memo(function ProjectHeader({ project, index, fixed, editable, stateLabel, stateTone, unit, openCount, agentIds, agents, waiting, today, onConvertToTask, onCleanup, onDelete }: HeaderProps) {
   const { pending, error, run } = useAsyncAction();
   const mobile = useIsMobile();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -356,9 +371,8 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, 
   const [title, setTitle] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [doneWhen, setDoneWhen] = useState<string | null>(null);
-  const today = todayKey(now);
   const open = isProjectOpen(project);
-  const releaseSummary = fixed ? null : releaseSummaryText(project);
+  const releaseSummary = fixed ? null : releaseSummaryText(project, index);
   const approvalBadge = fixed ? null : projectApprovalBadge(project.approval);
   const saveTitle = () => {
     const next = (title ?? "").trim();
@@ -536,7 +550,7 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, 
         {!fixed && (
           <div className="ps-pace" data-testid="project-release-pace">
             <span className="ps-pace__text" data-testid="project-release-pace-text">
-              {paceText(project, today)}
+              {paceText(project, today, index)}
             </span>
             {canEditHeader && (
               <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={() => setPaceOpen(true)} data-testid="project-release-pace-btn">
@@ -609,7 +623,7 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, 
           </div>
         </div>
         <div className="ps-head__actions">
-          {open && canEditHeader && project.tasks.filter((task) => !task.archived).length === 1 && (
+          {open && canEditHeader && index.liveTasks.length === 1 && (
             <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onConvertToTask} data-testid="project-to-task">
               Virar tarefa avulsa
             </button>
@@ -696,7 +710,7 @@ function ProjectHeader({ project, fixed, editable, stateLabel, stateTone, unit, 
       )}
     </header>
   );
-}
+});
 
 /** Diálogo do ritmo de liberação automática (N tarefas ou módulos por dia). */
 function ReleasePaceDialog({ project, today, onClose }: { project: Project; today: string; onClose: () => void }) {

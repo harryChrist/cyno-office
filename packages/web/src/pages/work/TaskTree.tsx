@@ -1,8 +1,9 @@
-import { isProjectTaskFinished, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type Project, type ProjectPriority } from "@cyno/shared";
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { isProjectTaskFinished, PROJECT_PRIORITIES, PROJECT_PRIORITY_LABELS, type Agent, type Label, type Project, type ProjectPriority, type Sprint } from "@cyno/shared";
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { ConfirmDialog, ErrorText, Modal } from "../../ui/widgets";
 import { AgentAvatar } from "./Agent";
 import { canDeleteTaskNode } from "./projectDeleteView";
+import { buildProjectIndex, type ProjectIndex } from "./projectIndex";
 import {
   impliedSelection,
   normalizeSelection,
@@ -14,11 +15,11 @@ import {
   releaseMenu,
   selectionCan,
   selectionSummary,
+  type PlannedWait,
   type ReleaseFilter,
 } from "./releaseView";
 import {
   buildTreeRows,
-  closedRefsOf,
   hasSprintColumn,
   indentLevel,
   MOBILE_INDENT_LEVELS,
@@ -26,10 +27,15 @@ import {
   normalizeText,
   pathText,
   readOpenRefs,
+  resolveDue,
   searchTree,
   TREE_PAGE,
+  TREE_VIRTUALIZE_FROM,
   treeOpenKey,
+  treeRowHeight,
+  treeVisibleRange,
   writeOpenRefs,
+  type DueInfo,
   type FlowInfo,
   type TreeAddRow,
   type TreeMoreRow,
@@ -47,6 +53,8 @@ import { brasiliaNote, fromBrasiliaInput, toBrasiliaInput } from "./workTime";
 
 type TreeProps = {
   project: Project;
+  /** Índice já montado pelo `ProjectBody` (evita reindexar na mesma versão do projeto). */
+  index?: ProjectIndex;
   agents: ReadonlyMap<string, Agent>;
   /** Quem pode receber tarefa (todos menos o Maestro), em ordem de nome. */
   workers: readonly Agent[];
@@ -64,6 +72,17 @@ type TreeProps = {
   /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
+
+const EMPTY_CLOSED: ReadonlySet<string> = new Set();
+
+/** O ancestral mais próximo que rola verticalmente (mesma regra do `usePointerDrag`). */
+function findScrollParent(node: HTMLElement | null): HTMLElement | null {
+  for (let current = node?.parentElement ?? null; current; current = current.parentElement) {
+    const overflow = getComputedStyle(current).overflowY;
+    if (overflow === "auto" || overflow === "scroll") return current;
+  }
+  return null;
+}
 
 /**
  * O título tem prioridade: enquanto ele aparece cortado, a linha solta o que é secundário, um nível por vez
@@ -108,11 +127,11 @@ const started = (row: Pick<TreeNodeRow, "node">): boolean => (row.node.status !=
  * contador, etiquetas e as colunas Responsáveis, Data e Prioridade (e Sprint, quando o projeto tiver sprints).
  * Clicar na linha abre o painel da tarefa; as colunas editam ali mesmo (no celular, a edição fica no painel).
  */
-export function TaskTree({ project, agents, workers, workspaceId, now, selectedRef, onSelect, editable, canCreate, actions, onConvert, onDelete }: TreeProps) {
+export function TaskTree({ project, index: externalIndex, agents, workers, workspaceId, now, selectedRef, onSelect, editable, canCreate, actions, onConvert, onDelete }: TreeProps) {
   const storageKey = treeOpenKey(workspaceId, project.id);
-  /** O que o dono abriu (a árvore nasce toda fechada); o resto é derivado em `closedRefs`. */
+  const projectIndex = useMemo(() => externalIndex ?? buildProjectIndex(project.tasks), [externalIndex, project.tasks]);
+  /** O que o dono abriu (a árvore nasce toda fechada). */
   const [openRefs, setOpenRefs] = useState<Set<string>>(() => readOpenRefs(storageKey) ?? new Set());
-  const closedRefs = useMemo(() => closedRefsOf(project, openRefs), [project, openRefs]);
   const [adding, setAdding] = useState<{ parentRef?: string; group?: boolean } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [moving, setMoving] = useState<string | null>(null);
@@ -133,48 +152,67 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
   const [selectMode, setSelectMode] = useState(false);
   /** Quantos filhos cada pai mostra ("ver mais" soma 30; chave "" é o projeto). */
   const [shown, setShown] = useState<ReadonlyMap<string, number>>(new Map());
+  const listRef = useRef<HTMLUListElement>(null);
+  const [scrollView, setScrollView] = useState({ top: 0, height: 800 });
 
   // O que o dono abre é lembrado por projeto (localStorage, com try/catch em writeOpenRefs); o resto nasce fechado.
-  const toggle = (ref: string) => {
-    const next = new Set(openRefs);
-    if (!next.delete(ref)) next.add(ref);
-    setOpenRefs(next);
-    writeOpenRefs(storageKey, next);
-  };
-  const openRef = (ref: string) => {
-    if (openRefs.has(ref)) return;
-    const next = new Set(openRefs);
-    next.add(ref);
-    setOpenRefs(next);
-    writeOpenRefs(storageKey, next);
-  };
+  const toggle = useCallback(
+    (ref: string) => {
+      setOpenRefs((current) => {
+        const next = new Set(current);
+        if (!next.delete(ref)) next.add(ref);
+        writeOpenRefs(storageKey, next);
+        return next;
+      });
+    },
+    [storageKey],
+  );
+  const openRef = useCallback(
+    (ref: string) => {
+      setOpenRefs((current) => {
+        if (current.has(ref)) return current;
+        const next = new Set(current);
+        next.add(ref);
+        writeOpenRefs(storageKey, next);
+        return next;
+      });
+    },
+    [storageKey],
+  );
 
   /** Mostra todos os filhos de um pai (depois de criar ou mover para ele: o item novo vai para o fim e não pode ficar escondido). */
-  const revealAll = (parentRef: string | null | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Number.MAX_SAFE_INTEGER));
-  const showMore = (parentRef: string | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Math.min(Number.MAX_SAFE_INTEGER, (current.get(parentRef ?? "") ?? TREE_PAGE) + TREE_PAGE)));
+  const revealAll = useCallback((parentRef: string | null | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Number.MAX_SAFE_INTEGER)), []);
+  const showMore = useCallback((parentRef: string | undefined) => setShown((current) => new Map(current).set(parentRef ?? "", Math.min(Number.MAX_SAFE_INTEGER, (current.get(parentRef ?? "") ?? TREE_PAGE) + TREE_PAGE))), []);
 
   const canRelease = editable && canCreate;
   const addingParent = adding?.parentRef;
   const searching = search.trim() !== "";
   const filtering = releaseFilter !== "tudo";
-  const filterRefs = useMemo(() => releaseFilterRefs(project, releaseFilter), [project, releaseFilter]);
-  const selectedRefs = useMemo(() => (canRelease ? normalizeSelection(project, picked) : []), [canRelease, project, picked]);
+  const filterRefs = useMemo(() => releaseFilterRefs(project, releaseFilter, projectIndex), [project, releaseFilter, projectIndex]);
+  const selectedRefs = useMemo(() => (canRelease ? normalizeSelection(project, picked, projectIndex) : []), [canRelease, project, picked, projectIndex]);
   const selectedSet = useMemo(() => new Set(selectedRefs), [selectedRefs]);
-  const impliedSet = useMemo(() => impliedSelection(project, selectedSet), [project, selectedSet]);
+  const impliedSet = useMemo(() => impliedSelection(project, selectedSet, projectIndex), [project, selectedSet, projectIndex]);
   const hasPicked = selectedRefs.length > 0;
-  const canBatch = useMemo(() => selectionCan(project, selectedRefs), [project, selectedRefs]);
+  const canBatch = useMemo(() => selectionCan(project, selectedRefs, projectIndex), [project, selectedRefs, projectIndex]);
   const clearPicked = useCallback(() => {
     setPicked(new Set());
     setSelectMode(false);
   }, []);
-  const togglePick = (ref: string) => {
-    if (!canRelease || impliedSet.has(ref)) return;
+
+  const latestRef = useRef({ project, projectIndex, canRelease, impliedSet, actions });
+  useEffect(() => {
+    latestRef.current = { project, projectIndex, canRelease, impliedSet, actions };
+  }, [project, projectIndex, canRelease, impliedSet, actions]);
+
+  const togglePick = useCallback((ref: string) => {
+    const { canRelease: allowed, impliedSet: implied, project: currentProject, projectIndex: currentIndex } = latestRef.current;
+    if (!allowed || implied.has(ref)) return;
     setPicked((current) => {
       const next = new Set(current);
       if (!next.delete(ref)) next.add(ref);
-      return new Set(normalizeSelection(project, next));
+      return new Set(normalizeSelection(currentProject, next, currentIndex));
     });
-  };
+  }, []);
   useEffect(() => {
     if (!hasPicked && !selectMode) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -189,32 +227,89 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
     return () => document.removeEventListener("keydown", onKey);
   }, [hasPicked, selectMode, clearPicked]);
 
+  const agentName = useCallback((id: string) => agents.get(id)?.name ?? id, [agents]);
+
+  // Sem `now` nas dependências: o relógio de 30 s não reconstrói a árvore (só resolve o prazo das linhas visíveis).
   const rows = useMemo(
     () =>
-      buildTreeRows(project, closedRefs, {
-        now,
+      buildTreeRows(project, EMPTY_CLOSED, {
+        index: projectIndex,
+        openRefs,
         addRows: editable && canCreate,
         shown,
         ...(search.trim() ? { query: search } : {}),
         ...(filterRefs ? { filter: filterRefs } : {}),
-        agentName: (id) => agents.get(id)?.name ?? id,
+        agentName,
         ...(addingParent ? { forceAdd: addingParent } : {}),
       }),
-    [project, closedRefs, now, editable, canCreate, addingParent, agents, shown, search, filterRefs],
+    [project, projectIndex, openRefs, editable, canCreate, addingParent, agentName, shown, search, filterRefs],
   );
   const found = useMemo(() => {
     if (!searching) return 0;
-    const matches = searchTree(project, search)?.matches;
+    const matches = searchTree(project, search, projectIndex)?.matches;
     if (!matches) return 0;
     return filterRefs ? [...matches].filter((ref) => filterRefs.has(ref)).length : matches.size;
-  }, [project, search, searching, filterRefs]);
-  const liveCount = useMemo(() => project.tasks.filter((task) => !task.archived).length, [project.tasks]);
+  }, [project, projectIndex, search, searching, filterRefs]);
+  const liveCount = projectIndex.liveTasks.length;
   const sprintColumn = hasSprintColumn(project);
+  const virtualized = rows.length > TREE_VIRTUALIZE_FROM;
+
+  // Janela de rolagem ativa só quando há muitas linhas abertas (> 200): acompanha o ancestral que rola (`.ps`).
+  useEffect(() => {
+    if (!virtualized) return;
+    const list = listRef.current;
+    const scroller = findScrollParent(list);
+    if (!list || !scroller) return;
+    const measure = () => {
+      const listRect = list.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      const listTopInScroller = listRect.top - scrollerRect.top + scroller.scrollTop;
+      const top = Math.max(0, scroller.scrollTop - listTopInScroller);
+      const height = scroller.clientHeight || 800;
+      setScrollView((current) => (Math.abs(current.top - top) < 4 && Math.abs(current.height - height) < 4 ? current : { top, height }));
+    };
+    measure();
+    scroller.addEventListener("scroll", measure, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(scroller);
+    return () => {
+      scroller.removeEventListener("scroll", measure);
+      observer?.disconnect();
+    };
+  }, [virtualized]);
+
+  const windowRange = useMemo(
+    () => (virtualized ? treeVisibleRange(rows, mobile, scrollView.top, scrollView.height) : null),
+    [virtualized, rows, mobile, scrollView.top, scrollView.height],
+  );
+  const visibleRows = useMemo(() => (windowRange ? rows.slice(windowRange.start, windowRange.end) : rows), [windowRange, rows]);
+
+  // Ao selecionar uma tarefa (ex.: link direto ou painel) com a árvore virtualizada, rola até ela se estiver fora da janela.
+  useEffect(() => {
+    if (!virtualized || !selectedRef) return;
+    const idx = rows.findIndex((row) => row.kind === "node" && row.ref === selectedRef);
+    if (idx < 0) return;
+    const list = listRef.current;
+    const scroller = findScrollParent(list);
+    if (!list || !scroller) return;
+    let offset = 0;
+    for (let i = 0; i < idx; i += 1) offset += treeRowHeight(rows[i]!, mobile);
+    const listRect = list.getBoundingClientRect();
+    const scrollerRect = scroller.getBoundingClientRect();
+    const listTopInScroller = listRect.top - scrollerRect.top + scroller.scrollTop;
+    const rowTop = listTopInScroller + offset;
+    const rowBottom = rowTop + treeRowHeight(rows[idx]!, mobile);
+    if (rowTop < scroller.scrollTop || rowBottom > scroller.scrollTop + scroller.clientHeight) {
+      scroller.scrollTop = Math.max(0, rowTop - scroller.clientHeight / 3);
+    }
+  }, [virtualized, selectedRef, rows, mobile]);
+
   useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 4000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
   // Arrastar uma linha: reordena entre irmãs ou muda de pai; a linha-guia mostra onde vai cair (regras em dragRules).
   const drag = usePointerDrag<TreeVerdict>({
     enabled: editable && canCreate && !mobile && !searching && !filtering,
@@ -223,7 +318,7 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
       const overRef = over?.dataset.ref;
       if (!over || !overRef) return null;
       const rect = over.getBoundingClientRect();
-      return treeDrop(project, id, overRef, zoneAt(point.y, rect.top, rect.height, true));
+      return treeDrop(project, id, overRef, zoneAt(point.y, rect.top, rect.height, true), projectIndex.tree);
     },
     accepts: (verdict) => verdict.ok,
     onDrop: (id, verdict) => {
@@ -238,6 +333,45 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
       });
     },
   });
+
+  const dragStartRef = useRef(drag.start);
+  useEffect(() => {
+    dragStartRef.current = drag.start;
+  }, [drag.start]);
+
+  const handleDragStart = useCallback((ref: string, title: string, event: PointerEvent<HTMLLIElement>) => {
+    dragStartRef.current(ref, title, event);
+  }, []);
+  const handleRename = useCallback((ref: string, on: boolean) => setRenaming(on ? ref : null), []);
+  const handleAddChild = useCallback(
+    (ref: string, isGroup: boolean, group?: boolean) => {
+      openRef(ref);
+      if (!isGroup) setSubDialog(ref);
+      else setAdding({ parentRef: ref, ...(group ? { group: true } : {}) });
+    },
+    [openRef],
+  );
+  const handleMove = useCallback((ref: string) => setMoving(ref), []);
+  const handleMoveSprint = useCallback((ref: string) => setMovingSprint(ref), []);
+  const handleCancel = useCallback((ref: string) => setCancelling(ref), []);
+  const handleStartAdd = useCallback((parentRef: string | undefined, group: boolean) => {
+    const parentNode = parentRef ? latestRef.current.projectIndex.tree.byRef.get(parentRef) : undefined;
+    if (parentRef && parentNode && !parentNode.group) setSubDialog(parentRef);
+    else setAdding({ ...(parentRef ? { parentRef } : {}), ...(group ? { group: true } : {}) });
+  }, []);
+  const handleStopAdd = useCallback(() => setAdding(null), []);
+  const handleCreateAdd = useCallback(
+    async (parentRef: string | undefined, title: string, group: boolean) => {
+      const ref = await latestRef.current.actions.create({ title, ...(parentRef ? { parent: parentRef } : {}), ...(group ? { group: true } : {}) });
+      if (ref) {
+        if (parentRef) openRef(parentRef);
+        revealAll(parentRef);
+      }
+      return ref !== undefined;
+    },
+    [openRef, revealAll],
+  );
+
   const movingRow = moving ? rows.find((row): row is TreeNodeRow => row.kind === "node" && row.ref === moving) : undefined;
   const sprintRow = movingSprint ? rows.find((row): row is TreeNodeRow => row.kind === "node" && row.ref === movingSprint) : undefined;
   const cancelRow = cancelling ? rows.find((row): row is TreeNodeRow => row.kind === "node" && row.ref === cancelling) : undefined;
@@ -246,6 +380,8 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
     const ok = await action();
     if (ok) clearPicked();
   };
+
+  const listStyle = windowRange ? ({ paddingTop: windowRange.offset, paddingBottom: windowRange.bottom } satisfies CSSProperties) : undefined;
 
   return (
     <div className={`tt${sprintColumn ? " tt--sprints" : ""}${hasPicked || selectMode ? " tt--picking" : ""}`} data-testid="task-tree">
@@ -303,7 +439,7 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
       {canRelease && hasPicked && (
         <div className="tt-batch" role="region" aria-label="Ações da seleção" data-testid="tree-batch-bar">
           <span className="tt-batch__count" data-testid="tree-batch-count">
-            {selectionSummary(project, selectedRefs)}
+            {selectionSummary(project, selectedRefs, projectIndex)}
           </span>
           <div className="tt-batch__actions">
             <button
@@ -347,12 +483,20 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
         <span>Prioridade</span>
         <span>{sprintColumn ? "Sprint" : "Estado"}</span>
       </div>
-      <ul className="tt-body" role="tree" aria-label="Tarefas do projeto">
-        {rows.map((row) =>
+      <ul
+        ref={listRef}
+        className="tt-body"
+        style={listStyle}
+        role="tree"
+        aria-label="Tarefas do projeto"
+        data-virtualized={virtualized ? "true" : undefined}
+        data-total-rows={rows.length}
+      >
+        {visibleRows.map((row) =>
           row.kind === "step" ? (
             <StepRow key={row.key} row={row} agents={agents} mobile={mobile} />
           ) : row.kind === "more" ? (
-            <MoreRow key={row.key} row={row} mobile={mobile} onMore={() => showMore(row.parentRef)} />
+            <MoreRow key={row.key} row={row} mobile={mobile} onMore={showMore} />
           ) : row.kind === "add" ? (
             <AddRow
               key={row.key}
@@ -360,32 +504,27 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
               mobile={mobile}
               active={adding !== null && adding.parentRef === row.parentRef && (row.both || !adding.group)}
               group={adding?.group ?? false}
-              onStart={(group) => (row.parentRef && project.tasks.some((task) => task.ref === row.parentRef && !task.group) ? setSubDialog(row.parentRef) : setAdding({ ...(row.parentRef ? { parentRef: row.parentRef } : {}), ...(group ? { group: true } : {}) }))}
-              onStop={() => setAdding(null)}
-              onCreate={async (title, group) => {
-                const ref = await actions.create({ title, ...(row.parentRef ? { parent: row.parentRef } : {}), ...(group ? { group: true } : {}) });
-                if (ref) {
-                  if (row.parentRef) openRef(row.parentRef);
-                  revealAll(row.parentRef);
-                }
-                return ref !== undefined;
-              }}
+              onStart={handleStartAdd}
+              onStop={handleStopAdd}
+              onCreate={handleCreateAdd}
             />
           ) : (
             <NodeRow
               key={row.key}
               row={row}
+              due={row.due ?? resolveDue(row.dueMeta, row.status, now)}
               project={project}
+              index={projectIndex}
               agents={agents}
               workers={workers}
               selected={selectedRef === row.ref}
               picked={selectedSet.has(row.ref)}
               implied={impliedSet.has(row.ref)}
               showCheck={canRelease && (!mobile || selectMode || hasPicked)}
-              onPick={() => togglePick(row.ref)}
+              onPick={togglePick}
               dragging={drag.session?.id === row.ref}
               dropVerdict={drag.session?.verdict && drag.session.verdict.overRef === row.ref ? drag.session.verdict : null}
-              onDragStart={(event) => drag.start(row.ref, row.node.title, event)}
+              onDragStart={handleDragStart}
               editable={editable}
               canCreate={canCreate}
               mobile={mobile}
@@ -394,15 +533,11 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
               actions={actions}
               onSelect={onSelect}
               onToggle={toggle}
-              onRename={(on) => setRenaming(on ? row.ref : null)}
-              onAddChild={(group) => {
-                openRef(row.ref);
-                if (!row.isGroup) setSubDialog(row.ref);
-                else setAdding({ parentRef: row.ref, ...(group ? { group: true } : {}) });
-              }}
-              onMove={() => setMoving(row.ref)}
-              onMoveSprint={() => setMovingSprint(row.ref)}
-              onCancel={() => setCancelling(row.ref)}
+              onRename={handleRename}
+              onAddChild={handleAddChild}
+              onMove={handleMove}
+              onMoveSprint={handleMoveSprint}
+              onCancel={handleCancel}
               {...(onConvert ? { onConvert } : {})}
               {...(onDelete ? { onDelete } : {})}
             />
@@ -422,7 +557,7 @@ export function TaskTree({ project, agents, workers, workspaceId, now, selectedR
         </p>
       )}
       {subDialog && <AddSubtaskDialog project={project} parentRef={subDialog} workers={workers} actions={actions} onClose={() => setSubDialog(null)} onCreated={(ref) => { openRef(subDialog); revealAll(subDialog); onSelect(ref); }} />}
-      {movingRow && <MoveDialog project={project} row={movingRow} actions={actions} onClose={() => setMoving(null)} onMoved={(parent) => { if (parent) openRef(parent); revealAll(parent); }} />}
+      {movingRow && <MoveDialog project={project} index={projectIndex} row={movingRow} actions={actions} onClose={() => setMoving(null)} onMoved={(parent) => { if (parent) openRef(parent); revealAll(parent); }} />}
       {sprintRow && <MoveSprintDialog project={project} row={sprintRow} actions={actions} onClose={() => setMovingSprint(null)} />}
       {cancelRow && (
         <ConfirmDialog
@@ -449,33 +584,36 @@ const SEARCH_FROM = 8;
 const levelStyle = (depth: number, mobile: boolean): CSSProperties => ({ "--tt-level": indentLevel(depth, mobile) }) as CSSProperties;
 
 /** "ver mais 70": mostra mais 30 filhos do nível. */
-function MoreRow({ row, mobile, onMore }: { row: TreeMoreRow; mobile: boolean; onMore: () => void }) {
+const MoreRow = memo(function MoreRow({ row, mobile, onMore }: { row: TreeMoreRow; mobile: boolean; onMore: (parentRef: string | undefined) => void }) {
   const next = Math.min(TREE_PAGE, row.remaining);
   return (
     <li className="tt-row tt-row--more" role="none" style={levelStyle(row.depth, mobile)} data-testid={`tree-${row.key}`}>
       <div className="tt-name">
         <span className="tt-arrow tt-arrow--none" aria-hidden="true" />
-        <button type="button" className="tt-addbtn tt-morebtn" title={`Mostra mais ${next}`} onClick={onMore} data-testid={`tree-more-${row.parentRef ?? "root"}`}>
+        <button type="button" className="tt-addbtn tt-morebtn" title={`Mostra mais ${next}`} onClick={() => onMore(row.parentRef)} data-testid={`tree-more-${row.parentRef ?? "root"}`}>
           ver mais {row.remaining}
         </button>
       </div>
     </li>
   );
-}
+});
 
 type NodeRowProps = {
   row: TreeNodeRow;
+  /** Prazo resolvido com `now` apenas para as linhas visíveis. */
+  due: DueInfo | null;
   project: Project;
+  index: ProjectIndex;
   agents: ReadonlyMap<string, Agent>;
   workers: readonly Agent[];
   selected: boolean;
   picked: boolean;
   implied: boolean;
   showCheck: boolean;
-  onPick: () => void;
+  onPick: (ref: string) => void;
   dragging: boolean;
   dropVerdict: TreeVerdict | null;
-  onDragStart: (event: PointerEvent<HTMLLIElement>) => void;
+  onDragStart: (ref: string, title: string, event: PointerEvent<HTMLLIElement>) => void;
   editable: boolean;
   canCreate: boolean;
   mobile: boolean;
@@ -484,19 +622,158 @@ type NodeRowProps = {
   actions: TaskActions;
   onSelect: (ref: string) => void;
   onToggle: (ref: string) => void;
-  onRename: (on: boolean) => void;
+  onRename: (ref: string, on: boolean) => void;
   /** `group`: o novo é um módulo (só dentro de módulo); sem ele, tarefa ou subtarefa. */
-  onAddChild: (group?: boolean) => void;
-  onMove: () => void;
-  onMoveSprint: () => void;
-  onCancel: () => void;
+  onAddChild: (ref: string, isGroup: boolean, group?: boolean) => void;
+  onMove: (ref: string) => void;
+  onMoveSprint: (ref: string) => void;
+  onCancel: (ref: string) => void;
   onConvert?: (ref: string) => void;
   /** Pede para apagar o item (quem chama abre a confirmação apropriada). */
   onDelete?: (ref: string) => void;
 };
 
-function NodeRow({ row, project, agents, workers, selected, picked, implied, showCheck, onPick, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert, onDelete }: NodeRowProps) {
+const sameStrings = (a: readonly string[] | undefined, b: readonly string[] | undefined): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+const sameLabels = (a: readonly Label[] | undefined, b: readonly Label[] | undefined): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.id !== b[i]!.id || a[i]!.name !== b[i]!.name || a[i]!.color !== b[i]!.color) return false;
+  }
+  return true;
+};
+
+const sameSprints = (a: readonly Sprint[] | undefined, b: readonly Sprint[] | undefined): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.id !== b[i]!.id || a[i]!.name !== b[i]!.name || a[i]!.status !== b[i]!.status || a[i]!.startAt !== b[i]!.startAt || a[i]!.endAt !== b[i]!.endAt) return false;
+  }
+  return true;
+};
+
+const sameDue = (a: DueInfo | null, b: DueInfo | null): boolean =>
+  a === b || (a !== null && b !== null && a.label === b.label && a.tone === b.tone && a.at === b.at && a.title === b.title);
+
+const sameFlow = (a: FlowInfo | undefined, b: FlowInfo | undefined): boolean =>
+  a === b ||
+  (a !== undefined &&
+    b !== undefined &&
+    a.kind === b.kind &&
+    a.ownerId === b.ownerId &&
+    a.ownerName === b.ownerName &&
+    a.text === b.text &&
+    a.summary === b.summary &&
+    a.done === b.done &&
+    a.total === b.total &&
+    sameStrings(a.everyone, b.everyone));
+
+const samePlannedWaits = (a: readonly PlannedWait[], b: readonly PlannedWait[]): boolean => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i]!.ref !== b[i]!.ref || a[i]!.title !== b[i]!.title || a[i]!.container !== b[i]!.container || a[i]!.state !== b[i]!.state) return false;
+  }
+  return true;
+};
+
+const sameVerdict = (a: TreeVerdict | null, b: TreeVerdict | null): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.ok !== b.ok || a.zone !== b.zone || a.overRef !== b.overRef) return false;
+  if (!a.ok && !b.ok) return a.reason === b.reason;
+  return true;
+};
+
+/** Comparação por valor visível: uma atualização numa tarefa redesenha só as linhas afetadas, mesmo quando `project:upserted` recria os objetos. */
+function areNodeRowPropsEqual(prev: NodeRowProps, next: NodeRowProps): boolean {
+  if (
+    prev.selected !== next.selected ||
+    prev.picked !== next.picked ||
+    prev.implied !== next.implied ||
+    prev.showCheck !== next.showCheck ||
+    prev.dragging !== next.dragging ||
+    prev.editable !== next.editable ||
+    prev.canCreate !== next.canCreate ||
+    prev.mobile !== next.mobile ||
+    prev.sprintColumn !== next.sprintColumn ||
+    prev.renaming !== next.renaming ||
+    prev.agents !== next.agents ||
+    prev.workers !== next.workers ||
+    prev.onSelect !== next.onSelect ||
+    prev.onToggle !== next.onToggle ||
+    prev.onPick !== next.onPick ||
+    prev.onDragStart !== next.onDragStart ||
+    prev.onRename !== next.onRename ||
+    prev.onAddChild !== next.onAddChild ||
+    prev.onMove !== next.onMove ||
+    prev.onMoveSprint !== next.onMoveSprint ||
+    prev.onCancel !== next.onCancel ||
+    prev.onConvert !== next.onConvert ||
+    prev.onDelete !== next.onDelete ||
+    !sameDue(prev.due, next.due) ||
+    !sameVerdict(prev.dropVerdict, next.dropVerdict)
+  ) {
+    return false;
+  }
+  const a = prev.row;
+  const b = next.row;
+  if (
+    a.ref !== b.ref ||
+    a.depth !== b.depth ||
+    a.isGroup !== b.isGroup ||
+    a.isContainer !== b.isContainer ||
+    a.hasChildren !== b.hasChildren ||
+    a.childCount !== b.childCount ||
+    a.open !== b.open ||
+    a.status !== b.status ||
+    a.waits !== b.waits ||
+    a.moreAssignees !== b.moreAssignees ||
+    a.priority !== b.priority ||
+    a.blocked !== b.blocked ||
+    a.waiting !== b.waiting ||
+    a.startsIn !== b.startsIn ||
+    a.carried !== b.carried ||
+    a.canAddChild !== b.canAddChild ||
+    a.stepCount !== b.stepCount ||
+    a.state.label !== b.state.label ||
+    a.state.tone !== b.state.tone ||
+    a.state.planned !== b.state.planned ||
+    a.progress?.done !== b.progress?.done ||
+    a.progress?.total !== b.progress?.total ||
+    a.node.title !== b.node.title ||
+    a.node.status !== b.node.status ||
+    a.node.priority !== b.node.priority ||
+    a.node.ownerId !== b.node.ownerId ||
+    a.node.dueAt !== b.node.dueAt ||
+    a.node.sprintId !== b.node.sprintId ||
+    a.node.released !== b.node.released ||
+    a.node.steps.length !== b.node.steps.length ||
+    !sameStrings(a.assignees, b.assignees) ||
+    !sameStrings(a.sprints, b.sprints) ||
+    !sameStrings(a.trail, b.trail) ||
+    !sameStrings(a.node.labels, b.node.labels) ||
+    !sameLabels(a.labels, b.labels) ||
+    !sameFlow(a.flow, b.flow) ||
+    !samePlannedWaits(a.plannedWaits, b.plannedWaits)
+  ) {
+    return false;
+  }
+  if ((a.plannedWaits.length > 0 || b.plannedWaits.length > 0) && prev.actions.busy !== next.actions.busy) return false;
+  if (prev.project.status !== next.project.status || prev.project.system !== next.project.system) return false;
+  if (!sameLabels(prev.project.labels, next.project.labels)) return false;
+  if (next.sprintColumn && !sameSprints(prev.project.sprints, next.project.sprints)) return false;
+  return true;
+}
+
+const NodeRow = memo(function NodeRow({ row, due, project, index, agents, workers, selected, picked, implied, showCheck, onPick, dragging, dropVerdict, onDragStart, editable, canCreate, mobile, sprintColumn, renaming, actions, onSelect, onToggle, onRename, onAddChild, onMove, onMoveSprint, onCancel, onConvert, onDelete }: NodeRowProps) {
   const { node } = row;
+  const cellRow: CellRow = useMemo(() => (row.due === due ? row : { ...row, due }), [row, due]);
   const leaf = !row.isGroup && !row.hasChildren;
   const editableCells = editable && leaf && !mobile;
   const parentLike = row.isContainer;
@@ -531,7 +808,7 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
       data-depth={row.depth}
       onClick={() => onSelect(row.ref)}
       onKeyDown={onKey}
-      onPointerDown={onDragStart}
+      onPointerDown={(event) => onDragStart(row.ref, node.title, event)}
     >
       <div className="tt-name" ref={nameRef} data-fit={fitLevel}>
         {mobile && row.depth > MOBILE_INDENT_LEVELS && row.trail.length > 0 && (
@@ -546,7 +823,7 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
               checked={picked || implied}
               disabled={implied}
               aria-label={`Selecionar ${node.title}`}
-              onChange={onPick}
+              onChange={() => onPick(row.ref)}
               data-testid={`tree-pick-${row.ref}`}
             />
           </label>
@@ -576,12 +853,12 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
           <RenameInput
             value={node.title}
             onDone={(title) => {
-              onRename(false);
+              onRename(row.ref, false);
               if (title && title !== node.title) void actions.update(row.ref, { title });
             }}
           />
         ) : (
-          <span className="tt-title" onDoubleClick={editable && !mobile ? (event) => (stop(event), onRename(true)) : undefined} title={node.title} data-testid={`tree-title-${row.ref}`}>
+          <span className="tt-title" onDoubleClick={editable && !mobile ? (event) => (stop(event), onRename(row.ref, true)) : undefined} title={node.title} data-testid={`tree-title-${row.ref}`}>
             {node.title}
           </span>
         )}
@@ -607,7 +884,7 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
             className="tt-subbtn"
             onClick={(event) => {
               event.stopPropagation();
-              onAddChild();
+              onAddChild(row.ref, row.isGroup);
             }}
             aria-label={`Adicionar subtarefa em ${row.node.title}`}
             data-testid={`tree-quick-sub-${row.ref}`}
@@ -630,29 +907,29 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
       <div className="tt-cells" onClick={editableCellsClick(editableCells, stop)}>
         <div className="tt-cell tt-cell--resp" data-testid={`tree-resp-${row.ref}`}>
           {editableCells ? (
-            <AssigneeCell row={row} agents={agents} workers={workers} actions={actions} />
+            <AssigneeCell row={cellRow} agents={agents} workers={workers} actions={actions} />
           ) : (
             row.assignees.length === 0 && parentLike ? <span className="tt-none">—</span> : <AvatarStack ids={row.assignees} more={row.moreAssignees} agents={agents} />
           )}
         </div>
-        <div className={`tt-cell tt-cell--due${row.due ? ` tt-cell--${row.due.tone}` : ""}`} data-testid={`tree-due-${row.ref}`}>
+        <div className={`tt-cell tt-cell--due${due ? ` tt-cell--${due.tone}` : ""}`} data-testid={`tree-due-${row.ref}`}>
           {editableCells ? (
-            <DueCell row={row} actions={actions} />
-          ) : row.due ? (
-            <span className="tt-due" title={row.due.title}>
-              {row.due.label}
+            <DueCell row={cellRow} actions={actions} />
+          ) : due ? (
+            <span className="tt-due" title={due.title}>
+              {due.label}
             </span>
           ) : (
             <span className="tt-none">—</span>
           )}
         </div>
         <div className="tt-cell tt-cell--prio" data-testid={`tree-prio-${row.ref}`}>
-          {editableCells ? <PrioCell row={row} actions={actions} /> : row.priority ? <PriorityFlag priority={row.priority} /> : <span className="tt-none">—</span>}
+          {editableCells ? <PrioCell row={cellRow} actions={actions} /> : row.priority ? <PriorityFlag priority={row.priority} /> : <span className="tt-none">—</span>}
         </div>
         {sprintColumn ? (
           <div className="tt-cell tt-cell--sprint" data-testid={`tree-sprint-${row.ref}`}>
             {editableCells ? (
-              <SprintCell row={row} project={project} actions={actions} />
+              <SprintCell row={cellRow} project={project} actions={actions} />
             ) : row.sprints.length > 0 ? (
               <span className="tt-sprint">{row.sprints.length === 1 ? row.sprints[0] : `${row.sprints[0]}–${row.sprints.at(-1)}`}</span>
             ) : (
@@ -670,15 +947,16 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
         <RowMenu
           row={row}
           project={project}
+          index={index}
           editable={editable}
           canCreate={canCreate}
           actions={actions}
-          onRename={() => onRename(true)}
-          onAddChild={onAddChild}
-          onMove={onMove}
-          onMoveSprint={onMoveSprint}
+          onRename={() => onRename(row.ref, true)}
+          onAddChild={(group) => onAddChild(row.ref, row.isGroup, group)}
+          onMove={() => onMove(row.ref)}
+          onMoveSprint={() => onMoveSprint(row.ref)}
           hasSprints={sprintColumn}
-          onCancel={onCancel}
+          onCancel={() => onCancel(row.ref)}
           onOpen={() => onSelect(row.ref)}
           {...(onConvert ? { onConvert } : {})}
           {...(onDelete ? { onDelete } : {})}
@@ -713,7 +991,7 @@ function NodeRow({ row, project, agents, workers, selected, picked, implied, sho
       )}
     </li>
   );
-}
+}, areNodeRowPropsEqual);
 
 /** A linha de fluxo debaixo do nome: subtarefa = avatar, nome e o que espera; tarefa-mãe = todos os responsáveis e o resumo. */
 function FlowLine({ flow, agents, refId, waits }: { flow: FlowInfo; agents: ReadonlyMap<string, Agent>; refId: string; waits?: string }) {
@@ -759,7 +1037,7 @@ function FlowLine({ flow, agents, refId, waits }: { flow: FlowInfo; agents: Read
 }
 
 /** Um passo de tarefa antiga (`steps`): só leitura, marcado como passo, com o agente, o que faz e o que espera. */
-function StepRow({ row, agents, mobile }: { row: TreeStepRow; agents: ReadonlyMap<string, Agent>; mobile: boolean }) {
+const StepRow = memo(function StepRow({ row, agents, mobile }: { row: TreeStepRow; agents: ReadonlyMap<string, Agent>; mobile: boolean }) {
   const agent = agents.get(row.agentId);
   return (
     <li className={`tt-row tt-row--step${row.status === "concluida" ? " is-done" : ""}`} style={levelStyle(row.depth, mobile)} role="treeitem" aria-level={row.depth} data-testid={`tree-step-${row.parentRef}-${row.index}`} data-status={row.status}>
@@ -782,7 +1060,7 @@ function StepRow({ row, agents, mobile }: { row: TreeStepRow; agents: ReadonlyMa
       </div>
     </li>
   );
-}
+});
 
 /** Em cada coluna editável, o clique não abre o painel (só o do botão da coluna conta). */
 const editableCellsClick = (editable: boolean, stop: (event: MouseEvent) => void) => (editable ? stop : undefined);
@@ -1018,6 +1296,7 @@ export function LabelsForm({ row, project, actions }: { row: Pick<TreeNodeRow, "
 type MenuProps = {
   row: TreeNodeRow;
   project: Project;
+  index: ProjectIndex;
   editable: boolean;
   canCreate: boolean;
   actions: TaskActions;
@@ -1033,9 +1312,8 @@ type MenuProps = {
   onDelete?: (ref: string) => void;
 };
 
-function RowMenu({ row, project, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert, onDelete }: MenuProps) {
+function RowMenu({ row, project, index, editable, canCreate, actions, onRename, onAddChild, onMove, onMoveSprint, hasSprints, onCancel, onOpen, onConvert, onDelete }: MenuProps) {
   const done = row.status === "concluida" || row.status === "cancelada";
-  const releaseItems = editable && canCreate ? releaseMenu(project, row.node) : [];
   const item = (label: string, run: () => void, close: () => void, testId?: string, danger = false) => (
     <li key={label} role="none">
       <button
@@ -1067,35 +1345,39 @@ function RowMenu({ row, project, editable, canCreate, actions, onRename, onAddCh
         </button>
       )}
     >
-      {(close) => (
-        <ul className="tt-pop__list" role="menu">
-          {item("Abrir detalhes", onOpen, close)}
-          {releaseItems.map((entry) =>
-            item(
-              entry.label,
-              () => {
-                if (entry.id === "release") void actions.release({ refs: [row.ref] });
-                else if (entry.id === "release_with") void actions.release({ refs: [row.ref], withPrerequisites: true });
-                else void actions.hold([row.ref]);
-              },
-              close,
-              entry.id === "release" ? `tree-release-${row.ref}` : entry.id === "release_with" ? `tree-release-with-${row.ref}` : `tree-hold-${row.ref}`,
-            ),
-          )}
-          {editable && canCreate && row.canAddChild && item(row.isGroup ? "Adicionar tarefa" : "Adicionar subtarefa", () => onAddChild(), close, `tree-add-child-${row.ref}`)}
-          {editable && canCreate && row.canAddChild && row.isGroup && item("Adicionar módulo", () => onAddChild(true), close, `tree-add-module-${row.ref}`)}
-          {editable && item("Renomear", onRename, close)}
-          {editable && canCreate && item("Mover para…", onMove, close, `tree-move-${row.ref}`)}
-          {editable && canCreate && hasSprints && !row.isGroup && !row.hasChildren && !done && item("Mover para sprint…", onMoveSprint, close, `tree-move-sprint-${row.ref}`)}
-          {editable && canCreate && item("Subir", () => void actions.move(row.ref, { step: "up" }), close)}
-          {editable && canCreate && item("Descer", () => void actions.move(row.ref, { step: "down" }), close)}
-          {editable && canCreate && item("Duplicar", () => void actions.duplicate(row.ref), close, `tree-duplicate-${row.ref}`)}
-          {editable && onConvert && !row.isGroup && !row.hasChildren && !done && item("Transformar em projeto", () => onConvert(row.ref), close, `tree-convert-${row.ref}`)}
-          {editable && !done && item("Cancelar", onCancel, close, `tree-cancel-${row.ref}`, true)}
-          {done && item("Arquivar", () => void actions.archive(row.ref), close, `tree-archive-${row.ref}`)}
-          {onDelete && canDeleteTaskNode(project, row.node) && item("Apagar", () => onDelete(row.ref), close, `tree-delete-${row.ref}`, true)}
-        </ul>
-      )}
+      {(close) => {
+        // Só calcula os itens de liberação quando o dono realmente abre o menu da linha (evita custo por linha fechada).
+        const releaseItems = editable && canCreate ? releaseMenu(project, row.node, index) : [];
+        return (
+          <ul className="tt-pop__list" role="menu">
+            {item("Abrir detalhes", onOpen, close)}
+            {releaseItems.map((entry) =>
+              item(
+                entry.label,
+                () => {
+                  if (entry.id === "release") void actions.release({ refs: [row.ref] });
+                  else if (entry.id === "release_with") void actions.release({ refs: [row.ref], withPrerequisites: true });
+                  else void actions.hold([row.ref]);
+                },
+                close,
+                entry.id === "release" ? `tree-release-${row.ref}` : entry.id === "release_with" ? `tree-release-with-${row.ref}` : `tree-hold-${row.ref}`,
+              ),
+            )}
+            {editable && canCreate && row.canAddChild && item(row.isGroup ? "Adicionar tarefa" : "Adicionar subtarefa", () => onAddChild(), close, `tree-add-child-${row.ref}`)}
+            {editable && canCreate && row.canAddChild && row.isGroup && item("Adicionar módulo", () => onAddChild(true), close, `tree-add-module-${row.ref}`)}
+            {editable && item("Renomear", onRename, close)}
+            {editable && canCreate && item("Mover para…", onMove, close, `tree-move-${row.ref}`)}
+            {editable && canCreate && hasSprints && !row.isGroup && !row.hasChildren && !done && item("Mover para sprint…", onMoveSprint, close, `tree-move-sprint-${row.ref}`)}
+            {editable && canCreate && item("Subir", () => void actions.move(row.ref, { step: "up" }), close)}
+            {editable && canCreate && item("Descer", () => void actions.move(row.ref, { step: "down" }), close)}
+            {editable && canCreate && item("Duplicar", () => void actions.duplicate(row.ref), close, `tree-duplicate-${row.ref}`)}
+            {editable && onConvert && !row.isGroup && !row.hasChildren && !done && item("Transformar em projeto", () => onConvert(row.ref), close, `tree-convert-${row.ref}`)}
+            {editable && !done && item("Cancelar", onCancel, close, `tree-cancel-${row.ref}`, true)}
+            {done && item("Arquivar", () => void actions.archive(row.ref), close, `tree-archive-${row.ref}`)}
+            {onDelete && canDeleteTaskNode(project, row.node) && item("Apagar", () => onDelete(row.ref), close, `tree-delete-${row.ref}`, true)}
+          </ul>
+        );
+      }}
     </Popover>
   );
 }
@@ -1105,13 +1387,13 @@ type AddRowProps = {
   mobile: boolean;
   active: boolean;
   group: boolean;
-  onStart: (group: boolean) => void;
+  onStart: (parentRef: string | undefined, group: boolean) => void;
   onStop: () => void;
-  onCreate: (title: string, group: boolean) => Promise<boolean>;
+  onCreate: (parentRef: string | undefined, title: string, group: boolean) => Promise<boolean>;
 };
 
 /** "Adicionar tarefa" no fim de cada nível: Enter cria e deixa o campo pronto para a próxima; Esc fecha. */
-function AddRow({ row, mobile, active, group, onStart, onStop, onCreate }: AddRowProps) {
+const AddRow = memo(function AddRow({ row, mobile, active, group, onStart, onStop, onCreate }: AddRowProps) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -1122,7 +1404,7 @@ function AddRow({ row, mobile, active, group, onStart, onStop, onCreate }: AddRo
     const title = text.trim();
     if (!title || saving) return;
     setSaving(true);
-    const ok = await onCreate(title, group);
+    const ok = await onCreate(row.parentRef, title, group);
     setSaving(false);
     if (ok) {
       setText("");
@@ -1158,22 +1440,22 @@ function AddRow({ row, mobile, active, group, onStart, onStop, onCreate }: AddRo
           />
         ) : row.both ? (
           <span className="tt-add">
-            <button type="button" className="tt-addbtn" onClick={() => onStart(true)} data-testid={row.root ? "tree-add-group" : `tree-add-module-${row.parentRef}`}>
+            <button type="button" className="tt-addbtn" onClick={() => onStart(row.parentRef, true)} data-testid={row.root ? "tree-add-group" : `tree-add-module-${row.parentRef}`}>
               + Módulo
             </button>
-            <button type="button" className="tt-addbtn" onClick={() => onStart(false)} data-testid={row.root ? "tree-add-task" : `tree-add-${row.parentRef}`}>
+            <button type="button" className="tt-addbtn" onClick={() => onStart(row.parentRef, false)} data-testid={row.root ? "tree-add-task" : `tree-add-${row.parentRef}`}>
               + Tarefa
             </button>
           </span>
         ) : (
-          <button type="button" className="tt-addbtn" onClick={() => onStart(false)} data-testid={`tree-add-${row.parentRef}`}>
+          <button type="button" className="tt-addbtn" onClick={() => onStart(row.parentRef, false)} data-testid={`tree-add-${row.parentRef}`}>
             + {row.label}
           </button>
         )}
       </div>
     </li>
   );
-}
+});
 
 /** A coluna Sprint de uma folha: o chip da sprint abre a lista das sprints do projeto (e "sem sprint"). */
 export function SprintCell({ row, project, actions }: { row: CellRow; project: Project; actions: CellActions }) {
@@ -1257,8 +1539,8 @@ function MoveSprintDialog({ project, row, actions, onClose }: { project: Project
 const MOVE_SHOWN = 60;
 
 /** "Mover para…": busca pelo nome ou pelo caminho. Sem busca só os módulos e itens que já têm filhas; buscando, qualquer destino. */
-function MoveDialog({ project, row, actions, onClose, onMoved }: { project: Project; row: TreeNodeRow; actions: TaskActions; onClose: () => void; onMoved: (parent: string | null) => void }) {
-  const targets = useMemo(() => moveTargets(project, row.ref), [project, row.ref]);
+function MoveDialog({ project, index, row, actions, onClose, onMoved }: { project: Project; index: ProjectIndex; row: TreeNodeRow; actions: TaskActions; onClose: () => void; onMoved: (parent: string | null) => void }) {
+  const targets = useMemo(() => moveTargets(project, row.ref, index), [project, row.ref, index]);
   const [choice, setChoice] = useState<string | null | undefined>(undefined);
   const [query, setQuery] = useState("");
   const needle = normalizeText(query.trim());

@@ -1,4 +1,5 @@
-import { assigneesOf, childrenOf, compareWork, isAvulsas, isProjectOpen, projectUnitProgress, type ForYouItem, type Project, type ProjectPriority, type UnitProgress } from "@cyno/shared";
+import { compareWork, isAvulsas, isProjectOpen, type ForYouItem, type Project, type ProjectPriority, type UnitProgress } from "@cyno/shared";
+import { buildProjectIndex } from "./projectIndex";
 import { isUnreleasedProject } from "./releaseView";
 import { currentSprintLabel } from "./sprintsView";
 import { awaitingUser, deadlineOf, projectState, unitProgressText, type Deadline, type StateInfo } from "./workView";
@@ -59,14 +60,10 @@ export function groupOf(project: Project): ProjectGroupId {
   return "progresso";
 }
 
-const FINISHED = new Set(["concluida", "cancelada", "falhou"]);
-
 function entryOf(project: Project, group: ProjectEntry["group"], waiting: number, now: number): ProjectEntry {
-  const live = { tasks: project.tasks.filter((task) => !task.archived) };
-  const roots = childrenOf(live);
-  const agents: string[] = [];
-  for (const root of roots) for (const id of assigneesOf(live, root, Number.POSITIVE_INFINITY)) if (!agents.includes(id)) agents.push(id);
-  const progress = projectUnitProgress(live);
+  const index = buildProjectIndex(project.tasks);
+  const agents = index.agentIds;
+  const progress = index.unitProgress;
   const deadline = group === "avulsas" ? null : deadlineOf(project, now);
   return {
     project,
@@ -79,10 +76,10 @@ function entryOf(project: Project, group: ProjectEntry["group"], waiting: number
     deadline,
     priority: project.priority,
     waiting,
-    open: live.tasks.filter((task) => !FINISHED.has(task.status) && !task.group && !live.tasks.some((child) => child.parent === task.ref)).length,
+    open: index.openLeafCount,
     risk: deadline?.risk ?? false,
     paused: project.status === "pausado",
-    unreleased: group !== "avulsas" && isProjectOpen(project) && isUnreleasedProject(live),
+    unreleased: group !== "avulsas" && isProjectOpen(project) && isUnreleasedProject(project, index),
     ...(currentSprintLabel(project) ? { sprint: currentSprintLabel(project)! } : {}),
   };
 }

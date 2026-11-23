@@ -54,10 +54,12 @@ export type Handoff = { planId: string; ref: string; title: string; fromAgentId:
 
 /** As passagens entre a versão anterior e a nova de um plano (etapa k feita e a etapa atual com outro agente). */
 export function detectHandoffs(previous: Plan | undefined, next: Plan): Handoff[] {
-  if (!previous) return [];
+  if (!previous || previous === next) return [];
+  const beforeByRef = new Map<string, Plan["tasks"][number]>();
+  for (const candidate of previous.tasks) beforeByRef.set(candidate.ref, candidate);
   const out: Handoff[] = [];
   for (const task of next.tasks) {
-    const before = previous.tasks.find((candidate) => candidate.ref === task.ref);
+    const before = beforeByRef.get(task.ref);
     if (!before || task.current <= before.current) continue;
     const done = task.steps[before.current];
     const now = task.steps[task.current];

@@ -1,6 +1,7 @@
 import { assigneesOf, AVULSAS_ID, isAvulsas, leavesOf, PRIORITY_RANK, type Project, type ProjectPriority, type ProjectTask, type ProjectTaskStatus, type Sprint } from "@cyno/shared";
 import { shortSprintName } from "./sprintsView";
 import { dueOf, TREE_STATUS_LABEL, type DueInfo } from "./taskTreeView";
+import { visibleWindow } from "./visibleWindow";
 
 /**
  * "Todas as tarefas": a lista plana das folhas de todos os projetos do workspace (inclusive as do Avulsas), com
@@ -274,31 +275,9 @@ export function flatten(groups: readonly TaskGroup[]): FlatItem[] {
   return out;
 }
 
+export { visibleWindow };
+
 /** Quais itens estão à vista: `top` e `height` são a rolagem e a altura da janela; `overscan` itens a mais de cada lado. Alturas fixas por tipo. */
 export function visibleRange(items: readonly FlatItem[], heights: { head: number; row: number }, top: number, height: number, overscan = 6): { start: number; end: number; total: number; offset: number } {
-  const size = (item: FlatItem) => (item.kind === "head" ? heights.head : heights.row);
-  let total = 0;
-  let start = -1;
-  let end = items.length;
-  let offset = 0;
-  for (let i = 0; i < items.length; i += 1) {
-    const h = size(items[i]!);
-    if (start < 0 && total + h > top) {
-      start = i;
-      offset = total;
-    }
-    if (start >= 0 && total >= top + height) {
-      end = i;
-      break;
-    }
-    total += h;
-  }
-  if (end < items.length) {
-    // `total` parou no começo do item `end`; soma o resto para o espaço de baixo.
-    for (let i = end; i < items.length; i += 1) total += size(items[i]!);
-  }
-  if (start < 0) return { start: items.length, end: items.length, total, offset: total };
-  const from = Math.max(0, start - overscan);
-  for (let i = from; i < start; i += 1) offset -= size(items[i]!);
-  return { start: from, end: Math.min(items.length, end + overscan), total, offset };
+  return visibleWindow(items, (item) => (item.kind === "head" ? heights.head : heights.row), top, height, overscan);
 }

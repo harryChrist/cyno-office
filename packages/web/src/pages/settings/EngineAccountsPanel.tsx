@@ -556,7 +556,7 @@ export type EngineAccountsPanelProps = {
  * com instalação pelo servidor quando o motor ainda não está instalado e login pelo mini terminal.
  */
 export function EngineAccountsPanel({ statuses, onEnginesChanged }: EngineAccountsPanelProps) {
-  const { accounts, loading, error, refresh, createAccount, renameAccount, deleteAccount } = useEngineAccounts();
+  const { accounts, loading, error, unavailable, refresh, createAccount, renameAccount, deleteAccount } = useEngineAccounts();
   const [loginTarget, setLoginTarget] = useState<LoginTarget | null>(null);
   const [deleting, setDeleting] = useState<EngineAccountView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -579,6 +579,14 @@ export function EngineAccountsPanel({ statuses, onEnginesChanged }: EngineAccoun
     void refresh();
     onEnginesChanged?.();
   }, [refresh, onEnginesChanged]);
+
+  if (unavailable) {
+    return (
+      <p className="settings__card-hint" data-testid="accounts-unavailable">
+        As contas extras dos motores chegam com a próxima atualização do servidor.
+      </p>
+    );
+  }
 
   return (
     <div className="settings__groups" data-testid="settings-accounts">

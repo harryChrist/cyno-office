@@ -16,7 +16,12 @@ type Scope = { byRef: Map<string, ProjectTask>; inside: Set<string>; ref: string
 function scopeOf(project: Tasks, ref: string): Scope {
   const byRef = new Map(project.tasks.map((task) => [task.ref, task]));
   const kids = new Map<string, string[]>();
-  for (const task of project.tasks) if (task.parent) kids.set(task.parent, [...(kids.get(task.parent) ?? []), task.ref]);
+  for (const task of project.tasks) {
+    if (!task.parent) continue;
+    const list = kids.get(task.parent);
+    if (list) list.push(task.ref);
+    else kids.set(task.parent, [task.ref]);
+  }
   const inside = new Set<string>([ref]);
   const stack = [ref];
   while (stack.length > 0) {
@@ -96,6 +101,8 @@ function entryLeaves(project: Tasks, ref: string): ProjectTask[] {
  */
 export function effectiveDeps(project: Tasks, task: Pick<ProjectTask, "ref" | "dependsOn">): string[] {
   const out = [...task.dependsOn];
+  const full = project.tasks.find((candidate) => candidate.ref === task.ref);
+  if (!full?.parent) return out;
   for (const node of pathOf(project, task.ref)) {
     if (node.ref === task.ref || node.dependsOn.length === 0) continue;
     if (!entryLeaves(project, node.ref).some((leaf) => leaf.ref === task.ref)) continue;
@@ -152,12 +159,129 @@ export function deadDependencies(project: Tasks, task: Pick<ProjectTask, "ref" |
 
 /** A folha está travada: não começou (backlog ou a fazer) e alguma dependência foi cancelada ou falhou. */
 export function isBlockedLeaf(project: Tasks, task: ProjectTask): boolean {
-  return isLeaf(project, task) && (task.status === "backlog" || task.status === "a_fazer") && deadDependencies(project, task).length > 0;
+  if (task.status !== "backlog" && task.status !== "a_fazer") return false;
+  if (!project.tasks.some((candidate) => candidate.status === "cancelada" || candidate.status === "falhou")) return false;
+  return isLeaf(project, task) && deadDependencies(project, task).length > 0;
 }
 
-/** As folhas travadas do projeto. */
+/** As folhas travadas do projeto (índice único em O(n + e) para projetos grandes). */
 export function blockedLeaves(project: Tasks): ProjectTask[] {
-  return leavesOf(project).filter((leaf) => isBlockedLeaf(project, leaf));
+  let hasDeps = false;
+  let hasDead = false;
+  for (const task of project.tasks) {
+    if (task.dependsOn.length > 0) hasDeps = true;
+    if (task.status === "cancelada" || task.status === "falhou") hasDead = true;
+    if (hasDeps && hasDead) break;
+  }
+  if (!hasDeps || !hasDead) return [];
+  const byRef = new Map<string, ProjectTask>();
+  const kids = new Map<string, { task: ProjectTask; index: number }[]>();
+  project.tasks.forEach((task, index) => {
+    byRef.set(task.ref, task);
+    const parent = task.parent ?? "";
+    const list = kids.get(parent);
+    if (list) list.push({ task, index });
+    else kids.set(parent, [{ task, index }]);
+  });
+  const sortedKids = new Map<string, ProjectTask[]>();
+  for (const [parent, list] of kids) {
+    list.sort((a, b) => (a.task.order ?? a.index * 1000) - (b.task.order ?? b.index * 1000) || a.index - b.index);
+    sortedKids.set(parent, list.map((item) => item.task));
+  }
+  const leaves: ProjectTask[] = [];
+  const leavesByRef = new Map<string, ProjectTask[]>();
+  const deadFlag = new Map<string, boolean>();
+  const walk = (node: ProjectTask, active: Set<string>): boolean => {
+    const cached = deadFlag.get(node.ref);
+    if (cached !== undefined) return cached;
+    active.add(node.ref);
+    const children = (sortedKids.get(node.ref) ?? []).filter((child) => !active.has(child.ref));
+    let dead = false;
+    if (!node.group && children.length === 0) {
+      leaves.push(node);
+      leavesByRef.set(node.ref, [node]);
+      dead = node.status === "cancelada" || node.status === "falhou";
+    } else {
+      const sub: ProjectTask[] = [];
+      for (const child of children) {
+        if (walk(child, active)) dead = true;
+        const childLeaves = leavesByRef.get(child.ref);
+        if (childLeaves) for (const item of childLeaves) sub.push(item);
+      }
+      leavesByRef.set(node.ref, sub);
+    }
+    active.delete(node.ref);
+    deadFlag.set(node.ref, dead);
+    return dead;
+  };
+  for (const top of sortedKids.get("") ?? []) walk(top, new Set());
+  // Nós soltos em ciclo de pais fora das raízes: ainda assim podem ter status cancelada/falhou.
+  for (const task of project.tasks) if (!deadFlag.has(task.ref)) walk(task, new Set());
+
+  const entryCache = new Map<string, Set<string>>();
+  const entryRefsOf = (containerRef: string): Set<string> => {
+    const cached = entryCache.get(containerRef);
+    if (cached) return cached;
+    const subLeaves = leavesByRef.get(containerRef) ?? [];
+    const inside = new Set<string>([containerRef]);
+    const stack = [containerRef];
+    while (stack.length > 0) {
+      for (const child of sortedKids.get(stack.pop()!) ?? []) {
+        if (inside.has(child.ref)) continue;
+        inside.add(child.ref);
+        stack.push(child.ref);
+      }
+    }
+    const entries = new Set<string>();
+    for (const leaf of subLeaves) {
+      let waitsInternal = false;
+      const seen = new Set<string>([leaf.ref]);
+      for (let cur: ProjectTask | undefined = leaf; cur && cur.ref !== containerRef; cur = cur.parent ? byRef.get(cur.parent) : undefined) {
+        if (cur !== leaf) {
+          if (seen.has(cur.ref)) break;
+          seen.add(cur.ref);
+        }
+        for (const dep of cur.dependsOn) {
+          if (inside.has(dep)) {
+            waitsInternal = true;
+            break;
+          }
+        }
+        if (waitsInternal) break;
+      }
+      if (!waitsInternal) entries.add(leaf.ref);
+    }
+    if (entries.size === 0 && subLeaves[0]) entries.add(subLeaves[0].ref);
+    entryCache.set(containerRef, entries);
+    return entries;
+  };
+
+  const out: ProjectTask[] = [];
+  for (const leaf of leaves) {
+    if (leaf.status !== "backlog" && leaf.status !== "a_fazer") continue;
+    let isDead = false;
+    for (const dep of leaf.dependsOn) {
+      if (deadFlag.get(dep)) {
+        isDead = true;
+        break;
+      }
+    }
+    if (!isDead) {
+      const seen = new Set<string>([leaf.ref]);
+      for (let up = leaf.parent ? byRef.get(leaf.parent) : undefined; up && !seen.has(up.ref); up = up.parent ? byRef.get(up.parent) : undefined) {
+        seen.add(up.ref);
+        if (up.dependsOn.length === 0) continue;
+        // Só calcula folhas de entrada se alguma dependência do ancestral estiver morta.
+        if (!up.dependsOn.some((dep) => deadFlag.get(dep))) continue;
+        if (entryRefsOf(up.ref).has(leaf.ref)) {
+          isDead = true;
+          break;
+        }
+      }
+    }
+    if (isDead) out.push(leaf);
+  }
+  return out;
 }
 
 /** "travada: “Criar os textos” foi cancelada" / "falhou" / "…e mais 1": o texto da folha travada (null se não está). */

@@ -109,23 +109,59 @@ export function releasePriority(project: Tasks, ref: string): ProjectPriority | 
  * Sem repetir, na ordem da árvore.
  */
 export function prerequisiteClosure(project: Tasks, refs: string[]): string[] {
-  const treeIndex = new Map(leavesOf(project).map((leaf, index) => [leaf.ref, index]));
-  const byRef = new Map(project.tasks.map((task) => [task.ref, task]));
+  if (!project.tasks.some((task) => task.released === false) || !project.tasks.some((task) => task.dependsOn.length > 0)) return [];
+  const byRef = new Map<string, ProjectTask>();
+  const rawKids = new Map<string, { task: ProjectTask; index: number }[]>();
+  project.tasks.forEach((task, index) => {
+    byRef.set(task.ref, task);
+    const parent = task.parent ?? "";
+    const list = rawKids.get(parent);
+    if (list) list.push({ task, index });
+    else rawKids.set(parent, [{ task, index }]);
+  });
+  const kids = new Map<string, ProjectTask[]>();
+  for (const [parent, list] of rawKids) {
+    list.sort((a, b) => (a.task.order ?? a.index * 1000) - (b.task.order ?? b.index * 1000) || a.index - b.index);
+    kids.set(parent, list.map((item) => item.task));
+  }
+  const leavesCache = new Map<string, ProjectTask[]>();
+  const leavesFor = (ref: string): ProjectTask[] => {
+    const cached = leavesCache.get(ref);
+    if (cached) return cached;
+    const start = byRef.get(ref);
+    if (!start) return [];
+    const acc: ProjectTask[] = [];
+    const seen = new Set<string>();
+    const walk = (node: ProjectTask) => {
+      if (seen.has(node.ref)) return;
+      seen.add(node.ref);
+      const children = kids.get(node.ref);
+      if (!node.group && !children) acc.push(node);
+      else for (const child of children ?? []) walk(child);
+    };
+    walk(start);
+    leavesCache.set(ref, acc);
+    return acc;
+  };
+  const allLeaves: ProjectTask[] = [];
+  for (const top of kids.get("") ?? []) allLeaves.push(...leavesFor(top.ref));
+  const treeIndex = new Map(allLeaves.map((leaf, index) => [leaf.ref, index]));
   const visited = new Set<string>();
   const queue: string[] = [];
   for (const ref of refs) {
-    for (const leaf of leavesOf(project, ref)) {
+    for (const leaf of leavesFor(ref)) {
       if (visited.has(leaf.ref)) continue;
       visited.add(leaf.ref);
       queue.push(leaf.ref);
     }
   }
   const out = new Set<string>();
-  while (queue.length > 0) {
-    const leaf = byRef.get(queue.shift()!);
+  let head = 0;
+  while (head < queue.length) {
+    const leaf = byRef.get(queue[head++]!);
     if (!leaf) continue;
     for (const dep of effectiveDeps(project, leaf)) {
-      for (const found of leavesOf(project, dep)) {
+      for (const found of leavesFor(dep)) {
         if (visited.has(found.ref)) continue;
         visited.add(found.ref);
         if (finished(found)) continue;

@@ -1,12 +1,14 @@
 import type { AccountEngine, EngineAccountView } from "@cyno/shared";
-import { useCallback, useEffect, useReducer, useRef } from "react";
-import { api, describeError } from "../../api/client";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { api, ApiRequestError, describeError } from "../../api/client";
 import { accountsReducer, INITIAL_ACCOUNTS_STATE } from "./engineAccountsView";
 
 export type EngineAccountsHook = {
   accounts: EngineAccountView[] | null;
   loading: boolean;
   error: string | null;
+  /** O servidor ainda não tem as rotas de contas (404): a tela mostra um aviso curto em vez de erro. */
+  unavailable: boolean;
   refresh: () => Promise<void>;
   createAccount: (engine: AccountEngine, label: string) => Promise<EngineAccountView>;
   renameAccount: (id: string, label: string) => Promise<EngineAccountView>;
@@ -20,6 +22,7 @@ export type EngineAccountsHook = {
 export function useEngineAccounts(): EngineAccountsHook {
   const [state, dispatch] = useReducer(accountsReducer, INITIAL_ACCOUNTS_STATE);
   const alive = useRef(true);
+  const [unavailable, setUnavailable] = useState(false);
 
   const load = useCallback(async (showLoading: boolean) => {
     if (showLoading) dispatch({ type: "loading" });
@@ -29,7 +32,8 @@ export function useEngineAccounts(): EngineAccountsHook {
       dispatch({ type: "loaded", accounts: response.accounts });
     } catch (failure) {
       if (!alive.current) return;
-      dispatch({ type: "error", error: describeError(failure) });
+      if (failure instanceof ApiRequestError && failure.status === 404) setUnavailable(true);
+      else dispatch({ type: "error", error: describeError(failure) });
     }
   }, []);
 
@@ -42,7 +46,8 @@ export function useEngineAccounts(): EngineAccountsHook {
       },
       (failure: unknown) => {
         if (!alive.current) return;
-        dispatch({ type: "error", error: describeError(failure) });
+        if (failure instanceof ApiRequestError && failure.status === 404) setUnavailable(true);
+        else dispatch({ type: "error", error: describeError(failure) });
       },
     );
     return () => {
@@ -85,6 +90,7 @@ export function useEngineAccounts(): EngineAccountsHook {
     accounts: state.accounts,
     loading: state.loading,
     error: state.error,
+    unavailable,
     refresh,
     createAccount,
     renameAccount,

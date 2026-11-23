@@ -1,5 +1,5 @@
 import { isLeaf, PROJECT_SAFETY, type Project, type ProjectTask } from "@cyno/shared";
-import { depthIn, heightIn, isLeafIn, kidsOf, moveDependencyConflict, subtreeSet, treeIndex } from "./treeIndex";
+import { depthIn, heightIn, isLeafIn, kidsOf, moveDependencyConflict, subtreeSet, treeIndex, type TreeIndex } from "./treeIndex";
 
 /**
  * As regras de onde uma linha pode cair ao arrastar (árvore e sprints). Funções puras: a tela só pergunta
@@ -26,9 +26,8 @@ const startedLeaf = (task: ProjectTask): boolean => !task.group && task.status !
  * dentro de si mesma nem nos filhos dela, nem criar dependência impossível (um módulo esperando o próprio conteúdo),
  * e tarefa que já começou não vira mãe.
  */
-export function treeDrop(project: Project, dragRef: string, overRef: string, zone: DropZone): TreeVerdict {
-  const visible = live(project);
-  const index = treeIndex(visible.tasks);
+export function treeDrop(project: Project, dragRef: string, overRef: string, zone: DropZone, prebuilt?: TreeIndex): TreeVerdict {
+  const index = prebuilt ?? treeIndex(live(project).tasks);
   const dragged = index.byRef.get(dragRef);
   const over = index.byRef.get(overRef);
   const no = (reason: string): TreeVerdict => ({ ok: false, reason, zone, overRef });

@@ -1,6 +1,5 @@
 import type { Project, ProjectTask, ProjectTaskStatus } from "./projects";
 import { findDependencyCycle, PROJECT_LIMITS, PROJECT_SAFETY } from "./projects";
-import { effectiveDeps } from "./task-flow";
 
 /**
  * Árvore de tarefas do projeto: funções puras sobre `Project.tasks` (cada tarefa guarda `parent`, o
@@ -206,16 +205,25 @@ export function completedRefs(project: Tasks): Set<string> {
 }
 
 /** Agentes de um nó, sem repetir: o dono e os das etapas; no pai, depois os das filhas, na ordem da árvore. */
-function agentsOf(project: Tasks, node: ProjectTask, seen = new Set<string>()): string[] {
-  if (seen.has(node.ref)) return [];
-  seen.add(node.ref);
+function agentsOf(project: Tasks, node: ProjectTask): string[] {
+  const index = childIndex(project.tasks);
+  const seen = new Set<string>();
+  const added = new Set<string>();
   const out: string[] = [];
   const add = (id: string | undefined) => {
-    if (id && !out.includes(id)) out.push(id);
+    if (id && !added.has(id)) {
+      added.add(id);
+      out.push(id);
+    }
   };
-  add(node.ownerId);
-  for (const step of node.steps) add(step.agentId);
-  for (const child of childrenOf(project, node.ref)) for (const id of agentsOf(project, child, seen)) add(id);
+  const walk = (current: ProjectTask) => {
+    if (seen.has(current.ref)) return;
+    seen.add(current.ref);
+    add(current.ownerId);
+    for (const step of current.steps) add(step.agentId);
+    for (const child of index.get(current.ref) ?? []) walk(child);
+  };
+  walk(node);
   return out;
 }
 
@@ -326,15 +334,96 @@ export function validateTree(project: Pick<Project, "tasks" | "sprints" | "label
   return { errors, warnings };
 }
 
+/** Folhas da subárvore de `start` usando um índice de filhos já pronto (na ordem da árvore). */
+function leavesUnderIndex(index: Map<string, ProjectTask[]>, start: ProjectTask): ProjectTask[] {
+  const out: ProjectTask[] = [];
+  const seen = new Set<string>();
+  const walk = (node: ProjectTask) => {
+    if (seen.has(node.ref)) return;
+    seen.add(node.ref);
+    const kids = index.get(node.ref);
+    if (!node.group && !kids) out.push(node);
+    else for (const child of kids ?? []) walk(child);
+  };
+  walk(start);
+  return out;
+}
+
 /**
  * Ciclo de dependências no grafo EFETIVO das folhas (cada folha espera as folhas das suas dependências e das do módulo/mãe de que é entrada),
  * ou `null`. Pega "A espera B e B espera A" também por módulos e tarefas-mãe. Devolve os refs das folhas, a primeira repetida no fim.
  */
 export function dependencyCycle(project: Tasks): string[] | null {
+  if (!project.tasks.some((task) => task.dependsOn.length > 0)) return null;
+  const byRef = new Map(project.tasks.map((task) => [task.ref, task]));
+  const index = childIndex(project.tasks);
+  const leavesCache = new Map<string, ProjectTask[]>();
+  const leavesFor = (ref: string): ProjectTask[] => {
+    let found = leavesCache.get(ref);
+    if (!found) {
+      const node = byRef.get(ref);
+      found = node ? leavesUnderIndex(index, node) : [];
+      leavesCache.set(ref, found);
+    }
+    return found;
+  };
+  const allLeaves: ProjectTask[] = [];
+  for (const top of index.get("") ?? []) allLeaves.push(...leavesFor(top.ref));
+  const entryCache = new Map<string, Set<string>>();
+  const entryRefsOf = (containerRef: string): Set<string> => {
+    const cached = entryCache.get(containerRef);
+    if (cached) return cached;
+    const subLeaves = leavesFor(containerRef);
+    const inside = new Set<string>([containerRef]);
+    const stack = [containerRef];
+    while (stack.length > 0) {
+      for (const child of index.get(stack.pop()!) ?? []) {
+        if (inside.has(child.ref)) continue;
+        inside.add(child.ref);
+        stack.push(child.ref);
+      }
+    }
+    const entries = new Set<string>();
+    for (const leaf of subLeaves) {
+      let hasInternalWait = false;
+      const seen = new Set<string>([leaf.ref]);
+      for (let cur: ProjectTask | undefined = leaf; cur && cur.ref !== containerRef; cur = cur.parent ? byRef.get(cur.parent) : undefined) {
+        if (cur !== leaf) {
+          if (seen.has(cur.ref)) break;
+          seen.add(cur.ref);
+        }
+        for (const dep of cur.dependsOn) {
+          if (inside.has(dep)) {
+            hasInternalWait = true;
+            break;
+          }
+        }
+        if (hasInternalWait) break;
+      }
+      if (!hasInternalWait) entries.add(leaf.ref);
+    }
+    if (entries.size === 0 && subLeaves[0]) entries.add(subLeaves[0].ref);
+    entryCache.set(containerRef, entries);
+    return entries;
+  };
   const graph = new Map<string, string[]>();
-  for (const leaf of leavesOf(project)) {
+  for (const leaf of allLeaves) {
+    const deps: string[] = [...leaf.dependsOn];
+    const depSet = new Set(deps);
+    const seen = new Set<string>([leaf.ref]);
+    for (let up = leaf.parent ? byRef.get(leaf.parent) : undefined; up && !seen.has(up.ref); up = up.parent ? byRef.get(up.parent) : undefined) {
+      seen.add(up.ref);
+      if (up.dependsOn.length === 0) continue;
+      if (!entryRefsOf(up.ref).has(leaf.ref)) continue;
+      for (const dep of up.dependsOn) {
+        if (!depSet.has(dep)) {
+          depSet.add(dep);
+          deps.push(dep);
+        }
+      }
+    }
     const waits = new Set<string>();
-    for (const dep of effectiveDeps(project, leaf)) for (const found of leavesOf(project, dep)) if (found.ref !== leaf.ref) waits.add(found.ref);
+    for (const dep of deps) for (const found of leavesFor(dep)) if (found.ref !== leaf.ref) waits.add(found.ref);
     graph.set(leaf.ref, [...waits]);
   }
   return findDependencyCycle(graph);
@@ -372,7 +461,7 @@ export function projectUnitProgress(project: Tasks): UnitProgress {
   const index = childIndex(project.tasks);
   const roots = (index.get("") ?? []).filter((task) => !task.archived);
   const hasContainer = roots.some((task) => task.group || index.has(task.ref));
-  if (!hasContainer) return { ...treeProgress(project), unit: "tarefas" };
+  if (!hasContainer) return { ...progressOf(roots), unit: "tarefas" };
   let done = 0;
   let total = 0;
   let skipped = 0;
@@ -386,7 +475,7 @@ export function projectUnitProgress(project: Tasks): UnitProgress {
       }
       continue;
     }
-    const leaves = leavesOf(project, root.ref);
+    const leaves = leavesUnderIndex(index, root);
     if (leaves.length === 0) {
       total += 1;
       continue;

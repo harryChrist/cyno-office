@@ -52,7 +52,7 @@ function WorkView({ workspaceId }: { workspaceId: string | null }) {
 
   const agents = useMemo(() => new Map((office?.agents ?? []).map((agent) => [agent.id, agent])), [office]);
   const workers = useMemo(() => (office?.agents ?? []).filter((agent) => !(office && isMaestroAgent(office, agent))).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")), [office]);
-  const assembling = useMemo(() => assemblingRequests(office?.tasks ?? [], projects).length, [office, projects]);
+  const assembling = useMemo(() => (route.view === "home" ? assemblingRequests(office?.tasks ?? [], projects).length : 0), [route.view, office, projects]);
 
   // Pedidos de foco: o Para você, o Cyno e a Hoje mandam o id de um projeto; o painel de status e o Maestro mandam uma tarefa.
   const requestedProject = useWorkStore((state) => state.openProjectId);

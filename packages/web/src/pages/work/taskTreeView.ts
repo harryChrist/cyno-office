@@ -1,21 +1,23 @@
 import {
-  isBlockedLeaf,
-  PRIORITY_RANK,
   PROJECT_SAFETY,
-  pendencySummary,
   leavesOf,
   isOpenStatus,
   joinNames,
   releaseHold,
-  releaseState,
-  rollupStatus,
-  waitingText,
   type Label,
   type Project,
   type ProjectPriority,
   type ProjectTask,
   type ProjectTaskStatus,
 } from "@cyno/shared";
+import { visibleWindow } from "./visibleWindow";
+import {
+  buildProjectIndex,
+  containerReleaseFromAgg,
+  pendencySummaryFromAgg,
+  waitingTextIn,
+  type ProjectIndex,
+} from "./projectIndex";
 import { containerState, leafState, plannedWaits, type PlannedWait, type RowState } from "./releaseView";
 import { carriedLabel, startsInLabel } from "./sprintsView";
 import { ancestorsIn, heightIn, isLeafIn, kidsOf, moveDependencyConflict, subtreeSet, treeIndex, type TreeIndex } from "./treeIndex";
@@ -26,7 +28,8 @@ import { spanLabel, shortDate } from "./workView";
  * qualquer profundidade, com seta de abrir e fechar, contador, responsáveis, data e prioridade. Função pura: o
  * React só desenha o que sai daqui. Quem contém outros itens é contêiner e o estado dele é o calculado das
  * folhas (`rollupStatus`), nunca o gravado. Para a árvore grande: tudo nasce recolhido (o dono abre o que quiser),
- * cada nível mostra os filhos de 30 em 30 ("ver mais N") e a busca mostra só os achados com os ancestrais.
+ * cada nível mostra os filhos de 30 em 30 ("ver mais N"), a busca mostra só os achados com os ancestrais e
+ * `buildTreeRows` só percorre os nós visíveis/abertos usando o `ProjectIndex` memoizado por versão do projeto.
  */
 
 const DAY = 86_400_000;
@@ -35,6 +38,8 @@ export const ASSIGNEES_SHOWN = 3;
 
 export type DueTone = "done" | "late" | "soon" | "normal";
 export type DueInfo = { label: string; tone: DueTone; at: string; title: string };
+/** Dados puros de prazo da linha (sem depender de `now`): permitem recalcular o texto relativo só nas linhas visíveis. */
+export type DueMeta = { at: string; finishedAt?: string };
 
 export type TreeNodeRow = {
   kind: "node";
@@ -65,6 +70,8 @@ export type TreeNodeRow = {
   /** Quantos agentes passam do teto de avatares ("+N"). */
   moreAssignees: number;
   due: DueInfo | null;
+  /** Prazo bruto da linha para resolver atraso/vence em relação a `now` sem reconstruir a árvore. */
+  dueMeta?: DueMeta;
   priority: ProjectPriority | null;
   labels: Label[];
   /** Alguma folha da subárvore está bloqueada (selo). */
@@ -149,6 +156,9 @@ export type TreeRow = TreeNodeRow | TreeStepRow | TreeAddRow | TreeMoreRow;
 /** Quantos filhos cada nível mostra de uma vez (e quantos mais cada "ver mais" traz). */
 export const TREE_PAGE = 30;
 
+/** A partir de quantas linhas visíveis a árvore liga a janela de rolagem (virtualização). */
+export const TREE_VIRTUALIZE_FROM = 200;
+
 /** A coluna Sprint aparece só quando o projeto tem sprints. */
 export const hasSprintColumn = (project: Pick<Project, "sprints">): boolean => (project.sprints?.length ?? 0) > 0;
 
@@ -169,30 +179,39 @@ export const MOBILE_INDENT_LEVELS = 4;
 /** Quantos níveis de recuo a linha tem: no desktop sem limite; no celular pára no nível 4 (`depth` 1 = sem recuo). */
 export const indentLevel = (depth: number, mobile: boolean): number => Math.max(0, mobile ? Math.min(depth, MOBILE_INDENT_LEVELS) - 1 : depth - 1);
 
-/** Prazo da linha: o do próprio nó ou, num pai sem prazo, o maior das folhas. Verde se concluída no prazo, vermelho se atrasada, âmbar se falta menos de 24 h. */
-function dueFrom(node: ProjectTask, status: ProjectTaskStatus, now: number, leafDue: string | undefined, leafFinished: string | undefined): DueInfo | null {
-  const at = node.dueAt || leafDue;
-  if (!at) return null;
-  const due = Date.parse(at);
+/** Prazo da linha a partir dos dados brutos (`at`, `finishedAt`) e do relógio `now`. Verde se concluída no prazo, vermelho se atrasada, âmbar se falta menos de 24 h. */
+export function resolveDue(meta: DueMeta | undefined, status: ProjectTaskStatus, now: number): DueInfo | null {
+  if (!meta?.at) return null;
+  const due = Date.parse(meta.at);
   if (Number.isNaN(due)) return null;
-  const label = shortDate(at);
+  const label = shortDate(meta.at);
   if (status === "concluida") {
-    const finishedAt = node.finishedAt ?? leafFinished;
-    const finished = finishedAt ? Date.parse(finishedAt) : NaN;
-    if (!Number.isNaN(finished) && finished <= due) return { label, tone: "done", at, title: "Concluída no prazo" };
-    return { label, tone: Number.isNaN(finished) ? "normal" : "late", at, title: Number.isNaN(finished) ? "Concluída" : "Concluída depois do prazo" };
+    const finished = meta.finishedAt ? Date.parse(meta.finishedAt) : NaN;
+    if (!Number.isNaN(finished) && finished <= due) return { label, tone: "done", at: meta.at, title: "Concluída no prazo" };
+    return { label, tone: Number.isNaN(finished) ? "normal" : "late", at: meta.at, title: Number.isNaN(finished) ? "Concluída" : "Concluída depois do prazo" };
   }
-  if (status === "cancelada") return { label, tone: "normal", at, title: "Cancelada" };
-  if (due < now) return { label, tone: "late", at, title: `Atrasada há ${spanLabel(now - due)}` };
-  if (due - now < DAY) return { label, tone: "soon", at, title: `Vence em ${spanLabel(due - now)}` };
-  return { label, tone: "normal", at, title: "Prazo" };
+  if (status === "cancelada") return { label, tone: "normal", at: meta.at, title: "Cancelada" };
+  if (due < now) return { label, tone: "late", at: meta.at, title: `Atrasada há ${spanLabel(now - due)}` };
+  if (due - now < DAY) return { label, tone: "soon", at: meta.at, title: `Vence em ${spanLabel(due - now)}` };
+  return { label, tone: "normal", at: meta.at, title: "Prazo" };
+}
+
+function dueMetaOf(node: ProjectTask, leafDue: string | undefined, leafFinished: string | undefined): DueMeta | undefined {
+  const at = node.dueAt || leafDue;
+  if (!at) return undefined;
+  const finishedAt = node.finishedAt ?? (leafFinished || undefined);
+  return finishedAt ? { at, finishedAt } : { at };
 }
 
 export function dueOf(project: Pick<Project, "tasks">, node: ProjectTask, status: ProjectTaskStatus, now: number): DueInfo | null {
   const leaves = leavesOf(project, node.ref);
-  const dues = leaves.flatMap((leaf) => (leaf.dueAt ? [leaf.dueAt] : []));
-  const finished = leaves.map((leaf) => leaf.finishedAt ?? "");
-  return dueFrom(node, status, now, dues.sort().at(-1), finished.sort().at(-1));
+  let dueMax: string | undefined;
+  let finishedMax = "";
+  for (const leaf of leaves) {
+    if (leaf.dueAt && (!dueMax || leaf.dueAt > dueMax)) dueMax = leaf.dueAt;
+    if (leaf.finishedAt && leaf.finishedAt > finishedMax) finishedMax = leaf.finishedAt;
+  }
+  return resolveDue(dueMetaOf(node, dueMax, finishedMax), status, now);
 }
 
 /**
@@ -201,7 +220,7 @@ export function dueOf(project: Pick<Project, "tasks">, node: ProjectTask, status
  */
 export function closedRefsOf(project: Pick<Project, "tasks">, openRefs: ReadonlySet<string>): Set<string> {
   const out = new Set<string>();
-  for (const task of live(project).tasks) if (!openRefs.has(task.ref)) out.add(task.ref);
+  for (const task of project.tasks) if (!task.archived && !openRefs.has(task.ref)) out.add(task.ref);
   return out;
 }
 
@@ -213,7 +232,8 @@ type Options = {
   addRows?: boolean;
   /** Tarefa que acabou de ganhar "Adicionar subtarefa": abre e mostra a linha de adicionar mesmo sem filhas. */
   forceAdd?: string;
-  now: number;
+  /** Relógio para calcular prazos relativos; quando omitido, a linha guarda só `dueMeta` e a célula resolve com `now`. */
+  now?: number;
   /** Nome do agente por id (para "espera a Sônia…"). Sem isso, mostra o id. */
   agentName?: (id: string) => string;
   /** Busca: mostra só quem bate no título ou no `ref` e os ancestrais deles (abertos). Vazio = árvore normal. */
@@ -222,25 +242,14 @@ type Options = {
   shown?: ReadonlyMap<string, number>;
   /** Filtro "Mostrar" (Liberadas, Planejadas): `ref` das linhas que ficam (folhas que batem e ancestrais). Junto com a busca, vale quem passa nos dois. */
   filter?: ReadonlySet<string> | null;
+  /** Índice já montado para esta versão do projeto (evita reindexar a cada abertura/fechamento). */
+  index?: ProjectIndex;
+  /** Quando informado, define os nós abertos diretamente (sem precisar montar `closedRefs` com todos os nós do projeto). */
+  openRefs?: ReadonlySet<string>;
 };
 
-/** Posição de cada folha `a_fazer` na fila do dono dentro do projeto: 1 = a próxima. Só entra quem tem alguém na frente (outra folha do dono rodando ou na fila antes). */
-function queueFrom(leaves: readonly ProjectTask[]): Map<string, number> {
-  const out = new Map<string, number>();
-  const byOwner = new Map<string, ProjectTask[]>();
-  for (const leaf of leaves) if (leaf.ownerId) byOwner.set(leaf.ownerId, [...(byOwner.get(leaf.ownerId) ?? []), leaf]);
-  for (const mine of byOwner.values()) {
-    const running = mine.some((leaf) => leaf.status === "em_andamento" || leaf.status === "esperando_voce");
-    const waiting = mine.filter((leaf) => leaf.status === "a_fazer").sort((a, b) => (a.waitingSince ?? "").localeCompare(b.waitingSince ?? ""));
-    waiting.forEach((leaf, index) => {
-      if (running || index > 0) out.set(leaf.ref, index + 1);
-    });
-  }
-  return out;
-}
-
-export function queuePositions(project: Pick<Project, "tasks">): Map<string, number> {
-  return queueFrom(leavesOf(project));
+export function queuePositions(project: Pick<Project, "tasks">, prebuilt?: ProjectIndex): Map<string, number> {
+  return new Map((prebuilt ?? buildProjectIndex(project.tasks)).queuePositions());
 }
 
 const STEP_STATUS: Record<string, ProjectTaskStatus> = { feita: "concluida", falhou: "falhou", em_andamento: "em_andamento" };
@@ -268,101 +277,6 @@ function stepText(task: ProjectTask, index: number, status: ProjectTaskStatus, n
   return `espera ${/a$/i.test(who.trim()) ? "a" : "o"} ${who} terminar o passo ${index}`;
 }
 
-/** O que se sabe de cada nó somando as folhas dele, calculado uma vez para a árvore inteira (em vez de varrer a subárvore a cada linha). */
-type Agg = {
-  leaves: number;
-  /** Concluídas e total da conta de progresso (sem canceladas nem puladas). */
-  done: number;
-  counted: number;
-  skipped: number;
-  /** Para o resumo da mãe: concluídas e não canceladas. */
-  concluded: number;
-  notCancelled: number;
-  /** Folhas que ainda não terminaram (nem concluída nem cancelada). */
-  unfinished: number;
-  /** O estado para mostrar: o gravado na folha (travada vira "esperando você"), o calculado nos contêineres. */
-  status: ProjectTaskStatus;
-  waiting: number;
-  blocked: boolean;
-  sprints: string[];
-  dueMax?: string;
-  finishedMax: string;
-  best: ProjectPriority | null;
-  assignees: string[];
-  runners: string[];
-};
-
-const unique = (lists: readonly (readonly string[])[]): string[] => {
-  const out: string[] = [];
-  for (const list of lists) for (const id of list) if (id && !out.includes(id)) out.push(id);
-  return out;
-};
-
-function aggregate(visible: Pick<Project, "tasks">, index: TreeIndex): { agg: Map<string, Agg>; leaves: ProjectTask[] } {
-  const agg = new Map<string, Agg>();
-  const leaves: ProjectTask[] = [];
-  const walk = (node: ProjectTask, inherited: boolean, active: Set<string>): Agg => {
-    active.add(node.ref);
-    const kids = kidsOf(index, node.ref).filter((child) => !active.has(child.ref));
-    let result: Agg;
-    if (node.group !== true && kids.length === 0) {
-      leaves.push(node);
-      // Só olha se está travada (dependência cancelada ou que falhou) quando ela ou um ancestral tem dependência: evita varrer a árvore por folha.
-      const blocked = (node.dependsOn.length > 0 || inherited) && isBlockedLeaf(visible, node);
-      const done = node.status === "concluida";
-      const counted = node.status !== "cancelada" && !(done && node.skipped);
-      result = {
-        leaves: 1,
-        done: counted && done ? 1 : 0,
-        counted: counted ? 1 : 0,
-        skipped: done && node.skipped ? 1 : 0,
-        concluded: done ? 1 : 0,
-        notCancelled: node.status === "cancelada" ? 0 : 1,
-        unfinished: done || node.status === "cancelada" ? 0 : 1,
-        status: blocked ? "esperando_voce" : node.status,
-        waiting: node.status === "esperando_voce" ? 1 : 0,
-        blocked: node.blocked !== undefined && node.blocked.type !== "voce",
-        sprints: node.sprintId ? [node.sprintId] : [],
-        ...(node.dueAt ? { dueMax: node.dueAt } : {}),
-        finishedMax: node.finishedAt ?? "",
-        best: node.priority,
-        assignees: unique([[node.ownerId], node.steps.map((step) => step.agentId)]),
-        runners: node.status === "em_andamento" && node.ownerId ? [node.ownerId] : [],
-      };
-    } else {
-      const below = kids.map((child) => walk(child, inherited || node.dependsOn.length > 0, active));
-      const sum = (pick: (item: Agg) => number) => below.reduce((total, item) => total + pick(item), 0);
-      const ranked = below.flatMap((item) => (item.best ? [item.best] : []));
-      let best: ProjectPriority | null = ranked.length === 0 ? null : ranked.reduce((acc, priority) => (PRIORITY_RANK[priority] < PRIORITY_RANK[acc] ? priority : acc), ranked[0]!);
-      if (best && node.priority !== "normal" && PRIORITY_RANK[node.priority] < PRIORITY_RANK[best]) best = node.priority;
-      const dues = below.flatMap((item) => (item.dueMax ? [item.dueMax] : [])).sort();
-      result = {
-        leaves: sum((item) => item.leaves),
-        done: sum((item) => item.done),
-        counted: sum((item) => item.counted),
-        skipped: sum((item) => item.skipped),
-        concluded: sum((item) => item.concluded),
-        notCancelled: sum((item) => item.notCancelled),
-        unfinished: sum((item) => item.unfinished),
-        status: rollupStatus(below.map((item) => ({ status: item.status }))),
-        waiting: sum((item) => item.waiting),
-        blocked: below.some((item) => item.blocked),
-        sprints: unique(below.map((item) => item.sprints)),
-        ...(dues.length > 0 ? { dueMax: dues.at(-1)! } : {}),
-        finishedMax: below.map((item) => item.finishedMax).sort().at(-1) ?? "",
-        best,
-        assignees: unique([[node.ownerId], node.steps.map((step) => step.agentId), ...below.map((item) => item.assignees)]),
-        runners: unique(below.map((item) => item.runners)),
-      };
-    }
-    active.delete(node.ref);
-    agg.set(node.ref, result);
-    return result;
-  };
-  for (const top of kidsOf(index)) walk(top, false, new Set());
-  return { agg, leaves };
-}
-
 /** O que a busca deixa na tela: quem bate (título ou `ref`, sem acento nem caixa) e os ancestrais deles. `null` = busca vazia. */
 export type TreeSearch = { matches: Set<string>; show: Set<string> };
 
@@ -376,8 +290,8 @@ function searchIn(index: TreeIndex, query: string): TreeSearch | null {
   return { matches, show };
 }
 
-export function searchTree(project: Pick<Project, "tasks">, query: string): TreeSearch | null {
-  return searchIn(treeIndex(live(project).tasks), query);
+export function searchTree(project: Pick<Project, "tasks">, query: string, prebuilt?: ProjectIndex): TreeSearch | null {
+  return searchIn(prebuilt ? prebuilt.tree : treeIndex(live(project).tasks), query);
 }
 
 /** "espera Autenticação" / "espera Autenticação e Pagamentos" / "espera Autenticação e mais 2". */
@@ -393,12 +307,12 @@ export function waitsText(titles: readonly string[]): string {
  * `query`, só os achados e os ancestrais deles (sempre abertos) e sem linhas de adicionar.
  */
 export function buildTreeRows(project: Project, closedRefs: ReadonlySet<string>, options: Options): TreeRow[] {
-  const visible = live(project);
-  const index = treeIndex(visible.tasks);
-  const { agg, leaves } = aggregate(visible, index);
+  const pIndex = options.index ?? buildProjectIndex(project.tasks);
+  const index = pIndex.tree;
+  const agg = pIndex.agg;
   const labelOf = new Map((project.labels ?? []).map((label) => [label.id, label]));
   const name = options.agentName ?? ((id: string) => id);
-  const queue = queueFrom(leaves);
+  const isClosed = options.openRefs ? (ref: string) => !options.openRefs!.has(ref) : (ref: string) => closedRefs.has(ref);
   const found = options.query ? searchIn(index, options.query) : null;
   const narrow = options.filter ?? null;
   // Busca e filtro "Mostrar" usam o mesmo caminho (mostrar só os achados e os ancestrais); com os dois, vale quem passa nos dois.
@@ -411,22 +325,22 @@ export function buildTreeRows(project: Project, closedRefs: ReadonlySet<string>,
     for (const ref of matches) for (const ancestor of ancestorsIn(index, ref)) if (narrow.has(ancestor.ref)) show.add(ancestor.ref);
     return { matches, show };
   })();
-  /** Só vale olhar a liberação (estado Planejado, aviso de espera) quando o projeto tem alguma tarefa Planejada. */
-  const anyPlanned = visible.tasks.some((task) => task.released === false);
-  const anyDeps = visible.tasks.some((task) => task.dependsOn.length > 0);
+  const { anyPlanned, anyDeps } = pIndex;
   const pageOf = (key: string) => options.shown?.get(key) ?? TREE_PAGE;
   /** Terminou? Folha: concluída ou cancelada; contêiner: todas as folhas dele (vazio não conta como feito). Ref que não existe (arquivado) já terminou. */
   const finished = (ref: string): boolean => {
     const item = agg.get(ref);
     return item === undefined ? true : item.leaves > 0 && item.unfinished === 0;
   };
+  let queue: ReadonlyMap<string, number> | null = null;
+  const queueOf = (): ReadonlyMap<string, number> => (queue ??= pIndex.queuePositions());
   const rows: TreeRow[] = [];
   const walk = (node: ProjectTask, depth: number, trail: string[]) => {
     const allKids = kidsOf(index, node.ref);
     const kids = search ? allKids.filter((child) => search.show.has(child.ref)) : allKids;
     const isGroup = node.group === true;
     const parent = isGroup || allKids.length > 0;
-    const open = search ? kids.length > 0 : (isGroup && allKids.length === 0) || ((parent || options.forceAdd === node.ref) && (options.forceAdd === node.ref || !closedRefs.has(node.ref)));
+    const open = search ? kids.length > 0 : (isGroup && allKids.length === 0) || ((parent || options.forceAdd === node.ref) && (options.forceAdd === node.ref || !isClosed(node.ref)));
     const summary = agg.get(node.ref)!;
     const status = summary.status;
     const mother = !isGroup && allKids.length > 0;
@@ -439,14 +353,15 @@ export function buildTreeRows(project: Project, closedRefs: ReadonlySet<string>,
       flow = {
         kind: "mother",
         // Mãe com subtarefa cancelada, que falhou ou travada: "3 de 5 prontas · 1 cancelada · 1 travada" (ela não conclui sozinha).
-        summary: pendencySummary(visible, node)?.text ?? `${summary.concluded} de ${summary.notCancelled} ${summary.notCancelled === 1 ? "pronta" : "prontas"}${running.length > 0 ? ` · agora: ${joinNames(running)}` : ""}`,
+        summary: pendencySummaryFromAgg(summary) ?? `${summary.concluded} de ${summary.notCancelled} ${summary.notCancelled === 1 ? "pronta" : "prontas"}${running.length > 0 ? ` · agora: ${joinNames(running)}` : ""}`,
         everyone: summary.assignees,
         done: summary.concluded,
         total: summary.notCancelled,
         text: "",
       };
     } else if (inMother || hasPendingDeps) {
-      const waits = waitingText({ task: node, project: visible, agentName: name, ...(queue.has(node.ref) ? { queuePosition: queue.get(node.ref)! } : {}) });
+      const q = queueOf();
+      const waits = waitingTextIn(pIndex, node, name, q.get(node.ref));
       const ended = node.status === "concluida" ? "entregou" : node.status === "falhou" ? "falhou" : node.status === "cancelada" ? "cancelada" : undefined;
       flow = { kind: "subtask", ...(node.ownerId ? { ownerId: node.ownerId, ownerName: name(node.ownerId) } : {}), text: waits ?? ended ?? (node.status === "backlog" ? "sem responsável ou parada" : "") };
     }
@@ -455,10 +370,14 @@ export function buildTreeRows(project: Project, closedRefs: ReadonlySet<string>,
     const leaf = !parent;
     const state = leaf
       ? leafState({ status, hold: releaseHold(node) !== undefined, blocked: summary.blocked })
-      : containerState({ status, release: summary.leaves === 0 && node.released === false ? "planejada" : anyPlanned ? releaseState(visible, node.ref) : undefined });
+      : containerState({ status, release: summary.leaves === 0 && node.released === false ? "planejada" : anyPlanned ? containerReleaseFromAgg(summary) : undefined });
+    const dueMeta = dueMetaOf(node, summary.dueMax, summary.finishedMax);
+    const due = options.now !== undefined ? resolveDue(dueMeta, status, options.now) : null;
+    const startsIn = leaf ? startsInLabel(project, node) : null;
+    const carried = leaf ? carriedLabel(project, node) : null;
     rows.push({
       state,
-      plannedWaits: anyPlanned && anyDeps ? plannedWaits(visible, node) : [],
+      plannedWaits: anyPlanned && anyDeps ? plannedWaits(project, node, pIndex) : [],
       kind: "node",
       key: node.ref,
       ref: node.ref,
@@ -476,39 +395,61 @@ export function buildTreeRows(project: Project, closedRefs: ReadonlySet<string>,
       ...(waitTitles.length > 0 ? { waits: waitsText(waitTitles) } : {}),
       assignees: summary.assignees.slice(0, ASSIGNEES_SHOWN),
       moreAssignees: Math.max(0, summary.assignees.length - ASSIGNEES_SHOWN),
-      due: dueFrom(node, status, options.now, summary.dueMax, summary.finishedMax),
+      due,
+      ...(dueMeta ? { dueMeta } : {}),
       priority: leaf ? node.priority : summary.best,
       labels: (node.labels ?? []).flatMap((id) => (labelOf.has(id) ? [labelOf.get(id)!] : [])),
       blocked: summary.blocked,
       waiting: summary.waiting,
       sprints: summary.sprints,
-      ...(leaf && startsInLabel(project, node) ? { startsIn: startsInLabel(project, node)! } : {}),
-      ...(leaf && carriedLabel(project, node) ? { carried: carriedLabel(project, node)! } : {}),
+      ...(startsIn ? { startsIn } : {}),
+      ...(carried ? { carried } : {}),
       ...(flow ? { flow } : {}),
       ...(stepCount > 0 ? { stepCount } : {}),
       canAddChild: depth < PROJECT_SAFETY.depth && (isGroup || allKids.length > 0 || (!started(node) && isLeafIn(index, node))),
     });
     // Tarefa antiga com `steps`: cada passo vira uma linha filha só de leitura (a seta abre e fecha).
-    if (stepCount > 0 && !closedRefs.has(node.ref)) {
+    if (stepCount > 0 && !isClosed(node.ref)) {
       node.steps.forEach((step, position) => {
-        const state = stepStatus(node, position);
-        rows.push({ kind: "step", key: `step:${node.ref}:${position}`, parentRef: node.ref, depth: depth + 1, index: position, total: node.steps.length, agentId: step.agentId, what: step.what, status: state, text: stepText(node, position, state, name) });
+        const stateOfStep = stepStatus(node, position);
+        rows.push({ kind: "step", key: `step:${node.ref}:${position}`, parentRef: node.ref, depth: depth + 1, index: position, total: node.steps.length, agentId: step.agentId, what: step.what, status: stateOfStep, text: stepText(node, position, stateOfStep, name) });
       });
     }
     if (!open) return;
     const limit = pageOf(node.ref);
-    for (const child of kids.slice(0, limit)) walk(child, depth + 1, [...trail, node.title]);
+    const nextTrail = [...trail, node.title];
+    const shownCount = Math.min(kids.length, limit);
+    for (let i = 0; i < shownCount; i += 1) walk(kids[i]!, depth + 1, nextTrail);
     if (kids.length > limit) rows.push({ kind: "more", key: `more:${node.ref}`, depth: depth + 1, parentRef: node.ref, remaining: kids.length - limit });
     if (options.addRows && !search && (isGroup || allKids.length > 0 || options.forceAdd === node.ref) && depth < PROJECT_SAFETY.depth) {
       rows.push({ kind: "add", key: `add:${node.ref}`, depth: depth + 1, parentRef: node.ref, label: isGroup ? "Adicionar tarefa" : "Adicionar subtarefa", root: false, both: isGroup });
     }
   };
-  const tops = kidsOf(index).filter((top) => !search || search.show.has(top.ref));
+  const allTops = kidsOf(index);
+  const tops = search ? allTops.filter((top) => search.show.has(top.ref)) : allTops;
   const rootLimit = pageOf("");
-  for (const top of tops.slice(0, rootLimit)) walk(top, 1, []);
+  const shownTops = Math.min(tops.length, rootLimit);
+  for (let i = 0; i < shownTops; i += 1) walk(tops[i]!, 1, []);
   if (tops.length > rootLimit) rows.push({ kind: "more", key: "more:root", depth: 1, remaining: tops.length - rootLimit });
   if (options.addRows && !search) rows.push({ kind: "add", key: "add:root", depth: 1, label: "Adicionar módulo ou tarefa", root: true, both: true });
   return rows;
+}
+
+/** Altura estimada de uma linha da árvore (para a janela de rolagem quando há muitas linhas abertas). */
+export function treeRowHeight(row: TreeRow, mobile: boolean): number {
+  if (row.kind === "add" || row.kind === "more") return 36;
+  if (row.kind === "step") return mobile ? 64 : 58;
+  const hasSub = Boolean(row.flow) || row.plannedWaits.length > 0 || (row.isContainer && Boolean(row.waits));
+  if (mobile) return hasSub ? 96 : 70;
+  return hasSub ? 60 : 37;
+}
+
+/** Janela de rolagem da árvore (reaproveita `visibleWindow` de `allTasksView.ts`). */
+export function treeVisibleRange(rows: readonly TreeRow[], mobile: boolean, top: number, height: number, overscan = 12): { start: number; end: number; total: number; offset: number; bottom: number } {
+  const range = visibleWindow(rows, (row) => treeRowHeight(row, mobile), top, height, overscan);
+  let sliceHeight = 0;
+  for (let i = range.start; i < range.end; i += 1) sliceHeight += treeRowHeight(rows[i]!, mobile);
+  return { ...range, bottom: Math.max(0, range.total - range.offset - sliceHeight) };
 }
 
 /**
@@ -525,9 +466,8 @@ export type MoveTarget = {
   container: boolean;
 };
 
-export function moveTargets(project: Project, ref: string): MoveTarget[] {
-  const visible = live(project);
-  const index = treeIndex(visible.tasks);
+export function moveTargets(project: Project, ref: string, prebuilt?: ProjectIndex): MoveTarget[] {
+  const index = prebuilt ? prebuilt.tree : treeIndex(live(project).tasks);
   const node = index.byRef.get(ref);
   if (!node) return [];
   const below = subtreeSet(index, ref);
