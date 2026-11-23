@@ -127,6 +127,7 @@ import { CONFIRMATIONS_PATH, PROPOSALS_PATH, type Confirmation, type Confirmatio
 import { JOINT_PATH, type JointsResponse, type JointView } from "@cyno/shared";
 import { MURAL_PATH, type MuralEntry, type MuralResponse, type MuralShareBody, type MuralUseResponse } from "@cyno/shared";
 import { FREEBUFF_MODELS_REFRESH_PATH, FREEBUFF_SETTINGS_PATH, FREEBUFF_TEST_PATH, type FreebuffSettingsBody } from "@cyno/shared";
+import { ENGINE_ACCOUNTS_PATH, engineAccountItemPath, type CreateEngineAccountBody, type EngineAccountResponse, type EngineAccountsResponse, type PatchEngineAccountBody } from "@cyno/shared";
 import { ENGINE_STATUS_PATH, OPENROUTER_KEY_PATH, OPENROUTER_MODELS_PATH, engineAccountPath, engineProgramDetectPath, engineProgramModelsPath, engineConfigPath, engineInstallPath, engineInstallPlanPath, engineTestPath, engineVerifyPath, AUTH_LOGOUT_ALL_PATH, AUTH_LOGOUT_PATH, AUTH_PASSWORD_PATH, ENGINE_RETRY_PATH, MODEL_DEFAULTS_PATH, RETENTION_CLEANUP_PATH, RETENTION_PATH, VERSION_CHECK_PATH, VERSION_PATH, VERSION_UPDATE_PATH, ACTIVITY_SYSTEM_PATH, USAGE_REFRESH_PATH, workspaceAccessPath, workFolderPath, workFoldersPath } from "@cyno/shared";
 import type { ActivityQueryInput, ActivityResponse, ActivitySummary, ActivitySystemResponse, ChangePasswordBody, SecurityState, TwoFactorEnabled, TwoFactorSetup } from "@cyno/shared";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_SECURITY_PATH, AUTH_UNBLOCK_PATH } from "@cyno/shared";
@@ -339,6 +340,11 @@ export const api = {
   /** "Tentar agora" com um motor sem cota (as tarefas paradas andam; se ainda faltar cota, voltam a esperar). */
   /** Tela Motores: o estado detectado dos cinco motores conhecidos. */
   getEngineStatus: () => requestJson<EngineStatusResponse>(ENGINE_STATUS_PATH),
+  /** Contas dos motores (Claude Code e Antigravity): lista (padrão + extras com `loggedIn`), criar, renomear e apagar. */
+  listEngineAccounts: () => requestJson<EngineAccountsResponse>(ENGINE_ACCOUNTS_PATH),
+  createEngineAccount: (body: CreateEngineAccountBody) => requestJson<EngineAccountResponse>(ENGINE_ACCOUNTS_PATH, { method: "POST", body }),
+  renameEngineAccount: (id: string, body: PatchEngineAccountBody) => requestJson<EngineAccountResponse>(engineAccountItemPath(id), { method: "PATCH", body }),
+  deleteEngineAccount: (id: string) => requestJson<void>(engineAccountItemPath(id), { method: "DELETE" }),
   /** "Testar": um pedido mínimo ao motor (um por vez; 409 se há outro rodando, 429 se foi há pouco). */
   testEngine: (id: string) => requestJson<{ result: EngineTestResult }>(engineTestPath(id), { method: "POST", body: {} }),
   /** Caminho do executável do motor (null = voltar ao padrão); devolve o estado de todos de novo. */

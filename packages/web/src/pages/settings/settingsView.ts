@@ -22,6 +22,7 @@ export const SEAL_LABELS: Record<SettingsSeal, string> = { plataforma: "Toda a p
 export const SETTINGS_SECTIONS = [
   { id: "senha", area: "plataforma", label: "Acesso e senha", hint: "Quem pode abrir o app", seal: "plataforma" },
   { id: "motores", area: "plataforma", label: "Motores", hint: "O que está instalado e funcionando", seal: "plataforma" },
+  { id: "contas", area: "plataforma", label: "Contas", hint: "Contas do Claude Code e do Antigravity neste servidor", seal: "plataforma" },
   { id: "limites", area: "plataforma", label: "Limites do plano", hint: "Pausar o trabalho quando o plano chega perto do fim", seal: "plataforma" },
   { id: "modelos-padrao", area: "plataforma", label: "Modelos padrão", hint: "Maestro, agentes, subagentes e Cyno", seal: "plataforma" },
   { id: "cyno-ajustes", area: "plataforma", label: "Cyno", hint: "Sono, teto de turnos e resumo", seal: "plataforma" },
@@ -78,6 +79,8 @@ const SECTION_ALIASES: Readonly<Record<string, SettingsSectionId>> = {
   espaco: "armazenamento",
   storage: "armazenamento",
   motor: "motores",
+  conta: "contas",
+  "contas-motores": "contas",
   limite: "limites",
   pausa: "limites",
   cota: "limites",
@@ -110,7 +113,7 @@ export function settingsSectionsOf(area: SettingsArea): SettingsSection[] {
  */
 export const SETTINGS_PAGES = [
   { area: "plataforma", label: "Acesso e senha", hint: "Quem pode abrir o app", sections: ["senha"] },
-  { area: "plataforma", label: "Motores", hint: "O que está instalado e funcionando", sections: ["motores"] },
+  { area: "plataforma", label: "Motores", hint: "O que está instalado, contas e como funcionam", sections: ["motores", "contas"] },
   { area: "plataforma", label: "Limites do plano", hint: "Pausar o trabalho quando o plano chega perto do fim", sections: ["limites"] },
   { area: "plataforma", label: "Modelos e Cyno", hint: "Modelos padrão e o jeito do Cyno", sections: ["modelos-padrao", "cyno-ajustes"] },
   { area: "plataforma", label: "Avisos", hint: "Som, notificação e o que avisa", sections: ["avisos"] },
@@ -180,6 +183,7 @@ export const SETTINGS_OPTIONS: readonly SettingsOption[] = [
   { id: "motor-freebuff", section: "motores", title: "Freebuff", line: "Terminal de IA gratuito, pago por anúncios (por hora aberta): serve a qualquer papel.", seal: "plataforma", keywords: "motor freebuff codebuff gratuito anúncios horas" },
   { id: "motor-openclaw", section: "motores", title: "OpenClaw", line: "Assistente de código aberto (agent exec): conta pelo OpenRouter ou pela configuração do próprio programa, modelo e Verificar.", seal: "plataforma", keywords: "motor openclaw openrouter chave conta provedor modelo verificar instalado" },
   { id: "motor-hermes", section: "motores", title: "Hermes", line: "Agente de terminal da Nous Research: instalar, conta pelo OpenRouter ou pela configuração do próprio programa, modelo e Verificar.", seal: "plataforma", keywords: "motor hermes nous openrouter instalar chave conta provedor modelo verificar" },
+  { id: "contas-motores", section: "contas", title: "Contas dos motores", line: "Entrar pelo navegador, instalar e cadastrar contas extras do Claude Code e do Antigravity.", seal: "plataforma", keywords: "contas conta login entrar claude antigravity gemini instalar perfil" },
   { id: "limite-plano", section: "limites", title: "Pausar ao chegar no limite do plano", line: "Ao bater o percentual, os agentes do motor param e voltam sozinhos quando a janela reinicia.", seal: "plataforma", keywords: "limite uso plano pausa pausar cota 5 horas semanal semana percentual 90 reset voltar assinatura" },
   { id: "limite-carteira", section: "limites", title: "Não gastar a carteira do Freebuff", line: "Para o Freebuff quando a cota do dia acaba, em vez de gastar o saldo da carteira.", seal: "plataforma", keywords: "freebuff carteira wallet saldo horas cota diária" },
   { id: "padrao-maestro", section: "modelos-padrao", title: "Modelo padrão do Maestro", line: "Vale para o Maestro de cada workspace novo.", seal: "plataforma", keywords: "modelo maestro sonnet opus haiku esforço padrão" },

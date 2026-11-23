@@ -1,5 +1,5 @@
-import { AUTH_STATUS_PATH, workspaceAccess, type AuthStatus, type EngineInfo, type ModelDefaults, type Workspace } from "@cyno/shared";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AUTH_STATUS_PATH, workspaceAccess, type AuthStatus, type EngineInfo, type EngineStatus, type ModelDefaults, type Workspace } from "@cyno/shared";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { escapeReturnsToMap } from "../../cena/escape";
 import { useConnectorsStore } from "../../store/connectorsStore";
 import { useForYouTypesSheet } from "../../store/forYouTypesSheet";
@@ -15,6 +15,7 @@ import { LocalConnectorsSettings } from "./LocalConnectorsSettings";
 import { DispatchSettings } from "./DispatchSettings";
 import { PlanApprovalSettings } from "./PlanApprovalSettings";
 import { GestaoSettings } from "./GestaoSettings";
+import { EngineAccountsPanel } from "./EngineAccountsPanel";
 import { EnginesPanel } from "./EnginesPanel";
 import { EngineStorageSettings } from "./EngineStorageSettings";
 import { HistorySettings } from "./HistorySettings";
@@ -164,6 +165,9 @@ export function SettingsPage() {
   const connectors = useConnectorsStore((state) => state.list);
   const auth = useAuthStatus();
   const [engines, setEngines] = useState<EngineInfo[] | null>(null);
+  const [engineStatuses, setEngineStatuses] = useState<EngineStatus[] | null>(null);
+  const [enginesRefreshTick, setEnginesRefreshTick] = useState(0);
+  const refreshEngines = useCallback(() => setEnginesRefreshTick((tick) => tick + 1), []);
   const [defaults, setDefaults] = useState<ModelDefaults | null>(null);
   const [pauses, setPauses] = useState<number | null>(null);
   const [query, setQuery] = useState("");
@@ -404,7 +408,15 @@ export function SettingsPage() {
               <PasswordSettings />
             </SectionBlock>
             <SectionBlock id="motores" mode={mode("motores")}>
-              <EnginesPanel onLoaded={setEngines} onOpenModels={() => jump("modelos-padrao")} />
+              <EnginesPanel
+                onLoaded={setEngines}
+                onStatuses={setEngineStatuses}
+                refreshTick={enginesRefreshTick}
+                onOpenModels={() => jump("modelos-padrao")}
+              />
+            </SectionBlock>
+            <SectionBlock id="contas" mode={mode("contas")}>
+              <EngineAccountsPanel statuses={engineStatuses} onEnginesChanged={refreshEngines} />
             </SectionBlock>
             <SectionBlock id="limites" mode={mode("limites")}>
               <div className="settings__groups">

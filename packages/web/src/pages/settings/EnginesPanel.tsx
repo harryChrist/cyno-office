@@ -279,7 +279,17 @@ function PathForm({ engine, onSaved }: { engine: EngineStatus; onSaved: (engines
  * Antigravity têm Testar (um pedido mínimo), Configurar (caminho do executável; o modelo e o esforço
  * padrão são os de Modelos padrão) e Usar como padrão; Freebuff, OpenClaw e Hermes têm o passo a passo próprio (horas, conta, modelo, Verificar).
  */
-export function EnginesPanel({ onLoaded, onOpenModels }: { onLoaded?: (engines: EngineInfo[]) => void; onOpenModels?: () => void }) {
+export function EnginesPanel({
+  onLoaded,
+  onStatuses,
+  refreshTick = 0,
+  onOpenModels,
+}: {
+  onLoaded?: (engines: EngineInfo[]) => void;
+  onStatuses?: (statuses: EngineStatus[]) => void;
+  refreshTick?: number;
+  onOpenModels?: () => void;
+}) {
   const [engines, setEngines] = useState<EngineStatus[] | null>(null);
   const [defaults, setDefaults] = useState<ModelDefaults | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -294,11 +304,22 @@ export function EnginesPanel({ onLoaded, onOpenModels }: { onLoaded?: (engines: 
   const [selected, setSelected] = useState<string | null>(null);
   const autoOpened = useRef(false);
   const alive = useRef(true);
+  const onLoadedRef = useRef(onLoaded);
+  const onStatusesRef = useRef(onStatuses);
+
+  useEffect(() => {
+    onLoadedRef.current = onLoaded;
+    onStatusesRef.current = onStatuses;
+  });
+
+  useEffect(() => {
+    if (engines) onStatusesRef.current?.(engines);
+  }, [engines]);
 
   const fetchAll = useCallback((refresh: boolean) => {
     // O resumo do topo das Configurações usa a detecção antiga (EngineInfo): ela também é atualizada.
     void loadEngines(refresh).then(
-      (list) => alive.current && onLoaded?.(list),
+      (list) => alive.current && onLoadedRef.current?.(list),
       () => undefined,
     );
     api.getEngineStatus().then(
@@ -315,8 +336,6 @@ export function EnginesPanel({ onLoaded, onOpenModels }: { onLoaded?: (engines: 
         setBusy(false);
       },
     );
-    // O aviso ao resumo do topo não deve refazer a detecção.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -330,6 +349,10 @@ export function EnginesPanel({ onLoaded, onOpenModels }: { onLoaded?: (engines: 
       alive.current = false;
     };
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (refreshTick > 0) fetchAll(true);
+  }, [refreshTick, fetchAll]);
 
   useEffect(() => {
     if (autoOpened.current || engines === null || defaults === null) return;

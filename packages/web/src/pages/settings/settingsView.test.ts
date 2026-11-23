@@ -88,8 +88,8 @@ describe("seção das Configurações no endereço", () => {
 });
 
 describe("áreas das Configurações", () => {
-  it("Da plataforma: acesso, motores, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
-    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "limites", "modelos-padrao", "cyno-ajustes", "avisos", "versao", "historico", "armazenamento", "conectores-locais", "escritorio", "atalhos"]);
+  it("Da plataforma: acesso, motores, contas, modelos padrão, histórico, aparência; Do workspace: o resto", () => {
+    expect(settingsSectionsOf("plataforma").map((section) => section.id)).toEqual(["senha", "motores", "contas", "limites", "modelos-padrao", "cyno-ajustes", "avisos", "versao", "historico", "armazenamento", "conectores-locais", "escritorio", "atalhos"]);
     expect(settingsSectionsOf("workspace").map((section) => section.id)).toEqual(["modelos", "distribuicao", "acesso", "seguranca", "pastas", "relatorios", "aprovacoes", "conectores"]);
     // As áreas vêm em ordem na página (toda a plataforma antes do workspace).
     expect(SETTINGS_SECTIONS.map((section) => section.id)).toEqual([...settingsSectionsOf("plataforma"), ...settingsSectionsOf("workspace")].map((section) => section.id));
@@ -136,7 +136,8 @@ describe("busca por nome da opção", () => {
   it("acha pelo apelido (paralelo, gemini, localhost) e diz de que seção veio", () => {
     expect(searchSettings("paralelo").map((option) => option.id)).toEqual(["ws-paralelo"]);
     expect(searchSettings("localhost").map((option) => option.id)).toContain("ws-rede-local");
-    expect(sectionsWithMatches(searchSettings("gemini"))).toEqual(new Set(["motores", "modelos-padrao", "modelos"]));
+    expect(sectionsWithMatches(searchSettings("gemini"))).toEqual(new Set(["motores", "contas", "modelos-padrao", "modelos"]));
+    expect(searchSettings("contas").map((option) => option.section)).toContain("contas");
     for (const term of ["aprovação", "aprovar", "plano", "autonomia"]) {
       expect(searchSettings(term).map((option) => option.id)).toContain("ws-aprovacao-planos");
     }
@@ -160,6 +161,8 @@ describe("endereços das seções novas e antigas", () => {
     expect(settingsSectionFromHash("#/ws1/configuracoes/dominios")).toBe("seguranca");
     expect(settingsSectionFromHash("#/ws1/configuracoes/aparencia")).toBe("escritorio");
     expect(settingsSectionFromHash("#/ws1/configuracoes/armazenamento")).toBe("armazenamento");
+    expect(settingsSectionFromHash("#/ws1/configuracoes/contas")).toBe("contas");
+    expect(settingsSectionFromHash("#/ws1/configuracoes/conta")).toBe("contas");
     for (const alias of ["disco", "cache", "espaco"]) expect(settingsSectionFromHash(`#/ws1/configuracoes/${alias}`)).toBe("armazenamento");
     for (const alias of ["plano", "planos", "aprovar", "autonomia", "aprovacao-planos", "plan-approval"]) {
       expect(settingsSectionFromHash(`#/ws1/configuracoes/${alias}`)).toBe("distribuicao");
