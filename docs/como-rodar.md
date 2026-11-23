@@ -46,6 +46,8 @@ O Cyno roda em Linux (e em macOS). No Windows há dois caminhos:
 - **Docker Desktop (recomendado):** `npm run docker:up` (ou `docker compose up -d --build`) e abra `http://localhost:3067`. Veja "Com Docker" abaixo.
 - **WSL2 com Ubuntu:** instale o Ubuntu (`wsl --install -d Ubuntu`), clone o projeto **dentro** do Ubuntu e rode os comandos desta página no terminal dele.
 
+Um aplicativo instalável para Windows (sem Docker, com ícone na bandeja) está em proposta: veja `docs/empacotamento-windows.md`.
+
 O `npm run dev`, o `npm start` e o pm2 **direto no Windows** (PowerShell ou CMD) não funcionam: o server abre terminais e CLIs de Linux para os agentes. O `npm run pm2:start` recusa o Windows com um aviso. Se uma versão anterior deixou o pm2 abrindo e fechando uma janela sem parar (erro `execvpe(/bin/bash) failed` do WSL), pare com `npx pm2 delete maestri-server maestri-web`.
 
 ## Com pm2
@@ -71,9 +73,11 @@ docker compose up -d --build     # http://localhost:3067
 docker compose logs -f cyno
 docker compose ps                # STATUS "healthy" (HEALTHCHECK em /api/health do server)
 ```
-Sem Compose: `docker build -t cyno . && docker run -d --name cyno -p 3067:3067 -v cyno-data:/data -v cyno-home:/home/node cyno`.
+Sem Compose: `docker build -t cyno . && docker run -d --name cyno -p 3067:3067 -e PUID=$(id -u) -e PGID=$(id -g) -v /onde/quiser/data:/data -v /onde/quiser/home:/home/node cyno`.
 
-- **Dados:** com o Compose, a pasta `./data` do projeto é o `DATA_DIR=/data` (workspaces, projetos, `auth.json`) e `./data-home` é o `/home/node`; as duas ficam fora do git e da imagem. Reiniciar ou recriar o contêiner mantém tudo. Backup: copie as duas pastas com o contêiner parado. `./data` também é a pasta padrão do app rodando fora do Docker (`npm run dev`): não rode os dois ao mesmo tempo sobre ela.
+- **Dados (você escolhe onde):** tudo o que é seu fica FORA da imagem, em pastas do seu computador. No `.env` ao lado do `docker-compose.yml`: `CYNO_DATA_DIR` (padrão `./data`) vira o `DATA_DIR=/data` do contêiner (workspaces, projetos, `auth.json`, contas dos motores e os motores que o app instala) e `CYNO_HOME_DIR` (padrão `./data-home`) vira o `/home/node` (login da conta padrão do Claude e do Antigravity). Ex.: `CYNO_DATA_DIR=/mnt/disco/cyno/data`. Reiniciar, recriar ou atualizar o contêiner mantém tudo. Backup: copie as duas pastas com o contêiner parado. `./data` também é a pasta padrão do app rodando fora do Docker (`npm run dev`): não rode os dois ao mesmo tempo sobre ela.
+- **Dono das pastas (`PUID`/`PGID`):** o app nunca roda como root. O contêiner sobe, acerta o dono das pastas de dados (uma vez) e vira o usuário `PUID:PGID` do `.env` (padrão 1000:1000; rode `id -u` e `id -g` e ponha os seus). Assim a pasta que o Docker cria sozinho (como root) também funciona, e os arquivos ficam seus no computador.
+- **Mais volumes (seus projetos, vault, backups):** copie `docker-compose.override.example.yml` para `docker-compose.override.yml` (o Compose lê sozinho; fica fora do git) e ajuste os caminhos do lado esquerdo, por exemplo `/home/voce/projetos:/projects`. No app, adicione `/projects/meu-site` em Configurações > Pastas de trabalho. O dono dessas pastas é o seu: o Cyno não troca.
 - **Configuração:** um `.env` na raiz (opcional; veja `.env.example`) é lido pelo Compose. Domínio de túnel ou proxy reverso: `WEB_ALLOWED_HOSTS=app.exemplo.com`. Para trocar a porta, mude `WEB_PORT` no `.env` (o Compose publica a mesma porta).
 - **Senha:** no primeiro acesso, veja o código de configuração com `docker compose exec cyno npm run auth:code` (ele também aparece em `docker compose logs cyno`); abra `http://localhost:3067` e crie a senha pela tela. Alternativas: `docker compose exec cyno npm run auth:set-password -w @cyno/server` (sem eco; precisa de terminal), `... auth:clear ...` para voltar ao primeiro acesso e `... auth:reset-2fa ...` para desligar o 2FA. O server relê o arquivo sozinho. O app nunca fica aberto sem senha; `CYNO_AUTH=off` não é para o contêiner.
 - **Login das CLIs:** nada do seu `~/.claude` do host é montado. Entre uma vez no contêiner: `docker compose exec cyno claude` (siga o login da sua assinatura e saia). O login fica em `./data-home` (`/home/node`), então sobrevive a reinícios e atualizações. Confira com `docker compose exec cyno claude auth status`.

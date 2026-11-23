@@ -4,6 +4,8 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/).
 
 ## [Não lançado]
 
+- Docker: dados e home das CLIs em pastas escolhidas por você (`CYNO_DATA_DIR`, `CYNO_HOME_DIR` no `.env` ao lado do compose), dono das pastas acertado sozinho (`PUID`/`PGID`, o app nunca roda como root), volumes extras por `docker-compose.override.yml` (modelo incluído), `curl` na imagem para os instaladores do app. Proposta do aplicativo para Windows em `docs/empacotamento-windows.md`.
+
 ### Adicionado
 - **Painel "Contas" e mini terminal de login pelo navegador (Claude Code e Antigravity):** em **Configurações > Motores**, a nova seção **Contas** lista a **Conta padrão** e as contas extras de cada motor com o estado **Conectada** / **Precisa entrar**, permite criar, renomear e apagar contas extras (com confirmação clara), instalar Claude Code ou Antigravity quando ausentes (plano em pt-BR, confirmação `confirm: true` e log do job com polling) e abrir o mini terminal de login (`LoginTerminal`) para entrar ou reconectar com **Copiar link**, **Colar código** e dica de janela anônima.
 - **Instalação privada e login de contas de motor pelo servidor (Claude Code e Antigravity):** receitas opcionais de cópia privada (`claudeRecipe` via `npm install --prefix`, `agyRecipe` com `HOME` isolado e `--skip-path --skip-aliases`), resolução única de binário preferindo a cópia privada quando existir, estado `loggedIn` com cache curto e item sintético `padrao` em `GET /api/engines/accounts`, e WebSocket global `GET /api/engines/accounts/:id/login` com PTY avulso de login (uma sessão por vez, timeouts, detecção automática de login e bloqueio sem senha).

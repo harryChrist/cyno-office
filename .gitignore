@@ -42,3 +42,6 @@ vault/
 # Ferramentas de bastidor do desenvolvimento (scripts de conferência e agentes de IA de apoio)
 qa/
 .claude/
+
+# Volumes extras do Docker de cada pessoa (modelo: docker-compose.override.example.yml)
+docker-compose.override.yml

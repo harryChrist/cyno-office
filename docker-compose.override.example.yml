@@ -1,0 +1,12 @@
+# Volumes extras do Cyno. Copie para `docker-compose.override.yml` (o Compose lê sozinho, ao lado do
+# docker-compose.yml) e ajuste os caminhos do LADO ESQUERDO (o seu computador); o lado direito é como o
+# contêiner enxerga. No app, adicione /projects/meu-site em Configurações > Pastas de trabalho.
+#
+# O dono dessas pastas é o seu: o Cyno não troca o dono delas. O app roda com o PUID/PGID do seu .env,
+# então use o mesmo usuário que é dono dos projetos no computador (`id -u`, `id -g`).
+services:
+  cyno:
+    volumes:
+      - /home/voce/projetos:/projects                # seus projetos (leitura e escrita)
+      # - /home/voce/obsidian:/vault:ro              # exemplo só leitura
+      # - /mnt/disco-grande/cyno-backups:/backups    # qualquer outra pasta

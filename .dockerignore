@@ -33,3 +33,4 @@ compose.yaml
 packages/site/public
 packages/site/src
 packages/site/index.html
+docker-compose.override*.yml

@@ -1,4 +1,11 @@
-# docker compose up -d --build   ->   http://localhost:3067
+# Cyno em Docker.   docker compose up -d --build   ->   http://localhost:3067
+#
+# Onde ficam as coisas (tudo FORA da imagem, em pastas que VOCÊ escolhe pelo .env, ao lado deste arquivo):
+#   CYNO_DATA_DIR   os dados do Cyno (workspaces, projetos, senha, contas dos motores)   padrão ./data
+#   CYNO_HOME_DIR   o home das CLIs (login da conta padrão de Claude/Antigravity)        padrão ./data-home
+#   PUID / PGID     o dono dessas pastas no seu computador (rode `id -u` e `id -g`)       padrão 1000 / 1000
+# Pastas dos seus projetos (usadas como "Pastas de trabalho" dos agentes) e outros volumes:
+#   copie docker-compose.override.example.yml para docker-compose.override.yml e ajuste.
 services:
   cyno:
     build: .
@@ -13,7 +20,8 @@ services:
         required: false
     environment:
       DATA_DIR: /data
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
     volumes:
-      # pastas do próprio projeto (ambas fora do git e da imagem: .gitignore e .dockerignore)
-      - ./data:/data              # workspaces, projetos, senha (auth.json)
-      - ./data-home:/home/node    # logins das CLIs (~/.claude, ~/.claude.json, ~/.codex...)
+      - ${CYNO_DATA_DIR:-./data}:/data              # workspaces, projetos, senha (auth.json), contas e motores do app
+      - ${CYNO_HOME_DIR:-./data-home}:/home/node    # logins das CLIs (~/.claude, ~/.gemini, ~/.codex...)
