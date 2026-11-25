@@ -45,6 +45,7 @@ export * from "./scripts";
 export * from "./ws-liveness";
 export * from "./access";
 export * from "./folders";
+export * from "./fs-browse";
 export * from "./storage";
 export * from "./activity";
 export * from "./usage-history";

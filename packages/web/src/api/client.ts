@@ -134,6 +134,7 @@ import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_
 import { boardDataPath, boardExportPath, boardPagePath, boardPath, boardSharePath, boardShareRotatePath, boardsPath, type Board, type BoardShare, type SetBoardShareBody, type UpdateBoardBody } from "@cyno/shared";
 import { fileCountPath, fileCreatePath, fileDeletePath, fileListPath, fileRawPath, fileReadPath, fileRenamePath, fileRootsPath, fileSearchPath, fileUploadPath, fileWritePath } from "@cyno/shared";
 import type { FileCountResponse, FileCreateBody, FileCreateResponse, FileDeleteBody, FileDeleteResponse, FileListResponse, FileReadResponse, FileRenameBody, FileRenameResponse, FileRootsResponse, FileSearchResponse, FileWriteBody, FileWriteResponse } from "@cyno/shared";
+import { fsBrowsePath, type FsBrowseResponse } from "@cyno/shared";
 import { scriptDownloadPath, scriptOutputPath, scriptPath, scriptsPath, scriptStopPath } from "@cyno/shared";
 import { agentRulesPath, brainOrganizePath, brainRulesPath, type AgentRulesResponse, type BrainOrganizeResponse } from "@cyno/shared";
 import { useAuthStore } from "../auth/authStore";
@@ -333,6 +334,8 @@ export const api = {
   addWorkFolder: (id: string, body: AddWorkFolderBody) => requestJson<Workspace>(workFoldersPath(id), { method: "POST", body }),
   updateWorkFolder: (id: string, folderId: string, body: UpdateWorkFolderBody) => requestJson<Workspace>(workFolderPath(id, folderId), { method: "PATCH", body }),
   removeWorkFolder: (id: string, folderId: string) => requestJson<Workspace>(workFolderPath(id, folderId), { method: "DELETE" }),
+  /** Navega pelas pastas do servidor (seletor de pastas no app; lista só diretórios). */
+  browseFolders: (dirPath?: string, hidden = false) => requestJson<FsBrowseResponse>(fsBrowsePath(dirPath, hidden)),
 
   /** Modelos padrão globais (preenchem os padrões de cada workspace novo). */
   getModelDefaults: () => requestJson<ModelDefaultsResponse>(MODEL_DEFAULTS_PATH),

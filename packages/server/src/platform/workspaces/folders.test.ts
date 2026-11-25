@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { WorkFolder } from "@cyno/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { checkWorkFolderPath, FOLDER_ERRORS, isInside, newFolderId } from "./folders";
+import { checkWorkFolderPath, FOLDER_ERRORS, isInside, newFolderId, relativePathError } from "./folders";
 
 describe("validação do caminho de uma pasta de trabalho", () => {
   let root: string;
@@ -37,6 +37,15 @@ describe("validação do caminho de uma pasta de trabalho", () => {
     await refused("projeto", FOLDER_ERRORS.relative);
     await refused("~/projeto", FOLDER_ERRORS.relative);
     await refused("   ", FOLDER_ERRORS.relative);
+  });
+
+  it("adapta a mensagem de caminho relativo no Windows mantendo o texto atual no Linux", async () => {
+    expect(relativePathError("linux")).toBe(FOLDER_ERRORS.relative);
+    expect(relativePathError("win32")).toBe("Use o caminho completo da pasta (ex.: C:\\Users\\voce\\projeto).");
+    await expect(checkWorkFolderPath("projeto", { dataDir, existing: [], platform: "win32" })).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Use o caminho completo da pasta (ex.: C:\\Users\\voce\\projeto).",
+    });
   });
 
   it("recusa o que não existe e arquivo", async () => {

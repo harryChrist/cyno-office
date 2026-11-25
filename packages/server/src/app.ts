@@ -34,6 +34,7 @@ import { updateConfigFromEnv } from "./platform/version/checker";
 import { REPO_ROOT } from "./config";
 import { registerWorkspaceScopedRoutes } from "./routes/scope";
 import { registerWorkspaceRoutes } from "./routes/workspaces";
+import { registerFsBrowseRoutes } from "./routes/fs-browse";
 import { registerWsRoute } from "./routes/ws";
 import { registerSceneLiveRoute } from "./routes/scene-live";
 import { sceneLiveEnabled } from "./workspace/scene-live/service";
@@ -729,6 +730,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     return reply.code(204).send();
   });
   registerWorkspaceRoutes(app, manager);
+  registerFsBrowseRoutes(app);
   // Links públicos dos Quadros: a rota pública fica fora de /api/w/:ws e só ela é aberta no portão da senha.
   app.decorate("boardShares", await BoardShareStore.open(path.join(deps.dataDir, "board-shares.json"), now));
   registerPublicBoardRoute(app, manager, () => app.boardShares, { now: () => now().getTime() });

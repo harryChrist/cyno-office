@@ -3,11 +3,18 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { WorkFolder } from "@cyno/shared";
 import { HttpError } from "../http/errors";
-import { isPathInside, samePath } from "../os";
+import { isPathInside, isWindows, samePath } from "../os";
+
+/** Mensagem para caminho relativo conforme a plataforma (Windows usa letra de unidade; Linux começa por `/`). */
+export function relativePathError(platform: NodeJS.Platform = process.platform): string {
+  return isWindows(platform)
+    ? "Use o caminho completo da pasta (ex.: C:\\Users\\voce\\projeto)."
+    : "Use o caminho completo da pasta, começando por / (ex.: /home/voce/projeto). O til (~) e caminhos relativos não valem.";
+}
 
 /** Mensagens de erro (pt-BR) de uma pasta de trabalho recusada. */
 export const FOLDER_ERRORS = {
-  relative: "Use o caminho completo da pasta, começando por / (ex.: /home/voce/projeto). O til (~) e caminhos relativos não valem.",
+  relative: relativePathError(),
   missing: "Essa pasta não existe neste computador. Confira o caminho.",
   denied: "O Cyno não consegue abrir essa pasta (sem permissão). Confira o caminho e as permissões dela.",
   notDirectory: "Esse caminho é um arquivo, não uma pasta.",
@@ -31,9 +38,15 @@ export function isInside(inner: string, outer: string, platform?: NodeJS.Platfor
  * links nem `..`): absoluto, existe, é uma pasta, não é `/`, não é nem contém nem fica dentro do
  * DATA_DIR do Cyno e ainda não está cadastrado neste workspace. Erro = HttpError 400 em português.
  */
-export async function checkWorkFolderPath(input: string, options: { dataDir: string; existing: readonly WorkFolder[] }): Promise<string> {
+export async function checkWorkFolderPath(
+  input: string,
+  options: { dataDir: string; existing: readonly WorkFolder[]; platform?: NodeJS.Platform },
+): Promise<string> {
+  const platform = options.platform ?? process.platform;
+  const pathApi = isWindows(platform) ? path.win32 : path.posix;
   const typed = input.trim();
-  if (!path.isAbsolute(typed)) throw new HttpError(400, FOLDER_ERRORS.relative);
+  const absolute = isWindows(platform) ? /^[A-Za-z]:[\\/]|^\\\\[^\\]+\\[^\\]+/.test(typed) : pathApi.isAbsolute(typed);
+  if (!absolute) throw new HttpError(400, relativePathError(platform));
   let real: string;
   try {
     real = await realpath(typed);

@@ -1,6 +1,9 @@
 import { WORK_FOLDER_LIMITS, type StorageFolder, type Workspace, type WorkFolder, type WorkFolderMode } from "@cyno/shared";
 import { useId, useState } from "react";
 import { api } from "../../api/client";
+import { isDesktopApp, pickFolder } from "../../desktop/desktopBridge";
+import { FolderPicker } from "../../ui/FolderPicker";
+import { resolveFolderPick, suggestedFolderName } from "../../ui/folderPicker";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
 import { StorageCard } from "./StorageCard";
@@ -160,65 +163,85 @@ function FolderRow({ workspaceId, folder, size, onRefreshSize }: { workspaceId: 
   );
 }
 
-/** Formulário de cadastro (recolhido atrás de "Adicionar pasta"): o caminho é digitado; o servidor confere e o erro aparece aqui, no lugar. */
+/** Formulário de cadastro (recolhido atrás de "Adicionar pasta"): permite escolher no disco ou digitar o caminho; o servidor confere e o erro aparece aqui. */
 function AddFolderForm({ id, workspaceId, onDone, onCancel }: { id: string; workspaceId: string; onDone: () => void; onCancel: () => void }) {
   const { pending, error, run, clearError } = useAsyncAction();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [purpose, setPurpose] = useState("");
   const [mode, setMode] = useState<WorkFolderMode>("read");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const applyPickedFolder = (pickedPath: string) => {
+    clearError();
+    setPath(pickedPath);
+    setName((current) => (current.trim() ? current : suggestedFolderName(pickedPath)));
+    setPickerOpen(false);
+  };
+  const chooseFolder = async () => {
+    const decision = await resolveFolderPick({ desktop: isDesktopApp(), pickNative: pickFolder });
+    if (decision.kind === "picked") applyPickedFolder(decision.path);
+    else if (decision.kind === "open-modal") setPickerOpen(true);
+  };
   const add = async () => {
     const result = await run(() => api.addWorkFolder(workspaceId, { name, path, ...(purpose.trim() ? { purpose } : {}), mode }));
     if (result) onDone();
   };
   return (
-    <form
-      id={id}
-      className="folder-add"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void add();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation();
-          onCancel();
-        }
-      }}
-      data-testid="settings-folder-add"
-    >
-      <div className="folder-add__grid">
-        <div className="folder-row__field">
-          <label htmlFor={`${id}-name`} className="folder-row__label">
-            Nome
-          </label>
-          <input id={`${id}-name`} className="ui-input" value={name} maxLength={WORK_FOLDER_LIMITS.name} placeholder="Ex.: Projeto do app" autoFocus onChange={(event) => (clearError(), setName(event.currentTarget.value))} data-testid="settings-folder-add-name" />
+    <>
+      <form
+        id={id}
+        className="folder-add"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void add();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            onCancel();
+          }
+        }}
+        data-testid="settings-folder-add"
+      >
+        <div className="folder-add__grid">
+          <div className="folder-row__field">
+            <label htmlFor={`${id}-name`} className="folder-row__label">
+              Nome
+            </label>
+            <input id={`${id}-name`} className="ui-input" value={name} maxLength={WORK_FOLDER_LIMITS.name} placeholder="Ex.: Projeto do app" autoFocus onChange={(event) => (clearError(), setName(event.currentTarget.value))} data-testid="settings-folder-add-name" />
+          </div>
+          <div className="folder-row__field">
+            <label htmlFor={`${id}-path`} className="folder-row__label">
+              Caminho completo
+            </label>
+            <div className="folder-add__path-row">
+              <input id={`${id}-path`} className="ui-input folder-add__path" value={path} maxLength={WORK_FOLDER_LIMITS.path} placeholder="/home/voce/projetos/meu-app" spellCheck={false} autoCapitalize="off" autoCorrect="off" onChange={(event) => (clearError(), setPath(event.currentTarget.value))} data-testid="settings-folder-add-path" />
+              <button type="button" className="ui-button ui-button--secondary ui-button--small folder-add__browse" disabled={pending} onClick={() => void chooseFolder()} data-testid="settings-folder-browse">
+                Escolher pasta…
+              </button>
+            </div>
+          </div>
         </div>
         <div className="folder-row__field">
-          <label htmlFor={`${id}-path`} className="folder-row__label">
-            Caminho completo
+          <label htmlFor={`${id}-purpose`} className="folder-row__label">
+            Para que serve (opcional)
           </label>
-          <input id={`${id}-path`} className="ui-input folder-add__path" value={path} maxLength={WORK_FOLDER_LIMITS.path} placeholder="/home/voce/projetos/meu-app" spellCheck={false} autoCapitalize="off" autoCorrect="off" onChange={(event) => (clearError(), setPath(event.currentTarget.value))} data-testid="settings-folder-add-path" />
+          <input id={`${id}-purpose`} className="ui-input" value={purpose} maxLength={WORK_FOLDER_LIMITS.purpose} placeholder="Ex.: código do app; minhas notas, consultar antes de responder" onChange={(event) => setPurpose(event.currentTarget.value)} data-testid="settings-folder-add-purpose" />
         </div>
-      </div>
-      <div className="folder-row__field">
-        <label htmlFor={`${id}-purpose`} className="folder-row__label">
-          Para que serve (opcional)
-        </label>
-        <input id={`${id}-purpose`} className="ui-input" value={purpose} maxLength={WORK_FOLDER_LIMITS.purpose} placeholder="Ex.: código do app; minhas notas, consultar antes de responder" onChange={(event) => setPurpose(event.currentTarget.value)} data-testid="settings-folder-add-purpose" />
-      </div>
-      <div className="folder-add__actions">
-        <FolderModePicker value={mode} label="Modo da nova pasta" onChange={setMode} testId="settings-folder-add-mode" />
-        <div className="folder-add__buttons">
-          <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onCancel} data-testid="settings-folder-add-cancel">
-            Cancelar
-          </button>
-          <button type="submit" className="ui-button ui-button--small" disabled={pending || !name.trim() || !path.trim()} aria-busy={pending} data-testid="settings-folder-add-submit">
-            {pending ? "Conferindo…" : "Adicionar pasta"}
-          </button>
+        <div className="folder-add__actions">
+          <FolderModePicker value={mode} label="Modo da nova pasta" onChange={setMode} testId="settings-folder-add-mode" />
+          <div className="folder-add__buttons">
+            <button type="button" className="ui-button ui-button--ghost ui-button--small" onClick={onCancel} data-testid="settings-folder-add-cancel">
+              Cancelar
+            </button>
+            <button type="submit" className="ui-button ui-button--small" disabled={pending || !name.trim() || !path.trim()} aria-busy={pending} data-testid="settings-folder-add-submit">
+              {pending ? "Conferindo…" : "Adicionar pasta"}
+            </button>
+          </div>
         </div>
-      </div>
-      <ErrorText testId="settings-folder-add-error">{error}</ErrorText>
-    </form>
+        <ErrorText testId="settings-folder-add-error">{error}</ErrorText>
+      </form>
+      {pickerOpen && <FolderPicker initialPath={path.trim() || undefined} onSelect={applyPickedFolder} onClose={() => setPickerOpen(false)} />}
+    </>
   );
 }

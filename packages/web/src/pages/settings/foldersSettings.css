@@ -341,9 +341,23 @@
   gap: 10px;
 }
 
+.folder-add__path-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
 .folder-add__path {
+  flex: 1 1 0;
+  min-width: 0;
   font-family: var(--ui-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
   font-size: 13px;
+}
+
+.folder-add__browse {
+  flex: 0 0 auto;
+  min-height: 36px;
 }
 
 .folder-add__actions {
@@ -481,6 +495,14 @@
 
   .folder-add__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folder-add__path-row {
+    flex-wrap: wrap;
+  }
+
+  .folder-add__path {
+    flex: 1 1 180px;
   }
 
   .folder-add .folder-mode {
