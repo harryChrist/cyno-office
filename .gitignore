@@ -45,3 +45,11 @@ qa/
 
 # Volumes extras do Docker de cada pessoa (modelo: docker-compose.override.example.yml)
 docker-compose.override.yml
+
+# Artefatos locais da casca desktop (Tauri / Rust)
+packages/desktop/src-tauri/target/
+packages/desktop/src-tauri/gen/
+packages/desktop/src-tauri/binaries/*.exe
+packages/desktop/src-tauri/resources/server/*
+!packages/desktop/src-tauri/resources/server/README.md
+

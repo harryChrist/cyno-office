@@ -1,0 +1,114 @@
+# Build e empacotamento da casca desktop Windows (Tauri 2) do Cyno Office.
+#
+# ATENÇÃO — SEGREDOS OBRIGATÓRIOS PARA ASSINAR O ATUALIZADOR:
+# Antes de rodar este workflow para gerar uma release utilizável pelo atualizador:
+#   1. Gere um par de chaves no Windows/Linux com:
+#        cd packages/desktop && npx tauri signer generate -w cyno-office.key
+#   2. Cole a chave PÚBLICA em `packages/desktop/src-tauri/tauri.conf.json`
+#      no campo `plugins.updater.pubkey` (substituindo `REPLACE_WITH_PUBLIC_KEY`).
+#   3. Crie os segredos no repositório (Settings -> Secrets and variables -> Actions):
+#        - TAURI_SIGNING_PRIVATE_KEY          (conteúdo do arquivo .key gerado)
+#        - TAURI_SIGNING_PRIVATE_KEY_PASSWORD (senha definida ao gerar a chave)
+#
+# Nada é publicado automaticamente: o workflow só roda por disparo manual
+# (`workflow_dispatch`) ou ao criar uma tag `desktop-v*`, e sempre gera uma
+# Release em RASCUNHO (`releaseDraft: true`). Publicar é decisão do dono.
+# Sem o segredo `TAURI_SIGNING_PRIVATE_KEY`, o passo de assinatura falha e
+# nenhum artefato é publicado.
+
+name: Desktop Windows (Tauri)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+permissions:
+  contents: write
+
+env:
+  NODE_SIDECAR_VERSION: "22.15.0"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar segredo de assinatura do atualizador
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            Write-Error "Segredo TAURI_SIGNING_PRIVATE_KEY ausente. Crie o segredo no GitHub antes de gerar a release (veja packages/desktop/README.md)."
+            exit 1
+          }
+
+      - name: Instalar Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar Rust estável
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache do Cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./packages/desktop/src-tauri -> target"
+
+      - name: Instalar dependências do monorepo e compilar web e pacotes
+        shell: pwsh
+        run: |
+          npm ci
+          npm run build
+
+      - name: Instalar CLI do Tauri em packages/desktop
+        shell: pwsh
+        working-directory: packages/desktop
+        run: npm install --no-audit --no-fund
+
+      - name: Baixar binário do Node.js Windows x64 (sidecar)
+        shell: pwsh
+        run: |
+          $dest = "packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"
+          $url = "https://nodejs.org/dist/v$($env:NODE_SIDECAR_VERSION)/win-x64/node.exe"
+          New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile $dest
+          if (-not (Test-Path $dest) -or (Get-Item $dest).Length -eq 0) {
+            Write-Error "Falha ao baixar sidecar do Node de $url"
+            exit 1
+          }
+
+      - name: Preparar recursos do servidor em resources/server/
+        shell: pwsh
+        run: |
+          $stage = "packages/desktop/src-tauri/resources/server"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item -Recurse -Force packages/web/dist "$stage/web-dist"
+          Copy-Item -Recurse -Force packages/server/src "$stage/server-src"
+          Copy-Item -Force packages/server/package.json "$stage/package.json"
+
+      - name: Compilar instaladores NSIS/MSI e gerar rascunho com latest.json
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: packages/desktop
+          tagName: desktop-v__VERSION__
+          releaseName: "Cyno Office v__VERSION__"
+          releaseBody: "Rascunho automático da casca desktop Windows (NSIS + MSI + latest.json). Revise e teste em uma máquina Windows limpa antes de publicar."
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          args: --target x86_64-pc-windows-msvc
