@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissões da janela principal do Cyno Office carregando o servidor local.",
+  "windows": ["main"],
+  "remote": {
+    "urls": [
+      "http://localhost:3067/*",
+      "http://127.0.0.1:3067/*"
+    ]
+  },
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "notification:default",
+    "autostart:default",
+    "updater:default"
+  ]
+}

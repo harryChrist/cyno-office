@@ -1,15 +1,18 @@
 import type { AttentionAlert } from "@cyno/shared";
+import { isDesktopApp, notify as desktopNotify } from "../desktop/desktopBridge";
 
-/** A permissão de notificação do navegador, com "sem suporte" no lugar de uma exceção. */
+/** A permissão de notificação (nativa no desktop ou do navegador), com "sem suporte" no lugar de uma exceção. */
 export type NotificationPermissionState = "unsupported" | "default" | "granted" | "denied";
 
 export function notificationPermission(): NotificationPermissionState {
+  if (isDesktopApp()) return "granted";
   if (typeof Notification === "undefined") return "unsupported";
   return Notification.permission;
 }
 
 /** Pede a permissão (chamar de dentro de um clique). Devolve o estado final. */
 export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
+  if (isDesktopApp()) return "granted";
   const state = notificationPermission();
   if (state !== "default") return state;
   try {
@@ -40,12 +43,16 @@ export async function ensureNotificationWorker(): Promise<ServiceWorkerRegistrat
 }
 
 /**
- * Mostra a notificação. Com service worker usa `registration.showNotification` (único jeito no
- * Android); sem ele, o construtor. O clique traz a aba e leva ao item (`onOpen`). Devolve se mostrou.
+ * Mostra a notificação. No aplicativo desktop usa a ponte nativa (`desktopBridge`); no navegador,
+ * com service worker usa `registration.showNotification` (único jeito no Android) e sem ele delega
+ * para a ponte (construtor `Notification`). O clique traz a aba e leva ao item (`onOpen`).
  */
 export async function showAttentionNotification(alert: AttentionAlert, onOpen: (alert: AttentionAlert) => void): Promise<boolean> {
   if (notificationPermission() !== "granted") return false;
   const { title, body, tag } = notificationContent(alert);
+  if (isDesktopApp()) {
+    return desktopNotify({ title, body, tag, onClickRoute: `/?alert=${encodeURIComponent(alert.key)}` });
+  }
   const options: NotificationOptions = { body, tag, icon: "/icon-192.png", badge: "/icon-192.png", data: { key: alert.key } };
   try {
     const registration = await ensureNotificationWorker();
@@ -54,19 +61,17 @@ export async function showAttentionNotification(alert: AttentionAlert, onOpen: (
       return true;
     }
   } catch {
-    // Cai para o construtor.
+    // Cai para o construtor via ponte.
   }
-  try {
-    const notification = new Notification(title, options);
-    notification.onclick = () => {
-      window.focus();
-      onOpen(alert);
-      notification.close();
-    };
-    return true;
-  } catch {
-    return false;
-  }
+  return desktopNotify({
+    title,
+    body,
+    tag,
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    data: { key: alert.key },
+    onClick: () => onOpen(alert),
+  });
 }
 
 /** O clique numa notificação feita pelo service worker avisa a página por mensagem. */
