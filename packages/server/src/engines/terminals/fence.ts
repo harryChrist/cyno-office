@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isWindows } from "../../platform/os";
 
 /**
  * A CERCA DE ARQUIVOS (Landlock). Os agentes de OpenClaw e Hermes rodam como o mesmo usuário Unix do servidor, e o Hermes não tem opção para prender as
@@ -68,20 +69,23 @@ export function interpretCheck(output: string, status: number | null, python: st
 let cached: FenceSupport | undefined;
 
 /** Pergunta ao lançador (uma vez por processo; o resultado não muda sem reiniciar o servidor). `CYNO_FENCE=off` força "sem cerca" (testes e quem quiser desligar de vez). */
-export function detectFence(options: { refresh?: boolean } = {}): FenceSupport {
-  if (cached && !options.refresh) return cached;
-  cached = probeFence();
-  return cached;
+export function detectFence(options: { refresh?: boolean; platform?: NodeJS.Platform } = {}): FenceSupport {
+  if (cached && !options.refresh && options.platform === undefined) return cached;
+  const result = probeFence(options.platform);
+  if (options.platform === undefined) cached = result;
+  return result;
 }
 
-function probeFence(): FenceSupport {
+function probeFence(platform: NodeJS.Platform = process.platform): FenceSupport {
+  if (isWindows(platform)) return UNAVAILABLE("Não existe no Windows: a cerca de arquivos usa o Landlock, recurso exclusivo do Linux.");
   if (process.env.CYNO_FENCE === "off") return UNAVAILABLE("A cerca foi desligada neste computador (CYNO_FENCE=off).");
-  return probeLandlock();
+  return probeLandlock(platform);
 }
 
 /** Pergunta de verdade ao kernel (pelo lançador), sem olhar `CYNO_FENCE`: os testes com os programas de verdade usam esta. */
-export function probeLandlock(): FenceSupport {
-  if (process.platform !== "linux") return UNAVAILABLE("A cerca de arquivos usa o Landlock, que só existe no Linux.");
+export function probeLandlock(platform: NodeJS.Platform = process.platform): FenceSupport {
+  if (isWindows(platform)) return UNAVAILABLE("Não existe no Windows: a cerca de arquivos usa o Landlock, recurso exclusivo do Linux.");
+  if (platform !== "linux") return UNAVAILABLE("A cerca de arquivos usa o Landlock, que só existe no Linux.");
   const python = findPython();
   if (!python) return UNAVAILABLE(`Falta o python3 (${FENCE_MIN_PYTHON} ou mais novo), que monta a cerca.`);
   const run = spawnSync(python, [FENCE_LAUNCHER, "--check"], { encoding: "utf8", timeout: 10_000 });

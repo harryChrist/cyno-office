@@ -283,6 +283,12 @@ describe("Cyno: run_host_command", () => {
       { command: "bash", args: ["-c", "echo oi && sudo ls"] },
       { command: "env", args: ["FOO=1", "sudo", "ls"] },
       { command: "su", args: ["-"] },
+      { command: "powershell", args: ["-Command", "sudo ls"] },
+      { command: "pwsh", args: ["-c", "sudo id"] },
+      { command: "cmd", args: ["/c", "sudo whoami"] },
+      { command: "wsl", args: ["sudo", "apt", "update"] },
+      { command: "bash.exe", args: ["-c", "sudo ls"] },
+      { command: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", args: ["-Command", "sudo ls"] },
     ]) {
       const result = await t.call("run_host_command", args);
       expect(result.isError).toBe(true);
@@ -292,6 +298,12 @@ describe("Cyno: run_host_command", () => {
     expect(t.structure.listConfirmations()).toEqual([]);
     expect(refuseHostCommand({ command: "ls", args: ["-la"] })).toBeUndefined();
     expect(refuseHostCommand({ command: "echo", args: ["sudo é uma palavra"] })).toBeUndefined();
+
+    // Descrição da ferramenta adapta o exemplo de shell conforme a plataforma.
+    const linuxDesc = cynoStructureTools(t.structure.toolDeps(), { platform: "linux" }).find((tool) => tool.name === "run_host_command")?.description ?? "";
+    const winDesc = cynoStructureTools(t.structure.toolDeps(), { platform: "win32" }).find((tool) => tool.name === "run_host_command")?.description ?? "";
+    expect(linuxDesc).toContain('command "bash" and args ["-c"');
+    expect(winDesc).toContain('command "powershell" and args ["-Command"');
   });
 
   it("corta a saída em 8 mil caracteres e o tempo limite mata o processo", async () => {

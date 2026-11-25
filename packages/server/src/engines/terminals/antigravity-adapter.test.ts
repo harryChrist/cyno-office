@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ANTIGRAVITY_DENY, ANTIGRAVITY_MCP_CONFIG, AntigravityCliAdapter, AntigravityStreamParser, antigravitySessionSettings } from "./antigravity-adapter";
+import { ANTIGRAVITY_DENY, ANTIGRAVITY_MCP_CONFIG, AntigravityCliAdapter, AntigravityStreamParser, antigravitySessionSettings, readAgyTranscript } from "./antigravity-adapter";
 import { DEFAULT_AGENT_TOOLS } from "./claude-adapter";
 import { detectEngines, EngineCatalog, parseAgyModels, type EngineProbe } from "./engines";
 import { isStrippedEnvName, sanitizeChildEnv } from "./env";
@@ -394,5 +394,26 @@ describe("AntigravityStreamParser: subagente traz ferramentas e resposta do tran
     const parser = new AntigravityStreamParser(undefined, () => undefined);
     parser.parse(line({ event: "step_update", step_update: { conversation_id: "c", step_index: 8, state: "DONE", step_type: "subagent", subagent_info: { subagents: [{ role: "H", log_uri: "file:///nada" }] } } }));
     expect(parser.parse(line({ event: "step_update", step_update: { conversation_id: "c", step_index: 10, state: "DONE", step_type: "system_message" } }))).toEqual([{ type: "subagent_end", id: "agy-c-8", ok: true }]);
+  });
+
+  it("readAgyTranscript segue o perfil da conta e recusa arquivos fora do cache brain", async () => {
+    const { mkdtemp, mkdir, rm, writeFile } = await import("node:fs/promises");
+    const { pathToFileURL } = await import("node:url");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const profileHome = await mkdtemp(path.join(os.tmpdir(), "cyno-agy-profile-"));
+    try {
+      const inside = path.join(profileHome, ".gemini", "antigravity-cli", "brain", "conv-1", "transcript.jsonl");
+      const outside = path.join(profileHome, "transcript.jsonl");
+      await mkdir(path.dirname(inside), { recursive: true });
+      await writeFile(inside, '{"ok":true}\n');
+      await writeFile(outside, '{"nope":true}\n');
+
+      expect(readAgyTranscript(pathToFileURL(inside).href, { homeDir: profileHome })).toBe('{"ok":true}\n');
+      expect(readAgyTranscript(pathToFileURL(outside).href, { homeDir: profileHome })).toBeUndefined();
+      expect(readAgyTranscript(pathToFileURL(inside).href, { env: { HOME: profileHome }, platform: "linux" })).toBe('{"ok":true}\n');
+    } finally {
+      await rm(profileHome, { recursive: true, force: true });
+    }
   });
 });

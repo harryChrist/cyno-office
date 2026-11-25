@@ -3,6 +3,7 @@ import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
 import type { WorkFolder } from "@cyno/shared";
 import { HttpError } from "../http/errors";
+import { isPathInside, samePath } from "../os";
 
 /** Mensagens de erro (pt-BR) de uma pasta de trabalho recusada. */
 export const FOLDER_ERRORS = {
@@ -20,10 +21,9 @@ export const FOLDER_ERRORS = {
 /** Caracteres que quebrariam as regras de permissão dos motores (lista separada por vírgula, padrões com `*`, `(`…). */
 const UNSAFE_PATH_CHARS = /[,*?[\]{}()\r\n]/;
 
-/** `inner` é `outer` ou está dentro dela? (caminhos já normalizados) */
-export function isInside(inner: string, outer: string): boolean {
-  const relative = path.relative(outer, inner);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+/** `inner` é `outer` ou está dentro dela? (caminhos já normalizados; case-insensitive no Windows) */
+export function isInside(inner: string, outer: string, platform?: NodeJS.Platform): boolean {
+  return isPathInside(inner, outer, { ...(platform ? { platform } : {}) });
 }
 
 /**
@@ -53,7 +53,7 @@ export async function checkWorkFolderPath(input: string, options: { dataDir: str
   const data = await realpath(options.dataDir).catch(() => path.resolve(options.dataDir));
   // Igual, dentro ou por cima do DATA_DIR (a pasta que contém o DATA_DIR daria acesso a tudo dele).
   if (isInside(real, data) || isInside(data, real)) throw new HttpError(400, FOLDER_ERRORS.dataDir);
-  const same = options.existing.find((folder) => folder.path === real);
+  const same = options.existing.find((folder) => samePath(folder.path, real));
   if (same) throw new HttpError(400, FOLDER_ERRORS.duplicate(same.name));
   return real;
 }

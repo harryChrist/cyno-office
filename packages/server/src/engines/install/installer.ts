@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { EngineInstallJob, InstallableEngineId } from "@cyno/shared";
+import { detachedSpawnOptions, isProcessAlive, killProcessTree } from "../../platform/os";
 import { sanitizeChildEnv } from "../terminals/env";
 import { errorMessage } from "../../util/text";
 import type { InstallRecipe } from "./recipes";
@@ -27,29 +28,12 @@ export type EngineInstallerOptions = {
 
 const LOG_LINES = 200;
 
-const alive = (pid: number | undefined): boolean => {
-  if (!pid || !Number.isInteger(pid) || pid <= 1) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM: o processo existe, só não é nosso.
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-};
+const alive = (pid: number | undefined): boolean => isProcessAlive(pid);
 
-/** Manda o sinal ao GRUPO do filho (ele é líder do grupo: `uv`, `pip`, `git` e o que mais ele abriu saem juntos); sem grupo, ao processo. */
+/** Encerra a árvore do filho (grupo no Linux; taskkill /T /F no Windows). */
 function killGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   if (child.pid === undefined) return;
-  try {
-    process.kill(-child.pid, signal);
-  } catch {
-    try {
-      child.kill(signal);
-    } catch {
-      // já saiu
-    }
-  }
+  killProcessTree(child.pid, signal);
 }
 
 /**
@@ -72,6 +56,7 @@ export class EngineInstaller {
   /** Começa a instalação (devolve o job na hora; a instalação segue em segundo plano). Lança se já há uma. */
   start(engine: InstallableEngineId, recipe: InstallRecipe): EngineInstallJob {
     if (this.closed) throw new Error("O servidor está fechando.");
+    if (recipe.unavailableReason) throw new Error(recipe.unavailableReason);
     if (this.running) throw new Error("Já há uma instalação em andamento. Espere terminar.");
     if (this.otherInstallRunning()) throw new Error("Já há uma instalação em andamento (iniciada antes de o servidor reiniciar). Espere terminar.");
     const job: EngineInstallJob = { id: `inst-${++this.counter}-${Date.now().toString(36)}`, engine, status: "running", startedAt: this.options.now().toISOString(), log: [] };
@@ -179,9 +164,10 @@ export class EngineInstaller {
   private async exec(job: EngineInstallJob, command: string, args: string[], cwd?: string, env?: Record<string, string>): Promise<void> {
     if (cwd) await mkdir(cwd, { recursive: true });
     if (env?.HOME) await mkdir(env.HOME, { recursive: true });
+    if (env?.USERPROFILE && env.USERPROFILE !== env.HOME) await mkdir(env.USERPROFILE, { recursive: true });
     return new Promise((resolve, reject) => {
-      // `detached`: o filho lidera um grupo, para o tempo máximo e o fechamento do servidor derrubarem a árvore inteira (uv, pip, git…).
-      const child = spawn(command, args, { ...(cwd ? { cwd } : {}), env: { ...sanitizeChildEnv(this.options.env ?? process.env), ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      // Grupo próprio no Linux; no Windows usa windowsHide sem detached e encerra pela árvore.
+      const child = spawn(command, args, { ...(cwd ? { cwd } : {}), env: { ...sanitizeChildEnv(this.options.env ?? process.env), ...env }, stdio: ["ignore", "pipe", "pipe"], ...detachedSpawnOptions() });
       this.child = child;
       this.writeLock(child.pid);
       const timer = setTimeout(() => {

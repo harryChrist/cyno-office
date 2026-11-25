@@ -3,6 +3,7 @@ import { lstat, mkdir, readFile, realpath, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { appToolsOf, type AppRun, type AppToolParam, type AppToolSpec, type CatalogApp, type ServerEvent } from "@cyno/shared";
+import { detachedSpawnOptions, isPathInside, killProcessTree } from "../../platform/os";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import type { StoredConnectorTool } from "../connectors/store";
 import { isInside, resolveInside, type AppsPaths } from "./paths";
@@ -89,8 +90,8 @@ export class AppToolRunner {
         nodeSpawn(file, [...args], {
           cwd: options.cwd,
           env: options.env,
-          // Grupo próprio: o tempo limite e o cancelamento matam o programa e os filhos dele (Chrome).
-          detached: true,
+          // Grupo próprio no Linux; no Windows usa windowsHide sem detached e encerra pela árvore.
+          ...detachedSpawnOptions(),
           stdio: ["ignore", "pipe", "pipe"],
         }));
   }
@@ -597,15 +598,7 @@ type ProbeResult = { error: string; duration?: undefined; video?: undefined } | 
 
 function killGroup(child: ChildProcess | undefined): void {
   if (!child?.pid) return;
-  try {
-    process.kill(-child.pid, "SIGKILL");
-  } catch {
-    try {
-      child.kill("SIGKILL");
-    } catch {
-      // já saiu
-    }
-  }
+  killProcessTree(child.pid, "SIGKILL");
 }
 
 function humanSize(bytes: number): string {
@@ -627,7 +620,7 @@ export async function resolveJailedPath(root: string, value: unknown, param: Ext
   const rawAbs = path.isAbsolute(value) ? path.normalize(value) : path.resolve(realRoot, value);
   // Aceita o caminho absoluto escrito com a pasta "de verdade" ou com a pasta como a conhecemos (link).
   const lexicalRoot = path.resolve(root);
-  const abs = rawAbs === lexicalRoot || rawAbs.startsWith(lexicalRoot + path.sep) ? path.join(realRoot, path.relative(lexicalRoot, rawAbs)) : rawAbs;
+  const abs = isPathInside(rawAbs, lexicalRoot) ? path.join(realRoot, path.relative(lexicalRoot, rawAbs)) : rawAbs;
   if (!isInside(abs, [realRoot])) throw new ParamError(`"${name}" must be inside your own folder (${path.basename(realRoot)}); "${value}" is not`);
   const outside = `"${name}" leaves your folder through a link`;
   if (param.ext && param.ext.length > 0 && !param.ext.includes(path.extname(abs).toLowerCase())) throw new ParamError(`"${name}" must end with ${param.ext.join(" or ")}`);

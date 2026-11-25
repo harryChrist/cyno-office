@@ -133,6 +133,8 @@ export type TerminalSpec = {
   subagent?: SubagentChoice;
   /** URL e token do servidor MCP "office" desta subida (os motores de um processo por turno passam o token por ambiente). */
   mcp?: { url: string; token: string };
+  /** Variáveis de isolamento da conta do motor (ex.: `CLAUDE_CONFIG_DIR` ou `homeEnvFor(perfil)` no Antigravity). */
+  profileEnv?: Record<string, string>;
 };
 
 /** Acesso efetivo de um agente numa subida, com os domínios da política do workspace. */

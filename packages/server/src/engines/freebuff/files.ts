@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { userHomeDir } from "../../platform/os";
 
 /**
  * O que o Cyno LÊ da pasta de dados do Freebuff (`~/.config/manicode`): os arquivos de chat, o arquivo
@@ -9,8 +9,8 @@ import path from "node:path";
  */
 
 /** A pasta de dados do Freebuff (`FREEBUFF_HOME` só nos testes). */
-export function manicodeDirOf(env: NodeJS.ProcessEnv = process.env): string {
-  return env.FREEBUFF_HOME?.trim() || path.join(os.homedir(), ".config", "manicode");
+export function manicodeDirOf(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
+  return env.FREEBUFF_HOME?.trim() || path.join(userHomeDir(env, platform), ".config", "manicode");
 }
 
 const slug = (text: string, max: number) =>

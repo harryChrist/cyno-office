@@ -1,37 +1,86 @@
 # Cyno no Windows: proposta de aplicativo instalável
 
-Estado: **proposta** (nada disso foi construído). Primeiro vem o Docker (já pronto, veja "Com Docker" em `como-rodar.md`); o Windows reaproveita a mesma ideia.
+Estado: **proposta** (nada disso foi construído). Trabalho na branch `windows-app`, a partir de `dev`. O Docker já está pronto (veja "Com Docker" em `como-rodar.md`) e fica como opção para servidor.
 
-## O que você pediu
+## O que foi pedido
 - Um instalador `.exe` (sem Docker, sem terminal): abre, instala, escolhe onde ficam os dados.
-- Inicia junto com o computador, vive no ícone da bandeja (canto inferior direito).
-- Fechar a janela **não** encerra: continua em segundo plano; só "Sair" pelo ícone da bandeja encerra.
-- Janela própria, como um PWA, e os mesmos motores (Claude e Antigravity, com contas isoladas).
+- Inicia junto com o computador e vive no ícone da bandeja (canto inferior direito).
+- Fechar a janela **não** encerra: continua em segundo plano; só "Sair" pelo ícone encerra.
+- Janela própria, como um PWA, com os mesmos motores (Claude e Antigravity, contas isoladas).
+- Notificações **do aplicativo** (nativas do Windows), no lugar das do navegador.
 - Atualização: aplicar ao fechar e abrir de novo.
+- Rodar **igual ao Linux**: o servidor é um processo separado, e a casca só abre a URL.
 
-## O obstáculo
-O Cyno foi feito para Linux: terminais de agente em pty, `bash`, cerca de arquivos (Landlock) e as CLIs rodando como num servidor. Portar tudo para o Windows nativo é grande e arriscado (caminhos, shell, segurança dos agentes). Por isso a rota recomendada **não porta**: leva o Linux junto, escondido.
+## Decisão: nativo no Windows, sem WSL
+Rodar o servidor direto no Windows, como roda no Linux. Motivos: o usuário escolhe qualquer pasta sem tradução de caminho, sem lentidão do acesso `/mnt/c` em repositórios grandes e sem exigir virtualização. Tudo roda localmente e só o próprio usuário acessa, então a segurança é equivalente a ele abrir um terminal e rodar o comando.
 
-## Caminho recomendado: Tauri + WSL2 privado
-1. **Instalador (Tauri, formato NSIS/MSI).** Pequeno (poucos MB), usa o WebView2 que já vem no Windows 10/11. Pergunta a pasta de dados e instala.
-2. **Linux privado dentro do Windows (WSL2).** O instalador liga o WSL2 (uma vez; pode pedir permissão de administrador e um reinício) e importa uma distro **só do Cyno** (`wsl --import CynoOffice <pasta escolhida>`) já com Node, o app e as dependências. Ela não aparece como "Ubuntu" para o usuário, não mexe nas outras distros e não abre terminal. Os dados (equivalente ao `/data` do Docker) ficam nessa pasta escolhida.
-3. **Bandeja e janela.** O app Tauri sobe a distro, inicia o servidor dentro dela e abre uma janela (WebView2) apontando para `http://localhost:3067`, sem barra de endereço, como um PWA. Fechar a janela só a esconde; o menu da bandeja tem Abrir, Atualizar e **Sair** (para o servidor e a distro). Uma instância só.
-4. **Iniciar com o Windows.** Entrada de inicialização do usuário (sem serviço de administrador): sobe direto para a bandeja, sem janela.
-5. **Pastas de trabalho.** Projetos do Windows (`C:\Users\...`) aparecem como `/mnt/c/...` dentro da distro, e a tela traduz o caminho para o usuário. Acesso por `/mnt/c` é mais lento que o disco do Linux; projetos grandes rendem mais dentro da pasta de dados do Cyno.
-6. **Motores e contas.** Igual ao Docker/Linux: instalar e logar `claude`/`agy` pela plataforma (mini terminal no navegador), cada conta numa pasta isolada, agente fixo na conta.
-7. **Atualização.** O Tauri tem atualizador próprio com pacotes **assinados** baixados das Releases do GitHub. Ao abrir, verifica; baixa em segundo plano; **aplica ao fechar e abrir**, nunca no meio de um trabalho. Antes de aplicar, faz cópia da pasta de dados (e volta sozinho se a versão nova não subir). Canais "estável" e "dev".
+O WSL fica só como **opção avançada** (para quem já o usa), nunca como base. O Maestri (concorrente) faz o mesmo: interface em Electron, motor nativo, PowerShell no Windows e WSL/SSH/Docker como escolha do usuário.
 
-## Alternativas descartadas (por ora)
-- **Windows nativo (sem WSL):** menor, mas exige portar pty, shell, cerca de arquivos e o comportamento das CLIs; meses de trabalho e segurança menor para os agentes.
-- **Docker Desktop:** é exatamente a dor que o aplicativo quer evitar (licença, instalação, WSL visível). Continua sendo opção para quem quiser.
-- **Electron:** funciona igual, mas o instalador passa de 100 MB e consome mais memória parado na bandeja.
+## A casca: Tauri com o servidor como processo separado
+O Tauri não conhece o Cyno. Ele só:
+1. inicia o servidor (um Node empacotado junto, como "sidecar") quando o app abre;
+2. mostra uma janela (WebView2) em `http://localhost:3067`, sem barra de endereço;
+3. mantém o ícone na bandeja: Abrir, Atualizar e **Sair** (encerra o servidor);
+4. inicia com o Windows (entrada de inicialização do usuário, sem serviço de administrador), direto para a bandeja;
+5. atualiza (atualizador assinado, abaixo);
+6. mostra **notificações nativas** (abaixo).
 
-## Riscos e custos
-- **WSL2 exige virtualização ligada na BIOS** e Windows 10 2004+ ou 11 (inclui Home). O instalador precisa detectar e explicar quando falta.
-- **Assinatura do instalador:** sem certificado de assinatura, o Windows mostra o aviso do SmartScreen. O certificado é pago (anual).
-- **Primeira instalação** pode pedir reinício (ativar o WSL2).
-- **Memória:** a distro usa RAM; dá para limitar (`.wslconfig`) e o app pode parar a distro ao Sair.
-- Windows em ARM: precisa de imagem arm64 (fica para depois).
+Por que Tauri e não Electron: instalador de poucos MB (usa o WebView2 do Windows), menos memória parado na bandeja e plugins prontos de bandeja, início com o sistema e atualizador. O Electron só traria vantagem se o servidor rodasse dentro do app, o que não é o desenho. Se o WebView2 se comportar mal com o terminal, trocar para Electron é barato porque o servidor e a interface não mudam. Precisa de um binário do Node e do módulo de terminal (`node-pty`) para Windows x64 no pacote.
+
+## Notificações nativas
+- O serviço de atenção do servidor (`AttentionService`) já sabe quando um agente terminou, travou ou precisa de uma decisão, e isso já chega à tela por WebSocket.
+- A casca ouve os mesmos eventos e dispara a **notificação do Windows** (também na central de notificações), mesmo com a janela fechada. Clicar abre a janela já no agente ou projeto certo.
+- Marca o ícone da bandeja quando há algo esperando o usuário.
+- Escolha de quais avisos notificar e modo "não perturbe". Se a janela está em foco, não duplica.
+- Fora do aplicativo (Linux, Docker, navegador), continua a notificação do navegador.
+
+## Pastas de trabalho
+- **"Adicionar pasta"** abre a janela normal do sistema; o usuário adiciona quantas quiser, em qualquer disco. No Linux nativo, o app tem o seletor de pastas próprio (navega pelo disco do servidor).
+- **Clonar pela plataforma:** colar a URL do repositório e o app clona nos dados. Exige uma tela para credenciais do git (chave SSH ou token), que também resolve repositório privado.
+- **Docker** (servidor): um único volume grande (`CYNO_PROJECTS_DIR=~`) e o seletor do app navega dentro dele. Não é o caminho do usuário comum.
+
+## O que muda no servidor para rodar no Windows
+A camada de terminais é a mesma (`@lydell/node-pty` usa o ConPTY no Windows 10 recente e no 11). O trabalho está em:
+- **Shell:** trechos que chamam `bash` (executor de scripts, receitas de instalação do `agy` e do Hermes, lista de binários proibidos) ganham versão para PowerShell; o Claude Code costuma exigir o Git para Windows. O agente é avisado de qual shell usar.
+- **Encerrar processos:** hoje usa grupos de processo do Linux (cerca de 46 pontos para revisar); no Windows, `taskkill` ou Job Objects.
+- **Cerca de arquivos (Landlock):** só existe no Linux. No Windows fica **opcional**: o agente roda com confirmação para escrever fora do projeto, em vez de bloqueio total.
+- **Caminhos:** `C:\...`, finais de linha, e isolamento de contas por `USERPROFILE`/`APPDATA` no lugar de `HOME`.
+- **Perfis de conta:** continuam dentro dos dados do Cyno (`<dados>/platform/engines/<motor>/accounts/<id>/`). Claude usa `CLAUDE_CONFIG_DIR` (arquivo de credenciais na pasta). O Antigravity precisa de teste: se guardar o login no gerenciador de credenciais do Windows, as contas dele se misturariam.
+- **A confirmar antes de prometer:** se o `agy` tem versão para Windows e como guarda o login (maior incógnita); se o login do `claude` com `CLAUDE_CONFIG_DIR` se comporta igual.
+
+## Instalação e atualização
+- **Instalador** NSIS/MSI, mais uma versão portátil. Pergunta a pasta de dados. Começar só por **Windows 11 x64**.
+- **Aviso do Windows:** sem certificado de assinatura, o SmartScreen e o "Controle inteligente de aplicativos" podem bloquear o instalador. Documentar a saída e, quando possível, assinar (certificado pago, anual).
+- **Atualizador assinado**, pacotes das Releases do GitHub. Ao abrir, verifica; baixa em segundo plano; **aplica ao fechar e abrir**, nunca no meio de um trabalho. Antes, copia a pasta de dados e volta sozinho se a versão nova não subir. Canais "estável" e "dev".
+- As CLIs (`claude`, `agy`) podem ser instaladas e logadas pela própria plataforma (mini terminal no navegador), diferente do Maestri, que exige que o usuário já as tenha.
+
+## Alternativas descartadas
+- **WSL2 privado como base:** funciona, mas exige virtualização, pode pedir reinício, o `/mnt/c` é lento em repositório grande (git e instalação de dependências costumam ficar de 3 a 10 vezes mais lentos) e as pastas precisam de tradução.
+- **Docker Desktop:** licença, instalação e WSL visível; é a dor que o aplicativo quer evitar. Continua sendo opção para servidor.
+- **Electron:** instalador de 100 MB ou mais e mais memória; fica de plano B para a casca.
+
+## Riscos
+- O `agy` pode não existir ou não isolar contas no Windows.
+- Sem a cerca de arquivos, um erro do agente pode apagar algo fora do projeto (mitigado por confirmação).
+- WebView2 pode se comportar diferente do Chrome no terminal (testar cedo).
+- Windows em ARM e Windows 10 antigo: fora do primeiro corte.
 
 ## Ordem sugerida
-1. Docker (pronto). 2. Atualização do Docker (botão "Atualizar agora" com cópia e volta automática). 3. Pacote da distro (`rootfs`) gerado por uma ação no GitHub a cada release. 4. Protótipo Tauri só com bandeja + janela + iniciar/parar a distro. 5. Instalador, início com o Windows e atualizador assinado. 6. Teste em Windows de verdade (máquina limpa) antes de publicar.
+1. Levantamento do `agy` e do `claude` no Windows (sem código). 2. Servidor subindo no Windows com CLI falsa (shell, processos, caminhos). 3. Seletor de pastas no app e clone pela plataforma. 4. Protótipo Tauri: bandeja, janela, iniciar e parar o servidor. 5. Notificações nativas. 6. Instalador, início com o Windows e atualizador assinado. 7. Teste em Windows de verdade (máquina limpa) antes de publicar.
+
+## Estado do servidor no Windows
+
+### O que já foi preparado (`packages/server`)
+- **Módulo de plataforma injetável** (`src/platform/os.ts`, coberto por `os.test.ts` simulando `win32` e `linux`): centraliza detecção de Windows, encerramento de árvore de processos (`process.kill(-pid)` no Linux; `taskkill /pid <pid> /T /F` sem shell no Windows), checagem de processo vivo (`isProcessAlive`), shell padrão (`bash` vs `powershell.exe -NoLogo -NoProfile`), isolamento de pasta pessoal (`homeEnvFor` com `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA`), chave/separador de `PATH`, `PATHEXT`, junção (`junction`) para symlinks de pasta e contenção de caminhos case-insensitive (`isPathInside` / `samePath` via `path.relative`).
+- **Processos e scripts:** `workspace/scripts/service.ts`, `library/apps/tool-runner.ts`, `engines/terminals/one-shot-terminal.ts` e `engines/install/installer.ts` trocam `detached: true` por `windowsHide: true` (sem `detached`) no Windows e encerram árvores via `killProcessTree`; o executor de scripts usa `powershell.exe` no Windows.
+- **Receitas de instalação (`engines/install/recipes.ts`):** variantes PowerShell (`powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ...`) para Claude (`irm https://claude.ai/install.ps1 | iex`) e Antigravity (`irm https://antigravity.google/cli/install.ps1 | iex`) com `USERPROFILE` isolado; Hermes marcado como indisponível no Windows nativo (recusado também pelo `EngineInstaller`).
+- **Contas, caminhos e binários:** `EngineAccountStore.profileEnv` usa `homeEnvFor` no Antigravity e cria junções (`junction`) para diretórios (como `.local`); `login-status.ts`, `config.ts`, `account-poller.ts`, `freebuff/files.ts` e `antigravity-adapter.ts` (`readAgyTranscript`) respeitam `USERPROFILE` / perfil da conta; `findExecutable`, `resolveEngineBinary` e `whichInPath` consideram `;` e `PATHEXT` (`.exe`, `.cmd`, `.bat`); comparações de prefixo de pasta passaram a usar `path.relative` normalizado.
+- **Requisitos, cerca e comandos do host:** `library/apps/requirements.ts` usa `os.freemem()` no Windows sem tentar `/proc/meminfo`; `engines/terminals/fence.ts` devolve `available: false` ("Não existe no Windows") sem tentar `python3` ou `/proc`; `host-command.ts` inclui `powershell`, `pwsh`, `cmd`, `wsl` e `bash.exe` como wrappers monitorados e `mcp/cyno/structure-tools.ts` exemplifica `powershell -Command` no Windows.
+
+### O que continua pendente / depende de teste real em Windows 11
+- **Teste em máquina Windows 11 real:** todas as mudanças foram validadas no Linux com simulação de `win32`; falta subir o servidor num Windows 11 nativo (incluindo `@lydell/node-pty` com ConPTY).
+- **Antigravity (`agy`) com várias contas:** o `profileEnv` já isola `USERPROFILE`/`APPDATA`/`LOCALAPPDATA`, mas se o `agy` guardar o login no Gerenciador de Credenciais do Windows, as contas podem se misturar — depende de teste real.
+- **Claude Code no Windows:** confirmar comportamento real de `CLAUDE_CONFIG_DIR`, dependência de Git para Windows e localização exata do binário instalado por `claude.ai/install.ps1`.
+- **Symlinks de arquivos sem Modo Desenvolvedor:** em `EngineAccountStore` (`.gitconfig`, `.npmrc`), symlinks de arquivo podem retornar `EPERM` sem Modo Desenvolvedor (hoje são ignorados silenciosamente no Windows para não travar a criação da conta).
+- **Runtimes da Biblioteca de Apps e métricas `/proc`:** download de runtimes (`library/apps/runtimes.ts`) ainda só lista alvos Linux (`x64`/`arm64`), e amostragem de processos em `platform/activity/sampler.ts` e `engines/freebuff/files.ts` degrada sem `/proc`.
+- **Hermes:** mantido propositalmente indisponível no Windows nativo.

@@ -23,6 +23,7 @@ import {
   type UpdateMediaBody,
 } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
+import { isPathInside } from "../../platform/os";
 import { HttpError } from "../../platform/http/errors";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import type { WriteQueue } from "../../store/write-queue";
@@ -267,7 +268,7 @@ export class MediaService {
     } catch {
       throw new MediaToolError(`File not found: ${requested}. Pass a path inside your own folder.`);
     }
-    if (real !== realRoot && !real.startsWith(`${realRoot}${path.sep}`)) throw new MediaToolError("The file must be inside your own agent folder (links and \"..\" that leave it are refused).");
+    if (!isPathInside(real, realRoot)) throw new MediaToolError("The file must be inside your own agent folder (links and \"..\" that leave it are refused).");
     const info = await stat(real);
     if (!info.isFile()) throw new MediaToolError(`${requested} is not a file.`);
     const mime = resolveMediaMime(undefined, real);

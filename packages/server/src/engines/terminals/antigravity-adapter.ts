@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { AGENT_LOG_LIMITS, clampLogText, OFFICE_MCP_SERVER, type EffectiveFolder, type TurnUsage, ENGINE_FALLBACK_MODELS, modelUsesEffort } from "@cyno/shared";
+import { isPathInside, isWindows, userHomeDir } from "../../platform/os";
 import { sanitizeChildEnv } from "./env";
 import type { AgentFile, CliAdapter, CliEventParser, TerminalAccess, TerminalEvent, TerminalSpec } from "./types";
 
@@ -35,6 +36,8 @@ export type AntigravityAdapterOptions = {
   prefixArgs?: string[];
   /** Esforço quando o agente não diz (padrão: nenhum, fica o do modelo, ex.: gemini-3.8-flash-low). */
   defaultEffort?: string;
+  /** Pasta pessoal do perfil da conta do Antigravity (padrão: HOME/USERPROFILE do processo). */
+  homeDir?: string;
 };
 
 /**
@@ -132,11 +135,13 @@ export class AntigravityCliAdapter implements CliAdapter {
   private readonly command_: string;
   private readonly prefixArgs: string[];
   private readonly defaultEffort: string | undefined;
+  private readonly homeDir: string | undefined;
 
   constructor(options: AntigravityAdapterOptions = {}) {
     this.command_ = options.command ?? "agy";
     this.prefixArgs = options.prefixArgs ?? [];
     this.defaultEffort = options.defaultEffort || undefined;
+    this.homeDir = options.homeDir || undefined;
   }
 
   command(spec: TerminalSpec, session: { sessionId: string; resume: boolean }): { command: string; args: string[] } {
@@ -170,12 +175,13 @@ export class AntigravityCliAdapter implements CliAdapter {
   }
 
   env(base: NodeJS.ProcessEnv, spec: TerminalSpec): NodeJS.ProcessEnv {
-    // Mantém HOME/DBUS (o login do agy fica no chaveiro do sistema); tira toda chave de API.
-    return sanitizeChildEnv(base, { GIT_CEILING_DIRECTORIES: path.dirname(spec.cwd) });
+    // Mantém HOME/USERPROFILE/DBUS (o login do agy fica no chaveiro do sistema ou no perfil da conta); tira toda chave de API.
+    return sanitizeChildEnv(base, { ...(spec.profileEnv ?? {}), GIT_CEILING_DIRECTORIES: path.dirname(spec.cwd) });
   }
 
   createParser(spec?: TerminalSpec): CliEventParser {
-    return new AntigravityStreamParser(spec?.subagent?.model);
+    const profileHome = spec?.profileEnv?.USERPROFILE ?? spec?.profileEnv?.HOME ?? this.homeDir;
+    return new AntigravityStreamParser(spec?.subagent?.model, profileHome ? (uri) => readAgyTranscript(uri, { homeDir: profileHome }) : readAgyTranscript);
   }
 
   encodeMessage(text: string): string {
@@ -570,13 +576,26 @@ export class AntigravityStreamParser implements CliEventParser {
 const SUBAGENT_MAX_TOOLS = 40;
 const TRANSCRIPT_MAX_BYTES = 2_000_000;
 
-/** Lê o transcript.jsonl de um subagente (só dentro do cache do agy, em ~/.gemini/antigravity-cli/brain). Nunca lança. */
-export function readAgyTranscript(uri: string): string | undefined {
+export type ReadAgyTranscriptOptions = {
+  /** Pasta pessoal do perfil da conta (padrão: `userHomeDir(env, platform)`). */
+  homeDir?: string;
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+};
+
+/**
+ * Lê o transcript.jsonl de um subagente (só dentro do cache do agy do perfil da conta,
+ * em `<home>/.gemini/antigravity-cli/brain`). Nunca lança.
+ */
+export function readAgyTranscript(uri: string, options: ReadAgyTranscriptOptions = {}): string | undefined {
   try {
     if (!uri.startsWith("file://")) return undefined;
-    const file = decodeURIComponent(new URL(uri).pathname);
-    const root = path.join(os.homedir(), ".gemini", "antigravity-cli", "brain") + path.sep;
-    if (!file.startsWith(root) || path.basename(file) !== "transcript.jsonl" || file.includes("..")) return undefined;
+    const platform = options.platform ?? process.platform;
+    const file = isWindows(platform) ? fileURLToPath(uri, { windows: true }) : fileURLToPath(uri);
+    const pathApi = isWindows(platform) ? path.win32 : path.posix;
+    const baseHome = options.homeDir ?? userHomeDir(options.env ?? process.env, platform);
+    const root = pathApi.join(baseHome, ".gemini", "antigravity-cli", "brain");
+    if (!isPathInside(file, root, { strict: true, platform }) || pathApi.basename(file) !== "transcript.jsonl") return undefined;
     if (statSync(file).size > TRANSCRIPT_MAX_BYTES) return undefined;
     return readFileSync(file, "utf8");
   } catch {

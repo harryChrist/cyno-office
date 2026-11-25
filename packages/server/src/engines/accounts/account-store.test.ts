@@ -154,4 +154,18 @@ describe("EngineAccountStore", () => {
     await expect(store.create("claude", `Conta ${MAX_ACCOUNTS_PER_ENGINE + 1}`)).rejects.toThrow(/Limite/);
     expect(a.id).toBe("conta-um");
   });
+
+  it("no Windows (win32), profileEnv do Antigravity inclui USERPROFILE, HOME, APPDATA e LOCALAPPDATA", async () => {
+    const dataDir = await tempDir();
+    const fakeHome = await tempDir();
+    const store = await EngineAccountStore.open(dataDir, { realHomeDir: fakeHome, platform: "win32" });
+    const account = await store.create("gemini", "Conta Win");
+    const expectedHome = path.resolve(dataDir, "platform", "engines", "gemini", "accounts", account.id, "home");
+    expect(store.profileEnv(account)).toEqual({
+      USERPROFILE: expectedHome,
+      HOME: expectedHome,
+      APPDATA: path.join(expectedHome, "AppData", "Roaming"),
+      LOCALAPPDATA: path.join(expectedHome, "AppData", "Local"),
+    });
+  });
 });

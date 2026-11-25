@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveEngineBinary } from "../terminals/engines";
 import { EngineInstaller } from "./installer";
-import { AGY_INSTALL_URL, CLAUDE_NPM_PACKAGE, agyRecipe, claudeRecipe, engineDirs } from "./recipes";
+import { AGY_INSTALL_PS1_URL, AGY_INSTALL_URL, CLAUDE_INSTALL_PS1_URL, CLAUDE_NPM_PACKAGE, agyRecipe, claudeRecipe, engineDirs, hermesRecipe } from "./recipes";
 
 describe("receitas de instalação privada (claude e agy)", () => {
   const dirs: string[] = [];
@@ -119,5 +119,50 @@ echo "instalado em $HOME/.local/bin/agy"
 
     // Com caminho explicitamente configurado na tela -> vence a cópia privada.
     expect(resolveEngineBinary("claude", { dataDir, base, configured: "/custom/claude" })).toEqual({ command: "/custom/claude" });
+  });
+
+  it("variantes Windows (win32): claude/agy usam PowerShell com USERPROFILE isolado; Hermes fica indisponível", async () => {
+    const dataDir = await temp();
+    const claude = claudeRecipe(engineDirs(dataDir, "claude"), "win32");
+    expect(claude.steps).toHaveLength(1);
+    expect(claude.steps[0]).toMatchObject({
+      kind: "run",
+      command: "powershell.exe",
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `irm ${CLAUDE_INSTALL_PS1_URL} | iex`],
+      env: expect.objectContaining({
+        USERPROFILE: engineDirs(dataDir, "claude").home,
+        HOME: engineDirs(dataDir, "claude").home,
+        APPDATA: path.join(engineDirs(dataDir, "claude").home, "AppData", "Roaming"),
+        LOCALAPPDATA: path.join(engineDirs(dataDir, "claude").home, "AppData", "Local"),
+      }),
+    });
+
+    const agy = agyRecipe(engineDirs(dataDir, "gemini"), "win32");
+    expect(agy.steps).toHaveLength(1);
+    expect(agy.steps[0]).toMatchObject({
+      kind: "run",
+      command: "powershell.exe",
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `irm ${AGY_INSTALL_PS1_URL} | iex`],
+      env: expect.objectContaining({
+        USERPROFILE: engineDirs(dataDir, "gemini").home,
+        APPDATA: path.join(engineDirs(dataDir, "gemini").home, "AppData", "Roaming"),
+      }),
+    });
+
+    const hermes = hermesRecipe(engineDirs(dataDir, "hermes"), dataDir, "win32");
+    expect(hermes.steps).toEqual([]);
+    expect(hermes.binaryCandidates).toEqual([]);
+    expect(hermes.unavailableReason).toMatch(/indisponível no Windows/i);
+    expect(hermes.plan.title).toMatch(/indisponível no Windows/i);
+
+    // EngineInstaller recusa iniciar receita marcada como indisponível.
+    const installer = new EngineInstaller({ now: () => new Date("2026-11-25T00:00:00Z") });
+    expect(() => installer.start("hermes", hermes)).toThrow(/indisponível no Windows/i);
+
+    // resolveEngineBinary no Windows considera .cmd/.exe (PATHEXT) mesmo sem bit +x Unix.
+    const winBin = path.join(engineDirs(dataDir, "claude").home, ".local", "bin", "claude.exe");
+    await mkdir(path.dirname(winBin), { recursive: true });
+    await writeFile(winBin, "fake-exe");
+    expect(resolveEngineBinary("claude", { dataDir, base: { command: "claude" }, platform: "win32" })).toEqual({ command: winBin });
   });
 });

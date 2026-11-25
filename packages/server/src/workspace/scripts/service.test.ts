@@ -13,7 +13,7 @@ afterEach(async () => {
   await Promise.all(services.splice(0).map((service) => service.stopAll()));
 });
 
-type Setup = Partial<Pick<ScriptsServiceOptions, "spawn" | "limits" | "graceMs" | "publishMs" | "sweepMs">> & { terminal?: boolean; sharedDir?: string };
+type Setup = Partial<Pick<ScriptsServiceOptions, "spawn" | "limits" | "graceMs" | "publishMs" | "sweepMs" | "platform">> & { terminal?: boolean; sharedDir?: string };
 
 async function setup(options: Setup = {}) {
   const root = await tempDir();
@@ -39,6 +39,7 @@ async function setup(options: Setup = {}) {
       ...(options.spawn ? { spawn: options.spawn } : {}),
       ...(options.limits ? { limits: options.limits } : {}),
       ...(options.sweepMs ? { sweepMs: options.sweepMs } : {}),
+      ...(options.platform ? { platform: options.platform } : {}),
       log: silent,
       now: () => new Date(),
     });
@@ -333,5 +334,27 @@ describe("ScriptsService", () => {
     }
     await finished(service, "s1");
     expect((await service.readOutput("s1")).data).toContain("k=[] u=[1]");
+  });
+
+  it("no Windows (win32), dispara o script com powershell.exe -NoLogo -NoProfile -Command", async () => {
+    let seen: { file: string; args: string[] } | undefined;
+    const { service } = await setup({
+      platform: "win32",
+      spawn: (file, args) => {
+        seen = { file, args };
+        return {
+          pid: 99999,
+          onData: () => undefined,
+          onExit: (listener) => queueMicrotask(() => listener({ code: 0 })),
+          killGroup: () => undefined,
+        };
+      },
+    });
+    await service.start({ agentId: "clara", title: "Win", command: "Write-Output oi" });
+    await finished(service, "s1");
+    expect(seen).toEqual({
+      file: "powershell.exe",
+      args: ["-NoLogo", "-NoProfile", "-Command", "Write-Output oi"],
+    });
   });
 });

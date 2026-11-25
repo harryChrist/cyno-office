@@ -18,6 +18,7 @@ import {
 } from "@cyno/shared";
 import { ANTIGRAVITY_STALE_REASONS } from "../usage/antigravity-poller";
 import type { FreebuffService } from "../freebuff/service";
+import { executableCandidates, isWindows, pathDelimiter, readPathEnv } from "../../platform/os";
 import type { EngineBinaries, EngineProbe } from "./engines";
 
 /**
@@ -71,23 +72,48 @@ export type EngineStatusDeps = {
   installable?: boolean;
 };
 
-async function isExecutable(file: string): Promise<boolean> {
+async function isExecutable(file: string, platform: NodeJS.Platform = process.platform): Promise<boolean> {
   try {
     if (!(await stat(file)).isFile()) return false;
-    await access(file, fsConstants.X_OK);
+    await access(file, isWindows(platform) ? fsConstants.F_OK : fsConstants.X_OK);
     return true;
   } catch {
     return false;
   }
 }
 
-/** Acha o executável como o shell acharia (sem rodar nada): o PATH e ~/.local/bin. Devolve o caminho completo. */
-export async function findExecutable(command: string, pathEnv: string, homeDir: string): Promise<string | undefined> {
-  if (command.includes("/")) return (await isExecutable(command)) ? path.resolve(command) : undefined;
-  const dirs = [...pathEnv.split(path.delimiter).filter(Boolean), path.join(homeDir, ".local", "bin")];
+export type FindExecutableOptions = {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+};
+
+/**
+ * Acha o executável como o shell acharia (sem rodar nada): o PATH e ~/.local/bin. Devolve o caminho completo.
+ * No Windows considera `PATHEXT` (`.exe`, `.cmd`, `.bat`…) e o separador `;`.
+ */
+export async function findExecutable(
+  command: string,
+  pathEnv: string,
+  homeDir: string,
+  options: FindExecutableOptions = {},
+): Promise<string | undefined> {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const hasSep = command.includes("/") || (isWindows(platform) && command.includes("\\"));
+  if (hasSep) {
+    for (const candidate of executableCandidates(command, env, platform)) {
+      if (await isExecutable(candidate, platform)) return path.resolve(candidate);
+    }
+    return undefined;
+  }
+  const delimiter = pathDelimiter(platform);
+  const dirs = [...pathEnv.split(delimiter).filter(Boolean), path.join(homeDir, ".local", "bin")];
+  const names = executableCandidates(command, env, platform);
   for (const dir of dirs) {
-    const candidate = path.join(dir, command);
-    if (await isExecutable(candidate)) return candidate;
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      if (await isExecutable(candidate, platform)) return candidate;
+    }
   }
   return undefined;
 }
@@ -134,7 +160,7 @@ function pickState(input: { installed: boolean; loggedIn?: boolean; quota: boole
 
 async function detectSupported(id: SupportedEngineId, deps: EngineStatusDeps): Promise<EngineStatus> {
   const bin = deps.binaries[id === "claude" ? "claude" : "gemini"];
-  const pathEnv = deps.pathEnv ?? process.env.PATH ?? "";
+  const pathEnv = deps.pathEnv ?? readPathEnv(process.env);
   const configuredPath = deps.configured[id];
   const found = await findExecutable(bin.command, pathEnv, deps.homeDir);
   const run = (args: string[]) => deps.probe(bin.command, [...(bin.prefixArgs ?? []), ...args], PROBE_TIMEOUT_MS);
@@ -179,7 +205,7 @@ async function detectSupported(id: SupportedEngineId, deps: EngineStatusDeps): P
  */
 async function detectFreebuff(deps: EngineStatusDeps): Promise<EngineStatus> {
   const described = DESCRIBED.freebuff;
-  const pathEnv = deps.pathEnv ?? process.env.PATH ?? "";
+  const pathEnv = deps.pathEnv ?? readPathEnv(process.env);
   const freebuff = deps.freebuff;
   const found = await findExecutable(freebuff?.command ?? "freebuff", pathEnv, deps.homeDir);
   const version = found ? await npmPackageVersion(found, "freebuff") : undefined;
@@ -224,7 +250,7 @@ async function detectFreebuff(deps: EngineStatusDeps): Promise<EngineStatus> {
 }
 
 async function detectSoon(id: Exclude<EngineCatalogId, SupportedEngineId | "freebuff">, deps: EngineStatusDeps): Promise<EngineStatus> {
-  const pathEnv = deps.pathEnv ?? process.env.PATH ?? "";
+  const pathEnv = deps.pathEnv ?? readPathEnv(process.env);
   const described = DESCRIBED[id];
   const found = await findExecutable(id, pathEnv, deps.homeDir);
   let version: string | undefined;

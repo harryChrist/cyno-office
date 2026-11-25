@@ -118,4 +118,23 @@ describe("AccountLoginChecker (estado de login por conta + cache curto)", () => 
     await checker.listWithStatus();
     expect(calls).toHaveLength(4);
   });
+
+  it("no Windows (win32), usa USERPROFILE do ambiente como pasta pessoal padrão do Antigravity", async () => {
+    const root = await temp();
+    const dataDir = path.join(root, "data");
+    const winProfile = path.join(root, "win-user");
+    const tokenFile = agyTokenFile(winProfile);
+    await mkdir(path.dirname(tokenFile), { recursive: true });
+    await writeFile(tokenFile, "fake", { mode: 0o600 });
+
+    const store = await EngineAccountStore.open(dataDir, { realHomeDir: winProfile, platform: "win32" });
+    const checker = new AccountLoginChecker({
+      store,
+      resolveBinary: (engine) => ({ command: engine === "claude" ? "claude" : "agy" }),
+      env: { USERPROFILE: winProfile },
+      platform: "win32",
+      probe: async () => ({ ok: false, stdout: "" }),
+    });
+    expect(await checker.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(true);
+  });
 });

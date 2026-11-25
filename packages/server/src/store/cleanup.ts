@@ -2,6 +2,7 @@ import { lstat, readdir, realpath, rm, unlink } from "node:fs/promises";
 import path from "node:path";
 import { conversationLogPrefix, GLOBAL_BRAIN_ID, isConversationLogId, isSafeId } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
+import { isPathInside } from "../platform/os";
 import { listNoteFiles } from "../workspace/brain/notes";
 import type { DataPaths } from "./paths";
 import type { WriteQueue } from "./write-queue";
@@ -175,6 +176,6 @@ export class DataCleanup {
     const root = await realpath(this.deps.paths.root);
     const parent = await realpath(path.dirname(path.resolve(target)));
     const resolved = path.join(parent, path.basename(target));
-    return resolved.startsWith(root + path.sep) && resolved !== root && path.basename(target) !== "..";
+    return isPathInside(resolved, root, { strict: true }) && path.basename(target) !== "..";
   }
 }

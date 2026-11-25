@@ -156,6 +156,23 @@ describe("findExecutable e npmPackageVersion", () => {
     expect(await findExecutable("nada", bin, root)).toBeUndefined();
   });
 
+  it("no Windows (win32), usa separador `;` e PATHEXT (.exe, .cmd, .bat) sem exigir bit +x", async () => {
+    const dirA = path.join(root, "win-a");
+    const dirB = path.join(root, "win-b");
+    await mkdir(dirA, { recursive: true });
+    await mkdir(dirB, { recursive: true });
+    // Simula npm no Windows: shim sem extensão + .cmd lado a lado; deve preferir .cmd.
+    await writeFile(path.join(dirA, "claude"), "#!/bin/sh\n");
+    await writeFile(path.join(dirA, "claude.cmd"), "@echo off\n");
+    await writeFile(path.join(dirB, "agy.exe"), "fake-pe");
+    const winPath = `${dirA};${dirB}`;
+    const env = { PATHEXT: ".EXE;.CMD;.BAT" };
+
+    expect(await findExecutable("claude", winPath, root, { platform: "win32", env })).toBe(path.join(dirA, "claude.cmd"));
+    expect(await findExecutable("agy", winPath, root, { platform: "win32", env })).toBe(path.join(dirB, "agy.exe"));
+    expect(await findExecutable("inexistente", winPath, root, { platform: "win32", env })).toBeUndefined();
+  });
+
   it("não confunde com outro pacote nem estoura com link quebrado", async () => {
     const pkg = path.join(root, "outro");
     await mkdir(pkg, { recursive: true });

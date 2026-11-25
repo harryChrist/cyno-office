@@ -266,6 +266,19 @@ describe("a detecção", () => {
     expect(detectFence({ refresh: true })).toMatchObject({ available: false, reason: expect.stringContaining("CYNO_FENCE=off") });
     setFenceSupportForTests(undefined);
   });
+
+  it("no Windows (win32), devolve available: false com motivo claro em pt-BR sem tentar python3 ou /proc", () => {
+    expect(detectFence({ platform: "win32" })).toMatchObject({
+      available: false,
+      abi: 0,
+      reason: expect.stringMatching(/Não existe no Windows/i),
+    });
+    expect(probeLandlock("win32")).toMatchObject({
+      available: false,
+      abi: 0,
+      reason: expect.stringMatching(/Não existe no Windows/i),
+    });
+  });
 });
 
 // O lançador de verdade: só onde o computador tem Landlock (o resto pula).

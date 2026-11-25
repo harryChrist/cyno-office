@@ -30,7 +30,7 @@ const sizes = { portrait: [1080, 1920], landscape: [1920, 1080], square: [1080, 
 const [width, height] = sizes[format] ?? sizes.portrait;
 const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 await mkdir(path.join(dir, "src"), { recursive: true });
-await symlink(path.join(appDir, "node_modules"), path.join(dir, "node_modules"), "dir");
+await symlink(path.join(appDir, "node_modules"), path.join(dir, "node_modules"), process.platform === "win32" ? "junction" : "dir");
 await writeFile(path.join(dir, "package.json"), JSON.stringify({ name: "video", private: true }, null, 2) + "\\n");
 await writeFile(path.join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "ESNext", moduleResolution: "bundler", jsx: "react-jsx", strict: true, skipLibCheck: true, noEmit: true } }, null, 2) + "\\n");
 await writeFile(path.join(dir, "src", "index.ts"), 'import { registerRoot } from "remotion";\\nimport { Root } from "./Root";\\n\\nregisterRoot(Root);\\n');

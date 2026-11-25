@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { accessSync, constants as fsConstants, statSync } from "node:fs";
 import { ENGINE_LABELS, type EngineInfo, type EngineModel, type FreebuffModel, type SupportedEngineId } from "@cyno/shared";
+import { executableCandidates, isWindows, readPathEnv } from "../../platform/os";
 import { errorMessage } from "../../util/text";
 import { privateBinaryCandidates } from "../install/recipes";
 import { sanitizeChildEnv } from "./env";
@@ -23,10 +24,10 @@ export type EngineBinaries = {
   gemini: EngineBinary;
 };
 
-function isExecutableSync(file: string): boolean {
+function isExecutableSync(file: string, platform: NodeJS.Platform = process.platform): boolean {
   try {
     if (!statSync(file).isFile()) return false;
-    accessSync(file, fsConstants.X_OK);
+    accessSync(file, isWindows(platform) ? fsConstants.F_OK : fsConstants.X_OK);
     return true;
   } catch {
     return false;
@@ -34,9 +35,18 @@ function isExecutableSync(file: string): boolean {
 }
 
 /** Cópia privada instalada pelo Cyno em `DATA_DIR/platform/engines/<motor>/`, se existir e for executável. */
-export function findPrivateEngineBinary(dataDir: string, engine: SupportedEngineId, candidates?: readonly string[]): string | undefined {
-  for (const candidate of candidates ?? privateBinaryCandidates(dataDir, engine)) {
-    if (isExecutableSync(candidate)) return candidate;
+export function findPrivateEngineBinary(
+  dataDir: string,
+  engine: SupportedEngineId,
+  candidates?: readonly string[],
+  options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
+): string | undefined {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  for (const candidate of candidates ?? privateBinaryCandidates(dataDir, engine, platform)) {
+    for (const variant of executableCandidates(candidate, env, platform)) {
+      if (isExecutableSync(variant, platform)) return variant;
+    }
   }
   return undefined;
 }
@@ -50,10 +60,13 @@ export function findPrivateEngineBinary(dataDir: string, engine: SupportedEngine
  */
 export function resolveEngineBinary(
   engine: SupportedEngineId,
-  options: { dataDir: string; base: EngineBinary; configured?: string; privateCandidates?: readonly string[] },
+  options: { dataDir: string; base: EngineBinary; configured?: string; privateCandidates?: readonly string[]; platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv },
 ): EngineBinary {
   if (options.configured) return { command: options.configured };
-  const privateBin = findPrivateEngineBinary(options.dataDir, engine, options.privateCandidates);
+  const privateBin = findPrivateEngineBinary(options.dataDir, engine, options.privateCandidates, {
+    ...(options.platform ? { platform: options.platform } : {}),
+    ...(options.env ? { env: options.env } : {}),
+  });
   if (privateBin) return { command: privateBin };
   return options.base;
 }
@@ -71,7 +84,7 @@ const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:[\]-]*$/;
 
 export const defaultProbe: EngineProbe = (command, args, timeoutMs, env) =>
   new Promise((resolve) => {
-    execFile(command, args, { timeout: timeoutMs, env: sanitizeChildEnv(process.env, env), maxBuffer: 4 * 1024 * 1024 }, (error, stdout) => {
+    execFile(command, args, { timeout: timeoutMs, env: sanitizeChildEnv(process.env, env), maxBuffer: 4 * 1024 * 1024, windowsHide: true }, (error, stdout) => {
       if (error) resolve({ ok: false, stdout: String(stdout ?? ""), error: (error as NodeJS.ErrnoException).code === "ENOENT" ? `comando ${command} não encontrado` : errorMessage(error), ...((error as { killed?: boolean }).killed === true ? { timedOut: true } : {}) });
       else resolve({ ok: true, stdout: String(stdout) });
     });
@@ -113,7 +126,7 @@ export async function detectEngines(binaries: EngineBinaries, probe: EngineProbe
   const agyVersion = version(agy);
   const freebuffInfo: EngineInfo[] = [];
   if (freebuff) {
-    const found = await findExecutable(freebuff.command, freebuff.pathEnv ?? process.env.PATH ?? "", freebuff.homeDir);
+    const found = await findExecutable(freebuff.command, freebuff.pathEnv ?? readPathEnv(process.env), freebuff.homeDir);
     const freebuffVersion = found ? await npmPackageVersion(found, "freebuff") : undefined;
     freebuffInfo.push({
       engine: "freebuff",

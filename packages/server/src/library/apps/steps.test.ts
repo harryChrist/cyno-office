@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { isInside, resolveInside } from "./paths";
+import { availMemMB, whichInPath } from "./requirements";
 import { appEnvironment, defaultExecutors, isForbiddenBinary, NeedsOwnerError, realExec, stepEnvironment, type ExecFn, type StepContext } from "./steps";
 
 const dirs: string[] = [];
@@ -156,5 +157,13 @@ describe("guardas de caminho e do exec real", () => {
     expect(env.GEMINI_API_KEY).toBeUndefined();
     expect(env.HOME).toBe("/d/apps/x/.cache/home");
     expect(appEnvironment("/d/apps/x", "/d/runtimes", { PATH: "/usr/bin" }).PATH).toBe("/d/apps/x/.venv/bin:/d/runtimes/uv/bin:/d/runtimes/ffmpeg/bin:/usr/bin");
+  });
+
+  it("requirements no Windows (win32): availMemMB usa os.freemem e whichInPath respeita `;` e PATHEXT", async () => {
+    const dir = await temp();
+    await writeFile(path.join(dir, "ffmpeg.exe"), "fake-pe");
+    expect(availMemMB("win32")).toBeGreaterThan(0);
+    expect(whichInPath("ffmpeg", `C:\\nao-existe;${dir}`, { platform: "win32", env: { PATHEXT: ".EXE;.CMD" } })).toBe(path.join(dir, "ffmpeg.exe"));
+    expect(whichInPath("ffmpeg", dir, { platform: "linux" })).toBeUndefined();
   });
 });

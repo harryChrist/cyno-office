@@ -1,10 +1,11 @@
 import { spawn as nodeSpawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, readlink, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { maskSecrets, type AgentProvider, type TerminalStatus } from "@cyno/shared";
 import { trackTerminalExit, trackTerminalFailure, trackTerminalSpawn } from "../../platform/activity/hooks";
+import { detachedSpawnOptions, dirSymlinkType, killProcessTree } from "../../platform/os";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import { errorMessage, shorten } from "../../util/text";
 import { fencedCommand, type FencePolicy } from "./fence";
@@ -74,7 +75,8 @@ export async function ensureAdapterDirs(adapter: Pick<OneShotAdapter, "requiredD
     try {
       if ((await readlink(link.path).catch(() => undefined)) === link.target) continue;
       await rm(link.path, { recursive: true, force: true });
-      await symlink(link.target, link.path);
+      const targetIsDir = await stat(link.target).then((info) => info.isDirectory()).catch(() => false);
+      await symlink(link.target, link.path, targetIsDir ? dirSymlinkType() : undefined);
     } catch {
       // sem o link o programa só não acha o que o dono ligou (e o turno diz o motivo)
     }
@@ -129,22 +131,14 @@ const MERGE_SEPARATOR = "\n\n(Outra mensagem que chegou junto, enquanto o turno 
 const STDERR_TAIL = 20;
 
 const defaultSpawn: OneShotSpawnFn = (command, args, options) =>
-  // `detached`: o processo vira líder de um grupo, para derrubar a árvore inteira (as ferramentas que ele abriu).
-  nodeSpawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"], detached: true });
+  // Grupo próprio no Linux; no Windows usa windowsHide sem detached e encerra pela árvore.
+  nodeSpawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"], ...detachedSpawnOptions() });
 
-/** Manda o sinal ao grupo do processo (a árvore); sem grupo (já saiu), ao processo. */
+/** Manda o sinal à árvore do processo (grupo no Linux; taskkill /T /F no Windows). */
 function killTree(child: ChildProcess, signal: NodeJS.Signals): void {
   const pid = child.pid;
   if (pid === undefined) return;
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    try {
-      child.kill(signal);
-    } catch {
-      // já saiu
-    }
-  }
+  killProcessTree(pid, signal);
 }
 
 /** O turno foi cortado (cancelar, interromper, parar) antes de o processo subir: nada roda. */

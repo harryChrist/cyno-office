@@ -8,7 +8,7 @@ import { errorMessage } from "../../util/text";
 /** Comandos que elevam privilégio: o Cyno nunca os roda (o dono roda sozinho, com o comando mostrado no chat). */
 const ELEVATORS = new Set(["sudo", "su", "doas", "pkexec", "sudoedit", "run0"]);
 /** Programas que recebem outro comando (ou um programa inteiro) como argumento: o texto também é conferido. */
-const WRAPPERS = new Set(["bash", "sh", "zsh", "dash", "fish", "ksh", "env", "xargs", "nohup", "timeout", "nice", "setsid", "exec", "time", "watch"]);
+const WRAPPERS = new Set(["bash", "bash.exe", "sh", "zsh", "dash", "fish", "ksh", "powershell", "pwsh", "cmd", "wsl", "env", "xargs", "nohup", "timeout", "nice", "setsid", "exec", "time", "watch"]);
 
 export type HostCommandInput = { command: string; args: string[]; cwd?: string };
 
@@ -26,9 +26,12 @@ export type HostCommandResult = {
 /** Motivo (em inglês, para o Cyno) se o comando não pode nem ser proposto; undefined se pode. */
 export function refuseHostCommand(input: HostCommandInput): string | undefined {
   if (!input.command.trim()) return "Refused: the command is empty.";
-  const name = path.basename(input.command.trim());
-  const words = [input.command, ...input.args].flatMap((text) => text.split(/[\s;&|()`$<>"']+/)).map((word) => path.basename(word));
-  if (ELEVATORS.has(name) || (WRAPPERS.has(name) && words.some((word) => ELEVATORS.has(word)))) {
+  const normalizeName = (raw: string) => (raw.split(/[\\/]/).pop() ?? raw).toLowerCase();
+  const isWrapper = (candidate: string) => WRAPPERS.has(candidate) || WRAPPERS.has(candidate.replace(/\.exe$/i, ""));
+  const isElevator = (candidate: string) => ELEVATORS.has(candidate) || ELEVATORS.has(candidate.replace(/\.exe$/i, ""));
+  const name = normalizeName(input.command.trim());
+  const words = [input.command, ...input.args].flatMap((text) => text.split(/[\s;&|()`$<>"']+/)).map(normalizeName);
+  if (isElevator(name) || (isWrapper(name) && words.some(isElevator))) {
     return "Refused: the Cyno never runs commands with sudo or other privilege elevation. Show the exact command to the owner in the chat (in a code block) and tell them to run it themselves in a terminal, then continue when they say it is done.";
   }
   return undefined;

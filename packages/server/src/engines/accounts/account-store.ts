@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, realpath, rm, symlink } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import {
   ACCOUNT_ENGINES,
@@ -14,6 +13,7 @@ import {
 } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
 import { HttpError } from "../../platform/http/errors";
+import { dirSymlinkType, homeEnvFor, isPathInside, isWindows, samePath, userHomeDir } from "../../platform/os";
 import { writeJsonAtomic } from "../../store/atomic-write";
 import { platformPaths } from "../../store/paths";
 import { WriteQueue } from "../../store/write-queue";
@@ -33,6 +33,8 @@ export type EngineAccountStoreOptions = {
   log?: Pick<FastifyBaseLogger, "warn">;
   /** Gerador de sufixo curto aleatório (injetável para testes determinísticos). */
   randomSuffix?: () => string;
+  /** Plataforma alvo (injetável para testes de portabilidade). */
+  platform?: NodeJS.Platform;
 };
 
 const defaultSuffix = () => randomBytes(2).toString("hex");
@@ -89,12 +91,11 @@ function parseAccountsFile(raw: unknown): EngineAccount[] {
   return accounts;
 }
 
-async function existsLstat(target: string): Promise<boolean> {
+async function statLstat(target: string) {
   try {
-    await lstat(target);
-    return true;
+    return await lstat(target);
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -110,14 +111,16 @@ export class EngineAccountStore {
   private readonly realHomeDir: string;
   private readonly now: () => Date;
   private readonly randomSuffix: () => string;
+  private readonly platform: NodeJS.Platform;
 
   private constructor(
     private readonly dataDir: string,
     private accounts: EngineAccount[],
     options: EngineAccountStoreOptions,
   ) {
+    this.platform = options.platform ?? process.platform;
     this.file = platformPaths(dataDir).engineAccountsFile;
-    this.realHomeDir = path.resolve(options.realHomeDir ?? os.homedir());
+    this.realHomeDir = path.resolve(options.realHomeDir ?? userHomeDir(process.env, this.platform));
     this.now = options.now ?? (() => new Date());
     this.randomSuffix = options.randomSuffix ?? defaultSuffix;
   }
@@ -224,7 +227,7 @@ export class EngineAccountStore {
     const id = assertValidAccountId(account.id);
     const root = this.accountsRoot(engine);
     const target = path.resolve(root, id);
-    if (path.dirname(target) !== root || path.basename(target) !== id) {
+    if (!samePath(path.dirname(target), root, this.platform) || path.basename(target) !== id) {
       throw new HttpError(400, "Caminho de conta inválido.");
     }
     return target;
@@ -233,12 +236,12 @@ export class EngineAccountStore {
   /**
    * Variáveis de ambiente de isolamento para esta conta:
    * - `claude`: `{ CLAUDE_CONFIG_DIR: <pasta do perfil> }`
-   * - `gemini`: `{ HOME: <pasta do perfil>/home }`
+   * - `gemini`: `homeEnvFor(<pasta do perfil>/home)` (`HOME` no Linux; `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA` no Windows)
    */
   profileEnv(account: Pick<EngineAccount, "id" | "engine">): Record<string, string> {
     const dir = this.profileDir(account);
     if (account.engine === "claude") return { CLAUDE_CONFIG_DIR: dir };
-    return { HOME: path.join(dir, "home") };
+    return homeEnvFor(path.join(dir, "home"), this.platform);
   }
 
   /** Caminho do `.credentials.json` de uma conta Claude. */
@@ -268,12 +271,19 @@ export class EngineAccountStore {
 
     for (const name of GEMINI_HOME_SYMLINKS) {
       const source = path.join(this.realHomeDir, name);
-      if (!(await existsLstat(source))) continue;
+      const sourceStats = await statLstat(source);
+      if (!sourceStats) continue;
       const dest = path.join(homeDir, name);
       try {
-        await symlink(source, dest);
+        // No Windows, diretório exige junção ("junction") para funcionar sem privilégio de administrador.
+        const type = sourceStats.isDirectory() ? dirSymlinkType(this.platform) : undefined;
+        await symlink(source, dest, type);
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EEXIST") continue;
+        // Sem Modo Desenvolvedor no Windows, symlink de arquivo pode devolver EPERM: não trava a criação da conta.
+        if (isWindows(this.platform) && !sourceStats.isDirectory() && code === "EPERM") continue;
+        throw error;
       }
     }
   }
@@ -293,11 +303,11 @@ export class EngineAccountStore {
       throw new HttpError(400, "Recusado remover pasta de perfil que aponta para symlink externo.");
     }
     const [realRoot, realTarget] = await Promise.all([realpath(root), realpath(target)]);
-    if (path.dirname(realTarget) !== realRoot || !realTarget.startsWith(`${realRoot}${path.sep}`)) {
+    if (!samePath(path.dirname(realTarget), realRoot, this.platform) || !isPathInside(realTarget, realRoot, { strict: true, platform: this.platform })) {
       throw new HttpError(400, "Caminho resolvido da conta está fora da pasta permitida.");
     }
     const realHome = await realpath(this.realHomeDir).catch(() => this.realHomeDir);
-    if (realTarget === realHome || realHome.startsWith(`${realTarget}${path.sep}`)) {
+    if (samePath(realTarget, realHome, this.platform) || isPathInside(realHome, realTarget, { platform: this.platform })) {
       throw new HttpError(400, "Recusado remover pasta que alcança o HOME real.");
     }
     // `rm -rf` no Node desfaz symlinks internos sem entrar nem apagar o alvo deles.

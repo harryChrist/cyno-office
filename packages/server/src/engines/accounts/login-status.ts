@@ -1,5 +1,4 @@
 import { stat } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import {
   ACCOUNT_ENGINES,
@@ -8,6 +7,7 @@ import {
   type EngineAccount,
   type EngineAccountView,
 } from "@cyno/shared";
+import { userHomeDir } from "../../platform/os";
 import { defaultProbe, type EngineBinary, type EngineProbe } from "../terminals/engines";
 import { parseLoggedIn } from "../terminals/engine-status";
 import type { EngineAccountStore } from "./account-store";
@@ -43,6 +43,9 @@ export type AccountLoginCheckerOptions = {
   now?: () => number;
   cacheTtlMs?: number;
   claudeTimeoutMs?: number;
+  /** Ambiente e plataforma opcionais (para simular Windows/Linux nos testes). */
+  env?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
 };
 
 type CacheEntry = { loggedIn: boolean; at: number };
@@ -75,7 +78,7 @@ export class AccountLoginChecker {
     this.now = options.now ?? Date.now;
     this.cacheTtlMs = options.cacheTtlMs ?? LOGIN_CACHE_TTL_MS;
     this.claudeTimeoutMs = options.claudeTimeoutMs ?? CLAUDE_AUTH_TIMEOUT_MS;
-    this.realHomeDir = path.resolve(options.realHomeDir ?? process.env.HOME ?? os.homedir());
+    this.realHomeDir = path.resolve(options.realHomeDir ?? userHomeDir(options.env ?? process.env, options.platform));
   }
 
   private key(engine: AccountEngine, accountId: string): string {
@@ -144,9 +147,8 @@ export class AccountLoginChecker {
 
   private async compute(target: LoginTarget): Promise<boolean> {
     if (target.engine === "gemini") {
-      const homeDir = target.isDefault
-        ? this.realHomeDir
-        : this.options.store.profileEnv({ id: target.accountId, engine: "gemini" }).HOME!;
+      const profile = target.isDefault ? undefined : this.options.store.profileEnv({ id: target.accountId, engine: "gemini" });
+      const homeDir = target.isDefault ? this.realHomeDir : (profile?.USERPROFILE ?? profile?.HOME)!;
       return fileExists(agyTokenFile(homeDir));
     }
 

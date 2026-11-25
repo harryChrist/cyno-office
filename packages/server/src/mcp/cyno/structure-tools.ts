@@ -1,6 +1,7 @@
 import { AGENT_EFFORTS, HOST_COMMAND_LIMITS, IMPLEMENTED_CLI_ENGINES, type ModelChoice, type Workspace } from "@cyno/shared";
 import { z } from "zod";
 import type { ProposalInput } from "../../platform/cyno/proposals";
+import { isWindows } from "../../platform/os";
 import { defineTool, type McpTool, type McpToolResult } from "../protocol";
 import { ROOM_PURPOSE_INPUTS, ROOM_SIZE_INPUTS } from "../structure-tools";
 
@@ -54,7 +55,10 @@ const SIZES = Object.keys(ROOM_SIZE_INPUTS) as [keyof typeof ROOM_SIZE_INPUTS, .
  * executa é a rota do dono, depois do clique). Em inglês. As ferramentas de estrutura que o Maestro também
  * tem (criar sala/time/agente, modelos…) entram por `scopedStructureTools`.
  */
-export function cynoStructureTools(deps: StructureHostDeps): McpTool[] {
+export function cynoStructureTools(deps: StructureHostDeps, options?: { platform?: NodeJS.Platform }): McpTool[] {
+  const shellExample = isWindows(options?.platform)
+    ? 'command "powershell" and args ["-Command", "..."]'
+    : 'command "bash" and args ["-c", "..."]';
   return [
     defineTool({
       name: "get_catalog",
@@ -219,7 +223,7 @@ export function cynoStructureTools(deps: StructureHostDeps): McpTool[] {
     }),
     defineTool({
       name: "run_host_command",
-      description: `The ONLY way for you to run something on the owner's machine (you have no shell). Give the program and its arguments separately: it runs directly with no shell (pipes, &&, redirects, globs and ~ do not work; to use them pass command "bash" and args ["-c", "..."], which the owner will see exactly). It runs in the platform work folder by default (or the absolute \`cwd\` you pass, shown on the card), with a time limit (default ${HOST_COMMAND_LIMITS.timeoutDefaultSec}s, max ${HOST_COMMAND_LIMITS.timeoutMaxSec}s) and the output cut at ${HOST_COMMAND_LIMITS.outputChars} characters. NEVER with sudo or any privilege elevation: it is refused; show the exact command to the owner in a code block so they run it themselves. ${NEEDS_OK} When the owner approves, the result (output) arrives as a message: show the useful part to the owner.`,
+      description: `The ONLY way for you to run something on the owner's machine (you have no shell). Give the program and its arguments separately: it runs directly with no shell (pipes, &&, redirects, globs and ~ do not work; to use them pass ${shellExample}, which the owner will see exactly). It runs in the platform work folder by default (or the absolute \`cwd\` you pass, shown on the card), with a time limit (default ${HOST_COMMAND_LIMITS.timeoutDefaultSec}s, max ${HOST_COMMAND_LIMITS.timeoutMaxSec}s) and the output cut at ${HOST_COMMAND_LIMITS.outputChars} characters. NEVER with sudo or any privilege elevation: it is refused; show the exact command to the owner in a code block so they run it themselves. ${NEEDS_OK} When the owner approves, the result (output) arrives as a message: show the useful part to the owner.`,
       input: z.object({
         command: z.string().trim().min(1).max(300).describe('The program, e.g. "ls" or "git"'),
         args: z.array(z.string().max(HOST_COMMAND_LIMITS.argLength)).max(HOST_COMMAND_LIMITS.args).optional().describe("The arguments, one per item"),

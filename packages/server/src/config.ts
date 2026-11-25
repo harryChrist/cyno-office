@@ -1,8 +1,8 @@
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { manicodeDirOf } from "./engines/freebuff/files";
+import { userHomeDir } from "./platform/os";
 
 /** Raiz do monorepo (packages/server/src -> ../../..). */
 export const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -178,11 +178,12 @@ export type AppConfig = {
 };
 
 /** Lê as variáveis de ambiente. DATA_DIR relativo é resolvido a partir da raiz do repo. */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): AppConfig {
   const parsed = envSchema.parse(env);
   if (parsed.MOCK_MAX_MS < parsed.MOCK_MIN_MS) {
     throw new Error("MOCK_MAX_MS precisa ser maior ou igual a MOCK_MIN_MS");
   }
+  const homeDir = userHomeDir(env, platform);
   return {
     port: parsed.PORT,
     host: parsed.HOST,
@@ -209,12 +210,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     claudeUsagePollMs: parsed.CLAUDE_USAGE_POLL_MS,
     antigravityUsagePollMs: parsed.ANTIGRAVITY_USAGE_POLL_MS,
     retention: {
-      claudeProjectsDir: path.join(path.resolve(parsed.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude")), "projects"),
+      claudeProjectsDir: path.join(path.resolve(parsed.CLAUDE_CONFIG_DIR ?? path.join(homeDir, ".claude")), "projects"),
       autoRun: parsed.RETENTION_AUTO === "1",
     },
     engineStorage: {
-      antigravityHome: path.resolve(parsed.ANTIGRAVITY_HOME ?? path.join(os.homedir(), ".gemini", "antigravity-cli")),
-      freebuffHome: manicodeDirOf(env),
+      antigravityHome: path.resolve(parsed.ANTIGRAVITY_HOME ?? path.join(homeDir, ".gemini", "antigravity-cli")),
+      freebuffHome: manicodeDirOf(env, platform),
     },
     connectorsStdio: parsed.CONNECTORS_STDIO === "1",
     browser: {

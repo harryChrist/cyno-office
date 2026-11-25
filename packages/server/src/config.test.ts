@@ -73,4 +73,11 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ MOCK_APPROVAL_RATE: "1.5" })).toThrow();
     expect(() => loadConfig({ AGENT_RUNNER: "claude" })).toThrow();
   });
+
+  it("no Windows (win32), resolve pastas padrão dos motores a partir de USERPROFILE", () => {
+    const config = loadConfig({ USERPROFILE: "/tmp/win-user" }, "win32");
+    expect(config.retention.claudeProjectsDir).toBe(path.join(path.resolve("/tmp/win-user", ".claude"), "projects"));
+    expect(config.engineStorage.antigravityHome).toBe(path.resolve("/tmp/win-user", ".gemini", "antigravity-cli"));
+    expect(config.engineStorage.freebuffHome).toBe(path.join("/tmp/win-user", ".config", "manicode"));
+  });
 });

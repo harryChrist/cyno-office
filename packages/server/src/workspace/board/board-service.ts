@@ -13,6 +13,7 @@ import {
 } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
 import { HttpError } from "../../platform/http/errors";
+import { isPathInside } from "../../platform/os";
 import { writeFileAtomic, writeJsonAtomic } from "../../store/atomic-write";
 import { DataFileError } from "../../store/files";
 import type { WriteQueue } from "../../store/write-queue";
@@ -293,7 +294,7 @@ export async function readBoardInputFile(agentDir: string, extraRoots: readonly 
   } catch {
     throw new BoardToolError(`File not found: ${requested}. Pass a path relative to your folder, or an absolute path inside a work folder you can read.`);
   }
-  if (!roots.some((root) => real === root || real.startsWith(`${root}${path.sep}`))) throw new BoardToolError("The file must be inside your own agent folder or a work folder you can read (links and \"..\" that leave them are refused).");
+  if (!roots.some((root) => isPathInside(real, root))) throw new BoardToolError("The file must be inside your own agent folder or a work folder you can read (links and \"..\" that leave them are refused).");
   const info = await stat(real);
   if (!info.isFile()) throw new BoardToolError(`${requested} is not a file.`);
   if (info.size > maxBytes) throw new BoardToolError(`${path.basename(real)} is too large (${mb(info.size)}; max ${mb(maxBytes)}).`);

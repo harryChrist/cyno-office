@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { userHomeDir } from "../../platform/os";
 import { parseAccountUsage } from "./account-usage";
 import { StaleError, UsagePoller, type RefreshResult, type UsagePollerOptions } from "./usage-poller";
 
@@ -27,8 +27,8 @@ export const STALE_REASONS = {
 } as const;
 
 /** Arquivo de credenciais do Claude Code (`$CLAUDE_CONFIG_DIR/.credentials.json` ou `~/.claude/`). */
-export function defaultCredentialsFile(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), ".claude"), ".credentials.json");
+export function defaultCredentialsFile(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
+  return path.join(env.CLAUDE_CONFIG_DIR || path.join(userHomeDir(env, platform), ".claude"), ".credentials.json");
 }
 
 export type AccountUsagePollerOptions = UsagePollerOptions & {

@@ -1,7 +1,8 @@
-import { accessSync, constants, readFileSync, statfsSync } from "node:fs";
+import { accessSync, constants, readFileSync, statSync, statfsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AppRequirement, CatalogApp, RequirementResult } from "@cyno/shared";
+import { executableCandidates, isWindows, pathDelimiter, readPathEnv } from "../../platform/os";
 import { RUNTIMES, platformKey } from "./runtimes";
 
 /** O que a máquina tem (injetável nos testes). */
@@ -21,26 +22,40 @@ export type MachineProbe = {
   runtimeInstalled: (runtimeId: string) => boolean;
 };
 
-export function whichInPath(bin: string, envPath: string | undefined = process.env.PATH): string | undefined {
-  for (const dir of (envPath ?? "").split(path.delimiter)) {
+export function whichInPath(
+  bin: string,
+  envPath: string | undefined = undefined,
+  options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
+): string | undefined {
+  const platform = options.platform ?? process.platform;
+  const env = options.env ?? process.env;
+  const rawPath = envPath ?? readPathEnv(env, platform);
+  const delimiter = pathDelimiter(platform);
+  const names = executableCandidates(bin, env, platform);
+  for (const dir of rawPath.split(delimiter)) {
     if (!dir) continue;
-    const candidate = path.join(dir, bin);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // próximo
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      try {
+        if (!statSync(candidate).isFile()) continue;
+        accessSync(candidate, isWindows(platform) ? constants.F_OK : constants.X_OK);
+        return candidate;
+      } catch {
+        // próximo
+      }
     }
   }
   return undefined;
 }
 
-function availMemMB(): number {
-  try {
-    const match = /MemAvailable:\s+(\d+) kB/.exec(readFileSync("/proc/meminfo", "utf8"));
-    if (match) return Math.round(Number(match[1]) / 1024);
-  } catch {
-    // sem /proc: cai no que o Node sabe
+export function availMemMB(platform: NodeJS.Platform = process.platform): number {
+  if (!isWindows(platform)) {
+    try {
+      const match = /MemAvailable:\s+(\d+) kB/.exec(readFileSync("/proc/meminfo", "utf8"));
+      if (match) return Math.round(Number(match[1]) / 1024);
+    } catch {
+      // sem /proc: cai no que o Node sabe
+    }
   }
   return Math.round(os.freemem() / 1024 / 1024);
 }
@@ -50,7 +65,7 @@ export function realProbe(dataDir: string, runtimesRoot: string): MachineProbe {
     platform: process.platform,
     arch: process.arch,
     totalMemMB: () => Math.round(os.totalmem() / 1024 / 1024),
-    availMemMB,
+    availMemMB: () => availMemMB(),
     diskFreeMB: () => {
       try {
         const stats = statfsSync(dataDir);

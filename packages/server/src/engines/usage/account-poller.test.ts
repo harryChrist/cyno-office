@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../app";
 import { seedDataDir } from "../../workspace/office/seed";
 import { useTempDirs } from "../../dev/test-utils";
-import { AccountUsagePoller, CLAUDE_USAGE_URL, STALE_REASONS } from "./account-poller";
+import { AccountUsagePoller, CLAUDE_USAGE_URL, defaultCredentialsFile, STALE_REASONS } from "./account-poller";
 import { SubscriptionUsageTracker } from "./subscription-usage";
 import { loadUsageFile, persistUsage, saveUsageFile } from "./usage-file";
 
@@ -255,5 +255,11 @@ describe("usage.json", () => {
     const disabled = await second.inject({ method: "POST", url: "/api/usage/refresh" });
     expect(disabled.statusCode).toBe(503);
     await second.close();
+  });
+
+  it("defaultCredentialsFile respeita CLAUDE_CONFIG_DIR e USERPROFILE no Windows (win32)", () => {
+    expect(defaultCredentialsFile({ USERPROFILE: "/tmp/win-ana" }, "win32")).toBe(path.join("/tmp/win-ana", ".claude", ".credentials.json"));
+    expect(defaultCredentialsFile({ CLAUDE_CONFIG_DIR: "/tmp/custom", USERPROFILE: "/tmp/win-ana" }, "win32")).toBe(path.join("/tmp/custom", ".credentials.json"));
+    expect(defaultCredentialsFile({ HOME: "/home/ana" }, "linux")).toBe(path.join("/home/ana", ".claude", ".credentials.json"));
   });
 });

@@ -1,5 +1,5 @@
 import { spawn as spawnPipes } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -9,6 +9,7 @@ import { minimalChildEnv, sanitizeChildEnv } from "../../engines/terminals/env";
 import { fencedCommand } from "../../engines/terminals/fence";
 import type { ScriptAgentContext } from "../../engines/terminals/manager";
 import { HttpError } from "../../platform/http/errors";
+import { defaultShell, detachedSpawnOptions, homeEnvFor, isPathInside, isProcessAlive, isWindows, killProcessTree } from "../../platform/os";
 import { writeJsonAtomic } from "../../store/atomic-write";
 
 /*
@@ -32,15 +33,7 @@ export type ScriptProcess = {
 export type ScriptSpawnFn = (file: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => Promise<ScriptProcess> | ScriptProcess;
 
 function killGroupOf(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch {
-    try {
-      process.kill(pid, signal);
-    } catch {
-      // já saiu
-    }
-  }
+  killProcessTree(pid, signal);
 }
 
 /** Processo sob um pseudo-terminal (saída ao vivo, sem buffer do programa). O node-pty cria a sessão: o pid é o líder do grupo. */
@@ -57,7 +50,7 @@ async function spawnPty(file: string, args: string[], options: { cwd: string; en
 
 /** Plano B sem PTY: stdout e stderr juntos, na ordem em que chegam, em processo próprio (grupo próprio). */
 export function spawnWithPipes(file: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }): ScriptProcess {
-  const child = spawnPipes(file, args, { cwd: options.cwd, env: options.env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawnPipes(file, args, { cwd: options.cwd, env: options.env, ...detachedSpawnOptions(), stdio: ["ignore", "pipe", "pipe"] });
   if (child.pid === undefined) throw new Error("could not start the process");
   const pid = child.pid;
   const listeners: ((chunk: string) => void)[] = [];
@@ -112,6 +105,8 @@ export type ScriptsServiceOptions = {
   sweepMs?: number;
   log: Pick<FastifyBaseLogger, "warn" | "info">;
   now: () => Date;
+  /** Plataforma alvo (injetável nos testes para simular Windows/Linux). */
+  platform?: NodeJS.Platform;
 };
 
 type EndReason = { kind: "stopped"; by: ScriptStopper } | { kind: "timeout" };
@@ -155,10 +150,7 @@ function incompleteTail(buffer: Buffer): number {
   return 0;
 }
 
-const isInside = (root: string, target: string): boolean => {
-  const relative = path.relative(root, target);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-};
+const isInside = (root: string, target: string, platform?: NodeJS.Platform): boolean => isPathInside(target, root, { ...(platform ? { platform } : {}) });
 
 /**
  * Marca que todo script leva no ambiente. Serve para reconhecer, depois de uma queda do servidor, que o processo de
@@ -169,16 +161,13 @@ const SCRIPT_MARK_ENV = "CYNO_SCRIPT";
 const scriptMark = (run: Pick<ScriptRun, "id" | "startedAt">): string => `${run.id}@${run.startedAt}`;
 
 /** O processo `pid` ainda existe e é o script com esta marca? (reinício do servidor: não matar um PID reaproveitado). */
-function looksLikeOurScript(pid: number, mark: string): boolean {
-  try {
-    process.kill(-pid, 0);
-  } catch {
-    return false;
-  }
+function looksLikeOurScript(pid: number, mark: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (!isProcessAlive(pid, { group: true, platform })) return false;
+  if (isWindows(platform)) return true;
   try {
     return readFileSync(`/proc/${pid}/environ`, "utf8").split("\0").includes(`${SCRIPT_MARK_ENV}=${mark}`);
   } catch {
-    return process.platform !== "linux";
+    return platform !== "linux";
   }
 }
 
@@ -694,21 +683,21 @@ export class ScriptsService {
       throw new HttpError(422, `The folder "${requested}" does not exist`);
     }
     if (!statSync(target).isDirectory()) throw new HttpError(422, `"${requested}" is not a folder`);
-    if (!roots.some((root) => isInside(root, target))) throw new HttpError(403, "That folder is outside your folder and your work folders. Scripts run only where your own terminal can.");
+    if (!roots.some((root) => isInside(root, target, this.options.platform))) throw new HttpError(403, "That folder is outside your folder and your work folders. Scripts run only where your own terminal can.");
     return target;
   }
 
   /** Programa, argumentos e ambiente: ambiente sem segredos; nos motores cercados, o mínimo e o comando dentro da mesma cerca do agente. */
   private async launchSpec(context: ScriptAgentContext, command: string, mark: string): Promise<{ file: string; args: string[]; env: NodeJS.ProcessEnv }> {
     const base = this.options.env?.() ?? process.env;
-    const bash = existsSync("/bin/bash") ? "/bin/bash" : "bash";
+    const shell = defaultShell("command", this.options.platform);
     if (context.fence) {
       const tmp = path.join(context.cwd, "tmp");
       await mkdir(tmp, { recursive: true });
-      const env = minimalChildEnv(base, { HOME: context.cwd, TMPDIR: tmp, PYTHONUNBUFFERED: "1", [SCRIPT_MARK_ENV]: mark });
-      const fenced = fencedCommand(context.fence.policy, context.fence.python, bash, ["-c", command]);
+      const env = minimalChildEnv(base, { ...homeEnvFor(context.cwd, this.options.platform), TMPDIR: tmp, PYTHONUNBUFFERED: "1", [SCRIPT_MARK_ENV]: mark });
+      const fenced = fencedCommand(context.fence.policy, context.fence.python, shell.command, [...shell.args, command]);
       return { file: fenced.command, args: fenced.args, env };
     }
-    return { file: bash, args: ["-c", command], env: sanitizeChildEnv(base, { PYTHONUNBUFFERED: "1", [SCRIPT_MARK_ENV]: mark }) };
+    return { file: shell.command, args: [...shell.args, command], env: sanitizeChildEnv(base, { PYTHONUNBUFFERED: "1", [SCRIPT_MARK_ENV]: mark }) };
   }
 }

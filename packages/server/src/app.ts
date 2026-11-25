@@ -82,6 +82,7 @@ import { OneShotEngines, type OneShotEnginesDeps } from "./engines/terminals/one
 import { readOpenclawBase } from "./engines/terminals/openclaw-adapter";
 import { OpenRouterModelsCache, type OpenRouterClientOptions } from "./platform/openrouter/client";
 import { OpenRouterKeyStore } from "./platform/openrouter/key-store";
+import { readPathEnv } from "./platform/os";
 import { SpendSettingsStore } from "./engines/usage/spend-settings";
 import { SubscriptionUsageTracker } from "./engines/usage/subscription-usage";
 import { loadUsageFile, persistUsage } from "./engines/usage/usage-file";
@@ -376,7 +377,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   engineSettings.onMaxGateways = () => hermesSlots.drain();
   terminals.hermes = { ...oneShotDefaults("hermes"), slots: hermesSlots, personalHome: path.join(deps.engineTools?.homeDir ?? os.homedir(), ".hermes"), ...deps.terminals?.hermes };
   terminals.openclawBase = () => readOpenclawBase(engineDirs(deps.dataDir, "openclaw").root);
-  const freebuffCommand = deps.freebuff?.command ?? (await findExecutable("freebuff", process.env.PATH ?? "", os.homedir())) ?? "freebuff";
+  const freebuffCommand = deps.freebuff?.command ?? (await findExecutable("freebuff", readPathEnv(process.env), os.homedir())) ?? "freebuff";
   terminals.freebuff = { manicodeDir: manicodeDirOf(), ...deps.freebuff, command: freebuffCommand, service: freebuffService };
   // OpenClaw e Hermes no seletor de motor (o serviço abre mais abaixo; a detecção só roda depois).
   const oneShotRef: { current?: OneShotEngines } = {};
