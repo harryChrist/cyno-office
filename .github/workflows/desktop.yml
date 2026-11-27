@@ -71,31 +71,43 @@ jobs:
           npm ci
           npm run build
 
-      - name: Instalar CLI do Tauri em packages/desktop
+      - name: Empacotar recursos autônomos do servidor e web (Windows x64)
         shell: pwsh
-        working-directory: packages/desktop
-        run: npm install --no-audit --no-fund
+        run: node packages/desktop/scripts/build-resources.mjs --platform win32-x64
 
-      - name: Baixar binário do Node.js Windows x64 (sidecar)
+      - name: Baixar binário do Node.js Windows x64 (sidecar) e verificar SHA256
         shell: pwsh
         run: |
           $dest = "packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"
-          $url = "https://nodejs.org/dist/v$($env:NODE_SIDECAR_VERSION)/win-x64/node.exe"
+          $baseUrl = "https://nodejs.org/dist/v$($env:NODE_SIDECAR_VERSION)"
+          $url = "$baseUrl/win-x64/node.exe"
+          $shasumsUrl = "$baseUrl/SHASUMS256.txt"
           New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
           Invoke-WebRequest -Uri $url -OutFile $dest
           if (-not (Test-Path $dest) -or (Get-Item $dest).Length -eq 0) {
             Write-Error "Falha ao baixar sidecar do Node de $url"
             exit 1
           }
+          $shasums = (Invoke-WebRequest -Uri $shasumsUrl -UseBasicParsing).Content
+          $matchLine = ($shasums -split "`r?`n") | Where-Object { $_ -match '^\s*[0-9a-fA-F]{64}\s+\*?win-x64/node\.exe\s*$' } | Select-Object -First 1
+          if (-not $matchLine) {
+            Remove-Item -Force $dest -ErrorAction SilentlyContinue
+            Write-Error "Entrada win-x64/node.exe não encontrada em $shasumsUrl"
+            exit 1
+          }
+          $expectedHash = ($matchLine.Trim() -split '\s+')[0].ToLowerInvariant()
+          $actualHash = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            Remove-Item -Force $dest -ErrorAction SilentlyContinue
+            Write-Error "SHA256 divergente para node.exe (esperado: $expectedHash, obtido: $actualHash)"
+            exit 1
+          }
+          Write-Host "SHA256 verificado para node.exe v$($env:NODE_SIDECAR_VERSION): $actualHash"
 
-      - name: Preparar recursos do servidor em resources/server/
+      - name: Instalar CLI do Tauri em packages/desktop
         shell: pwsh
-        run: |
-          $stage = "packages/desktop/src-tauri/resources/server"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item -Recurse -Force packages/web/dist "$stage/web-dist"
-          Copy-Item -Recurse -Force packages/server/src "$stage/server-src"
-          Copy-Item -Force packages/server/package.json "$stage/package.json"
+        working-directory: packages/desktop
+        run: npm install --no-audit --no-fund
 
       - name: Compilar instaladores NSIS/MSI e gerar rascunho com latest.json
         uses: tauri-apps/tauri-action@v0
@@ -112,3 +124,13 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: --target x86_64-pc-windows-msvc
+
+      - name: Publicar instaladores como artefato do workflow (para testes manuais)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyno-office-windows-x64
+          path: |
+            packages/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            packages/desktop/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 14
+          if-no-files-found: error

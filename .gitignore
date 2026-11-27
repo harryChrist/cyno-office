@@ -52,4 +52,7 @@ packages/desktop/src-tauri/gen/
 packages/desktop/src-tauri/binaries/*.exe
 packages/desktop/src-tauri/resources/server/*
 !packages/desktop/src-tauri/resources/server/README.md
+!packages/desktop/src-tauri/resources/server/.gitkeep
+packages/desktop/src-tauri/resources/web/*
+!packages/desktop/src-tauri/resources/web/.gitkeep
 

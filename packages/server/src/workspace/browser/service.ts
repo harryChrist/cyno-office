@@ -10,7 +10,8 @@ import {
   type ServerEvent,
 } from "@cyno/shared";
 import type { FastifyBaseLogger } from "fastify";
-import { chromium, type BrowserContext, type CDPSession, type Locator, type Page } from "playwright-core";
+import type { BrowserContext, CDPSession, Locator, Page } from "playwright-core";
+import { loadChromium } from "./playwright";
 import { activity } from "../activity/log";
 import { describeFind, describeInspect, FIND_DEFAULT_LIMIT, FIND_MAX_LIMIT, findElements, INSPECT_DEFAULT_CHARS, INSPECT_DEFAULT_DEPTH, INSPECT_MAX_CHARS, INSPECT_MAX_DEPTH, inspectElement } from "./inspect";
 import { CLEAR_COPIED_SOURCE, COPY_CAPTURE_SCRIPT, describeLinks, type LinkRecipe, readLinks, recipesFor, TAKE_COPIED_SOURCE } from "./links";
@@ -88,8 +89,8 @@ const DEFAULT_HOME_URL = "https://www.google.com";
 /** User agent sem "HeadlessChrome" (sites como o Google tratam o navegador sem tela como robô). Descoberto na primeira vez. */
 let cachedUserAgent: string | undefined;
 
-const defaultLauncher: BrowserLauncher = (profileDir, { userAgent }) =>
-  chromium.launchPersistentContext(profileDir, {
+const defaultLauncher: BrowserLauncher = async (profileDir, { userAgent }) =>
+  (await loadChromium()).launchPersistentContext(profileDir, {
     channel: "chromium",
     headless: true,
     acceptDownloads: false,

@@ -19,22 +19,35 @@ A casca **não conhece a lógica do Cyno**: ela apenas inicia o servidor Node co
 
 ## Como compilar no Windows
 
-1. Na raiz do monorepo, instale e compile o web e os pacotes:
+1. Na raiz do monorepo, instale as dependências e compile a interface web e os pacotes:
 
    ```powershell
    npm ci
    npm run build
    ```
 
-2. Coloque o binário do Node.js Windows x64 como sidecar em `packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe`:
+2. Gere o pacote autônomo do servidor + web (`resources/server/entry.mjs`, `resources/server/node_modules/@lydell/node-pty*` e `resources/web/`):
 
    ```powershell
-   Invoke-WebRequest `
-     -Uri "https://nodejs.org/dist/v22.15.0/win-x64/node.exe" `
-     -OutFile "packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"
+   node packages/desktop/scripts/build-resources.mjs --platform win32-x64
    ```
 
-3. Instale a CLI do Tauri dentro de `packages/desktop` e gere os instaladores (`.exe` NSIS e `.msi`):
+   *(Também disponível como `npm run build:resources` dentro de `packages/desktop`. No Linux, use `--platform host` ou `npm run smoke` para testar o pacote com o Node local.)*
+
+3. Baixe o binário do Node.js Windows x64 como sidecar em `packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe` e confira o SHA256 oficial:
+
+   ```powershell
+   $ver = "22.15.0"
+   $dest = "packages/desktop/src-tauri/binaries/node-x86_64-pc-windows-msvc.exe"
+   New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null
+   Invoke-WebRequest -Uri "https://nodejs.org/dist/v$ver/win-x64/node.exe" -OutFile $dest
+   $sums = (Invoke-WebRequest -Uri "https://nodejs.org/dist/v$ver/SHASUMS256.txt" -UseBasicParsing).Content
+   $expected = (($sums -split "`r?`n" | Where-Object { $_ -match 'win-x64/node\.exe$' }) -split '\s+')[0].ToLowerInvariant()
+   $actual = (Get-FileHash -Path $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+   if ($actual -ne $expected) { throw "SHA256 inválido! Esperado $expected, obtido $actual" }
+   ```
+
+4. Instale a CLI do Tauri dentro de `packages/desktop` e gere os instaladores (`.exe` NSIS e `.msi`):
 
    ```powershell
    cd packages/desktop
@@ -43,6 +56,17 @@ A casca **não conhece a lógica do Cyno**: ela apenas inicia o servidor Node co
    ```
 
    Os instaladores ficam em `packages/desktop/src-tauri/target/release/bundle/` (`nsis/` e `msi/`).
+
+### Teste de fumaça (Linux ou Windows)
+
+Depois de rodar `npm run build -w @cyno/web`, você pode validar o bundle autônomo sem precisar de Rust:
+
+```bash
+cd packages/desktop
+npm run smoke
+```
+
+O script empacota com `--platform host`, sobe `resources/server/entry.mjs` numa pasta `DATA_DIR` temporária e portas livres, valida `/api/health`, `/__backend-health`, `GET /` (HTML) e uma conexão WebSocket em `/ws`, e encerra o processo de forma limpa.
 
 ### Desenvolvimento local
 
@@ -54,8 +78,9 @@ $env:CYNO_SERVER_ENTRY = "C:\caminho\para\entry.mjs"
 npm run dev
 ```
 
-Variáveis de ambiente opcionais lidas pela casca:
+Variáveis de ambiente opcionais lidas pela casca e pelo `entry.mjs`:
 - `CYNO_SERVER_ENTRY`: sobrescreve o script executado pelo sidecar Node (padrão: `resources/server/entry.mjs` dentro do pacote).
+- `CYNO_WEB_DIR`: sobrescreve a pasta dos arquivos estáticos da web (padrão: `../web` relativo ao `entry.mjs`).
 - `DATA_DIR`: sobrescreve a pasta de dados (padrão no Windows: `%LOCALAPPDATA%\CynoOffice\data`).
 - `WEB_PORT` (padrão `3067`) e `PORT` (padrão `3068`).
 
@@ -90,7 +115,11 @@ O atualizador (`tauri-plugin-updater`) exige assinatura criptográfica para acei
 
 | Caminho | Função |
 | --- | --- |
-| `packages/desktop/package.json` | Scripts `tauri`, `dev`, `build` e `@tauri-apps/cli` ^2 |
+| `packages/desktop/package.json` | Scripts `tauri`, `dev`, `build`, `build:resources`, `smoke` e `@tauri-apps/cli` ^2 |
+| `packages/desktop/scripts/build-resources.mjs` | Gera `resources/server/entry.mjs` (esbuild), copia `resources/web/` e empacota `@lydell/node-pty` da plataforma |
+| `packages/desktop/scripts/smoke.mjs` | Teste de fumaça ponta a ponta do bundle autônomo (`--platform host`, HTTP + WebSocket + shutdown limpo) |
+| `packages/server/src/desktop-entry.ts` | Ponto de entrada autônomo do sidecar (servidor Fastify + gateway web em `127.0.0.1` + saída ao fechar stdin) |
+| `packages/server/src/desktop-gateway.ts` | Gateway HTTP/WebSocket em `node:http` + `node:net` (estáticos, fallback SPA, `/__backend-health`, proxy `/api` e `/ws`) |
 | `packages/desktop/frontend/index.html` | Tela mínima de carregamento enquanto o servidor sobe |
 | `packages/desktop/src-tauri/Cargo.toml` | Crates do Tauri 2 e plugins (shell, single-instance, autostart, notification, dialog, updater) |
 | `packages/desktop/src-tauri/tauri.conf.json` | Identificador `app.cyno.office`, janela `localhost:3067`, CSP, bundle NSIS/MSI, sidecar e atualizador |

@@ -1,4 +1,5 @@
-import { chromium, type Browser } from "playwright-core";
+import type { Browser } from "playwright-core";
+import { loadChromium } from "./playwright";
 import type { UrlPolicy } from "./url-policy";
 
 /** Lado máximo da página renderizada (px) e tempo máximo de uma renderização. */
@@ -21,7 +22,8 @@ export type RenderInput = {
 /** Abre o Chromium só para uma renderização (os testes podem trocar). */
 export type RenderLauncher = () => Promise<Browser>;
 
-const defaultLauncher: RenderLauncher = () => chromium.launch({ channel: "chromium", headless: true, args: ["--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check"] });
+const defaultLauncher: RenderLauncher = async () =>
+  (await loadChromium()).launch({ channel: "chromium", headless: true, args: ["--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check"] });
 
 /** Uma renderização por vez: cada uma sobe um Chromium e a memória é curta. */
 let tail: Promise<unknown> = Promise.resolve();

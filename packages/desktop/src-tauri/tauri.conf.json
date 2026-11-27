@@ -42,7 +42,8 @@
       "binaries/node"
     ],
     "resources": [
-      "resources/server/**/*"
+      "resources/server/**/*",
+      "resources/web/**/*"
     ],
     "windows": {
       "webviewInstallMode": {
