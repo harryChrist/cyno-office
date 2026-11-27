@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { makeAgent, makeOffice, makeRoom, makeTask } from "../test-fixtures";
 import type { ActivityEntry } from "../ui/activity";
 import { agentWorkStatus, maestroOf, maestroRequests, maestroStatus, maestroSteps } from "./maestroTimeline";
-import { clockLabel } from "./timeline";
+import { clockLabel } from "./timelineView";
 
 /** O escritório de teste com a Sala do Maestro, a Gerência e o Maestro. */
 function withMaestro(): OfficeState {

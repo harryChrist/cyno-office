@@ -1,7 +1,7 @@
 import { CYNO_STATUS_LABELS, engineBlockLabel, type CynoState, type WorkspaceProposal } from "@cyno/shared";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { cynoChatItems, cynoThinking, type CynoChatItem, type CynoWorkStep } from "../../agentWork/cynoChat";
-import { clockLabel } from "../../agentWork/timeline";
+import { clockLabel } from "../../agentWork/timelineView";
 import { useCynoStore } from "../../store/cynoStore";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { CynoPet } from "./CynoPet";
@@ -9,7 +9,7 @@ import { CynoModelPicker } from "./CynoModelPicker";
 import { ConfirmationCard, PendingDecisions, ProposalCard } from "./DecisionCards";
 import { RequestCard } from "./RequestsPanel";
 import { CynoChips, CynoRail, CynoSide, useSideCounts } from "./CynoSide";
-import { clampSideWidth, loadSideCollapsed, loadSideTab, loadSideWidth, saveSideCollapsed, saveSideTab, saveSideWidth, SIDE_WIDTH_DEFAULT, SIDE_WIDTH_MAX, SIDE_WIDTH_MIN, SIDE_WIDTH_STEP, type SideTabId } from "./cynoSide";
+import { clampSideWidth, loadSideCollapsed, loadSideTab, loadSideWidth, saveSideCollapsed, saveSideTab, saveSideWidth, SIDE_WIDTH_DEFAULT, SIDE_WIDTH_MAX, SIDE_WIDTH_MIN, SIDE_WIDTH_STEP, type SideTabId } from "./cynoSideView";
 import { JointCard } from "../joint/JointCard";
 import { CidadeFaixa } from "../../cena/cidade/CidadeFaixa";
 import "./cynoRequests.css";

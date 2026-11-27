@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { abertaPorPadrao, escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixa";
+import { abertaPorPadrao, escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixaView";
 
 /** localStorage de mentira (o ambiente dos testes é node). */
 beforeEach(() => {

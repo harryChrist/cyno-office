@@ -1,6 +1,6 @@
 import { BRAIN_SHELF_LABELS, brainShelf, type BrainFrontmatter, type BrainKind, type BrainNoteSummary, type BrainShelf, type BrainSummary, type OfficeState, type Task } from "@cyno/shared";
 import { countLabel } from "../../ui/format";
-import { inlineText, parseInline } from "../../ui/markdown/markdown";
+import { inlineText, parseInline } from "../../ui/markdown/markdownTree";
 
 /**
  * Nota escolhida no endereço (`#/biblioteca/cerebro/<ws>/<brainId>/<arquivo>`) ou as regras de um

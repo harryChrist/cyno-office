@@ -5,7 +5,7 @@ import { useOfficeStore } from "../store/officeStore";
 import { makeAgent, makeOffice, makeRoom } from "../test-fixtures";
 import { dockEscapeCollapses, isClick, type DockEscapeInput } from "../ui/maestroDock";
 import { activeRequests, currentMaestroTab, maestroTabs } from "./maestroTabs";
-import type { RequestItem } from "./timeline";
+import type { RequestItem } from "./timelineView";
 import { useWorkPanelStore } from "./workPanelStore";
 
 function withMaestro(): OfficeState {

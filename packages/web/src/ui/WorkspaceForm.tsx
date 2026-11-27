@@ -11,7 +11,7 @@ import { hasErrors, LIMITS, type FieldErrors } from "./validation";
 import { accessLabel } from "./AgentAccess";
 import { ErrorText, Field, Switch } from "./widgets";
 import "./workspaceForm.css";
-import { createWorkspaceBody, maestroEngineValues, newWorkspaceValues, validateNewWorkspace, type MaestroDraft, type WorkspaceFormValues } from "./workspaceForm";
+import { createWorkspaceBody, maestroEngineValues, newWorkspaceValues, validateNewWorkspace, type MaestroDraft, type WorkspaceFormValues } from "./workspaceFormView";
 
 type WorkspaceFormProps = {
   /** "hero": o estado vazio (campo grande, sem Cancelar); "dialog": o "Novo workspace" do seletor. */

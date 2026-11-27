@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitLinks } from "./linkify";
+import { splitLinks } from "./linkifyParts";
 
 const links = (text: string) => splitLinks(text).filter((part) => part.kind === "link").map((part) => part.text);
 
