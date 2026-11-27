@@ -8,7 +8,9 @@
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "build:resources": "node scripts/build-resources.mjs --platform win32-x64",
+    "smoke": "node scripts/smoke.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0"
