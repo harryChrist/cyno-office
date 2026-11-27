@@ -6,7 +6,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
-import { applyDesktopDefaults, DEFAULT_DESKTOP_WEB_PORT, resolveDesktopWebDir, resolveDesktopWebPort } from "./desktop-entry";
+import { applyDesktopDefaults, DEFAULT_DESKTOP_WEB_PORT, resolveDesktopWebDir, resolveDesktopWebPort, sameFilePath, stripWindowsVerbatimPrefix } from "./desktop-entry";
 import { DESKTOP_GATEWAY_HOST, isProxyPath, startDesktopGateway, type DesktopGateway } from "./desktop-gateway";
 
 type Cleanup = () => Promise<void>;
@@ -298,6 +298,22 @@ describe("desktop-entry helpers", () => {
     const fakeEntryUrl = pathToFileURL(path.resolve("/tmp/app/resources/server/entry.mjs")).href;
     expect(resolveDesktopWebDir({}, fakeEntryUrl)).toBe(path.resolve("/tmp/app/resources/web"));
     expect(resolveDesktopWebDir({ CYNO_WEB_DIR: "/custom/web" }, fakeEntryUrl)).toBe(path.resolve("/custom/web"));
+  });
+
+  it("tira o prefixo \\\\?\\ do Windows, que a casca Tauri passa em argv[1]", () => {
+    expect(stripWindowsVerbatimPrefix("\\\\?\\C:\\Cyno Office\\resources\\server\\entry.mjs")).toBe("C:\\Cyno Office\\resources\\server\\entry.mjs");
+    expect(stripWindowsVerbatimPrefix("\\\\?\\UNC\\servidor\\pasta\\entry.mjs")).toBe("\\\\servidor\\pasta\\entry.mjs");
+    expect(stripWindowsVerbatimPrefix("C:\\normal\\entry.mjs")).toBe("C:\\normal\\entry.mjs");
+    expect(stripWindowsVerbatimPrefix("/usr/lib/entry.mjs")).toBe("/usr/lib/entry.mjs");
+  });
+
+  it("reconhece o mesmo arquivo com prefixo \\\\?\\ e caixa diferente no Windows, e só no Windows", () => {
+    const literal = "\\\\?\\C:\\Users\\Ana\\AppData\\Local\\Cyno Office\\resources\\server\\entry.mjs";
+    const normal = "c:\\users\\ana\\appdata\\local\\cyno office\\resources\\server\\entry.mjs";
+    expect(sameFilePath(literal, normal, "win32")).toBe(true);
+    expect(sameFilePath(literal, "C:\\outra\\pasta\\entry.mjs", "win32")).toBe(false);
+    // Fora do Windows o prefixo não existe e a caixa importa.
+    expect(sameFilePath(literal, normal, "linux")).toBe(false);
   });
 
   it("lê e valida WEB_PORT", () => {

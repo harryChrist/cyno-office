@@ -8,12 +8,12 @@ Material que morava no README e foi movido para cá para o README ficar curto. O
 A segurança está no próprio app (nada depende de Cloudflare, nginx ou outro proxy) e **o app nunca fica aberto por esquecimento**. Cada instalação tem uma senha única (sem contas), criada no primeiro acesso:
 
 1. Sem `auth.json`, o server gera um **código de configuração** (`XXXX-XXXX-XXXX`, alfabeto sem 0/O/1/I/L) a cada subida e o escreve no log, num quadro bem visível: `Abra o Cyno e use o código XXXX-XXXX-XXXX para criar a senha`. Até a senha existir, todas as rotas e WebSockets respondem 401, menos `GET /api/auth/status`, `POST /api/auth/setup` e `/api/health`.
-2. A tela "Criar a senha" pede o código, a senha (mínimo 8 caracteres) e a confirmação. Acertar grava `DATA_DIR/auth.json` (0600), invalida o código e já abre a sessão. O código errado conta no bloqueio por IP.
+2. A tela "Criar a senha" pede o código, a senha e a confirmação. Acertar grava `DATA_DIR/auth.json` (0600), invalida o código e já abre a sessão. O código errado conta no bloqueio por IP.
 3. Alternativa pelo terminal do servidor: `npm run auth:set-password -w @cyno/server`.
 
 | Comando | O que faz |
 |---|---|
-| `npm run auth:set-password -w @cyno/server` | pede a senha duas vezes (sem eco, mínimo 8 caracteres) e grava o hash scrypt em `DATA_DIR/auth.json`; trocar a senha derruba todas as sessões e **mantém** o 2FA |
+| `npm run auth:set-password -w @cyno/server` | pede a senha duas vezes (sem eco) e grava o hash scrypt em `DATA_DIR/auth.json`; trocar a senha derruba todas as sessões e **mantém** o 2FA |
 | `npm run auth:clear -w @cyno/server` | remove a senha (com confirmação): o app volta ao estado de primeira instalação (código no log ao reiniciar) |
 | `npm run auth:reset-2fa -w @cyno/server` | desliga a verificação em duas etapas (quem perdeu o celular e os códigos de recuperação) |
 

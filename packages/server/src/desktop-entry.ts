@@ -101,17 +101,31 @@ async function main(): Promise<void> {
   }
 }
 
-function sameFilePath(a: string, b: string): boolean {
-  const resolveReal = (target: string) => {
+/**
+ * Tira o prefixo `\\?\` (caminho "literal" do Windows) que a casca Tauri passa ao Node em `argv[1]`:
+ * `\\?\C:\x` vira `C:\x` e `\\?\UNC\srv\share` vira `\\srv\share`. Sem isso, o `realpath` mantém o
+ * prefixo e a comparação com o `import.meta.url` (já sem ele) falha: o `main()` nunca roda e o Node
+ * sai em silêncio com código 0.
+ */
+export function stripWindowsVerbatimPrefix(target: string): string {
+  if (target.startsWith("\\\\?\\UNC\\")) return `\\\\${target.slice(8)}`;
+  if (/^\\\\\?\\[A-Za-z]:\\/.test(target)) return target.slice(4);
+  return target;
+}
+
+export function sameFilePath(a: string, b: string, platform: NodeJS.Platform = process.platform): boolean {
+  const windows = platform === "win32";
+  const normalize = (target: string) => {
+    const plain = windows ? stripWindowsVerbatimPrefix(target) : target;
+    let real: string;
     try {
-      return realpathSync(target);
+      real = realpathSync(plain);
     } catch {
-      return path.resolve(target);
+      real = path.resolve(plain);
     }
+    return windows ? stripWindowsVerbatimPrefix(real).toLowerCase() : real;
   };
-  const left = resolveReal(a);
-  const right = resolveReal(b);
-  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+  return normalize(a) === normalize(b);
 }
 
 // Evita autoexecução caso funções auxiliares sejam importadas em testes.

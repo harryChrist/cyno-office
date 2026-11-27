@@ -25,9 +25,11 @@ export const AUTH_SET_PASSWORD_COMMAND = "npm run auth:set-password -w @cyno/ser
 
 /**
  * `enabled`: há senha definida; `authenticated`: esta requisição tem sessão válida (true sem senha só com
- * CYNO_AUTH=off); `setupRequired`: sem senha e o app fechado, esperando o código de configuração.
+ * CYNO_AUTH=off); `setupRequired`: sem senha e o app fechado, esperando a criação da senha;
+ * `setupCodeRequired`: false no aplicativo desktop (servidor só em loopback), onde a senha se cria direto,
+ * sem o código de configuração; ausente/true nos demais (servidor, Docker).
  */
-export type AuthStatus = { enabled: boolean; authenticated: boolean; setupRequired?: boolean };
+export type AuthStatus = { enabled: boolean; authenticated: boolean; setupRequired?: boolean; setupCodeRequired?: boolean };
 
 /** Resposta do login: com 2FA ligado, a senha certa devolve só um token curto para o segundo passo. */
 export type LoginResult = AuthStatus & { twoFactorToken?: string };
@@ -36,8 +38,9 @@ export type LoginResult = AuthStatus & { twoFactorToken?: string };
 export const SETUP_CODE_PATTERN = /^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/;
 
 export const setupBodySchema = z.object({
-  code: z.string().min(1).max(64),
-  password: z.string().min(8, "A senha precisa ter pelo menos 8 caracteres").max(1024),
+  /** Obrigatório fora do desktop; o servidor decide (no desktop o código não existe e é ignorado). */
+  code: z.string().max(64).optional(),
+  password: z.string().min(1, "Digite uma senha").max(1024),
 });
 export type SetupBody = z.infer<typeof setupBodySchema>;
 
@@ -67,6 +70,6 @@ export type LoginBody = z.infer<typeof loginBodySchema>;
 
 export const changePasswordBodySchema = z.object({
   current: z.string().min(1).max(1024),
-  next: z.string().min(8, "A nova senha precisa ter pelo menos 8 caracteres").max(1024),
+  next: z.string().min(1, "Digite a nova senha").max(1024),
 });
 export type ChangePasswordBody = z.infer<typeof changePasswordBodySchema>;

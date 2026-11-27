@@ -16,7 +16,7 @@ import { useRunningCount } from "../hoje/TodayPanel";
 import { useScriptsStore } from "../../store/scriptsStore";
 import { runningCount } from "../../pages/scripts/scriptsView";
 import { useNavBadges } from "./navHooks";
-import { activeChild, childSub, counterParts, isGroupOpen, PAGE_HINTS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections, type Badge, type NavChildDef, type NavCounterKind, type NavItemDef, type ParaVoceButtonDef, type ParaVoceId } from "./navItems";
+import { activeChild, childSub, counterParts, isGroupOpen, PAGE_HINTS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections, type Badge, type NavChildDef, type NavCounterKind, type NavItemDef, type ParaVoceButtonDef, type ParaVoceId } from "./navItemsLogic";
 
 /** Selo de contagem: pílula ao lado do nome (aberta) ou bolinha no canto do ícone (recolhida). */
 function CountBadge({ badge }: { badge: Badge | undefined }) {

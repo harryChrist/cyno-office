@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import { api } from "../../api/client";
 import { isDesktopApp, pickFolder } from "../../desktop/desktopBridge";
 import { FolderPicker } from "../../ui/FolderPicker";
-import { resolveFolderPick, suggestedFolderName } from "../../ui/folderPicker";
+import { resolveFolderPick, suggestedFolderName } from "../../ui/folderPickerLogic";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
 import { StorageCard } from "./StorageCard";

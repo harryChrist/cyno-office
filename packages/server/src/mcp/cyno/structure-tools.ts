@@ -41,10 +41,10 @@ async function guarded(run: () => string | Promise<string>): Promise<McpToolResu
 }
 
 const workspaceField = z.string().trim().min(1).max(120).describe("Workspace id or name (see list_workspaces)");
-const reasonField = z.string().trim().max(600).optional().describe("Why, in Brazilian Portuguese: it is shown to the owner on the approval card as 'Cyno says'. Plain words, no technical ids.");
+const reasonField = z.string().trim().max(600).optional().describe("Why, in Brazilian Portuguese: recorded in the activity log. Plain words, no technical ids.");
 const choiceField = z.object({ engine: z.enum(IMPLEMENTED_CLI_ENGINES), model: z.string().trim().min(1).max(80).optional(), effort: z.enum(AGENT_EFFORTS).optional() });
 
-const NEEDS_OK = "NEEDS THE OWNER'S OK: this tool does NOT do it. It registers an approval card in the chat (summary built by the server) and returns PENDING_CONFIRMATION. You get a message when the owner decides. Never say it was done before that message.";
+const NEEDS_OK = "RUNS RIGHT AWAY (no approval card) and returns the real result (DONE or FAILED). Use it only for what the owner asked for in the conversation; if it goes beyond what they asked, ask them in the chat first and wait for the answer. If the server was set to require approval it returns PENDING_CONFIRMATION instead: then the owner decides on a card, you get a message with the result, and you must not say it was done, retry or find another way before that.";
 
 const PURPOSES = Object.keys(ROOM_PURPOSE_INPUTS) as [keyof typeof ROOM_PURPOSE_INPUTS, ...(keyof typeof ROOM_PURPOSE_INPUTS)[]];
 const SIZES = Object.keys(ROOM_SIZE_INPUTS) as [keyof typeof ROOM_SIZE_INPUTS, ...(keyof typeof ROOM_SIZE_INPUTS)[]];
@@ -69,7 +69,7 @@ export function cynoStructureTools(deps: StructureHostDeps, options?: { platform
     defineTool({
       name: "create_workspace",
       description:
-        "Creates a new EMPTY workspace (just its Maestro, no rooms or agents) right away, no approval needed. Use it only for a plain empty workspace; to build a whole package (rooms, team, agents, routines) use propose_workspace so the owner reviews it first. After it exists, add rooms/teams/agents with create_room, create_team, create_agent (pass workspace).",
+        "Creates a new EMPTY workspace (just its Maestro, no rooms or agents) right away, no approval needed. Use it only for a plain empty workspace; to build a whole package (rooms, team, agents, routines) use propose_workspace. After it exists, add rooms/teams/agents with create_room, create_team, create_agent (pass workspace).",
       input: z.object({
         name: z.string().trim().min(1).max(40).describe("Workspace name, shown to the owner"),
         summary: z.string().trim().max(280).optional().describe("One sentence in Brazilian Portuguese: what this workspace does (shown on its card)"),
@@ -101,7 +101,7 @@ export function cynoStructureTools(deps: StructureHostDeps, options?: { platform
     defineTool({
       name: "propose_workspace",
       description: [
-        "Proposes a WHOLE workspace to the owner as a proposal card (nothing is created): rooms, teams, agents (with engine/model), connectors, sites that need a login and routines. The owner reviews it and presses \"Criar workspace\"; then the SERVER creates everything by code in one transaction (if something fails it is all undone) and you get a message with the result. This is the way to build any package: never create the pieces one by one for a new workspace the owner asked for.",
+        "Builds a WHOLE workspace: rooms, teams, agents (with engine/model), connectors, sites that need a login and routines. The SERVER creates everything by code in one transaction (if something fails it is all undone) and the result comes back in this call (DONE or FAILED); the package also shows in the chat as a card, only as a record. If the server was set to require approval it instead only shows the card (nothing is created) and the owner presses \"Criar workspace\", then you get a message with the result. This is the way to build any package: never create the pieces one by one for a new workspace the owner asked for.",
         "Call get_catalog first. The server validates before showing (installed engine, existing model, unique names, valid room purposes, known connectors, routine format) and returns every problem so you can fix and call again.",
         "Defaults: Claude agents use model sonnet; Antigravity agents (engine gemini) use gemini-3.8-flash-medium; use opus or others only if the owner asked. Mix engines only when it helps (e.g. the image/research agent on gemini).",
         "Each room has teams; each team has agents (the first agent leads the team). Agent `focus` = its instructions (how it works, style, limits), `role` = short job title, both in Brazilian Portuguese. `connectors` of an agent must be listed in the proposal's `connectors` (existing ones are copied into the new workspace; ones that do not exist yet are only listed with a warning: they need add_connector with the owner's OK afterwards).",
@@ -157,31 +157,31 @@ export function cynoStructureTools(deps: StructureHostDeps, options?: { platform
     // ---------- Ações perigosas: só registram o pedido de OK ----------
     defineTool({
       name: "delete_workspace",
-      description: `Asks the owner to DELETE a whole workspace (rooms, agents, tasks; the folder goes to the platform trash). ${NEEDS_OK}`,
+      description: `DELETES a whole workspace (rooms, agents, tasks; the folder goes to the platform trash). ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.deleteWorkspace(input)),
     }),
     defineTool({
       name: "delete_room",
-      description: `Asks the owner to delete a room of a workspace WITH its teams, agents and tasks. ${NEEDS_OK}`,
+      description: `Deletes a room of a workspace WITH its teams, agents and tasks. ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, room: z.string().trim().min(1).max(64).describe("Room id or name"), reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.deleteRoom(input)),
     }),
     defineTool({
       name: "delete_team",
-      description: `Asks the owner to delete a team and its agents. ${NEEDS_OK}`,
+      description: `Deletes a team and its agents. ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, team: z.string().trim().min(1).max(64).describe("Team id or name"), reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.deleteTeam(input)),
     }),
     defineTool({
       name: "delete_agent",
-      description: `Asks the owner to delete an agent. ${NEEDS_OK}`,
+      description: `Deletes an agent. ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, agent: z.string().trim().min(1).max(64).describe("Agent id or name"), reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.deleteAgent(input)),
     }),
     defineTool({
       name: "add_connector",
-      description: `Asks the owner to register a NEW connector (an external MCP server) in a workspace, by URL (kind http) or by a command to run on this machine (kind stdio). It is created with no agent; giving it to agents is another approval (set_agent_connectors). Secrets (API keys, tokens) never go through you: tell the owner to add them in the workspace's connectors screen. ${NEEDS_OK}`,
+      description: `Registers a NEW connector (an external MCP server) in a workspace, by URL (kind http) or by a command to run on this machine (kind stdio). It is created with no agent; give it to agents afterwards with set_agent_connectors. Secrets (API keys, tokens) never go through you: tell the owner to add them in the workspace's connectors screen. ${NEEDS_OK}`,
       input: z.object({
         workspace: workspaceField,
         name: z.string().trim().min(1).max(60).describe("Connector name, shown to the owner"),
@@ -195,19 +195,19 @@ export function cynoStructureTools(deps: StructureHostDeps, options?: { platform
     }),
     defineTool({
       name: "set_agent_connectors",
-      description: `Asks the owner to set which connectors of the workspace ONE agent uses: the COMPLETE list (by id or name; [] = none). ${NEEDS_OK}`,
+      description: `Sets which connectors of the workspace ONE agent uses: the COMPLETE list (by id or name; [] = none). ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, agent: z.string().trim().min(1).max(64), connectors: z.array(z.string().trim().min(1).max(80)).max(50), reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.setAgentConnectors(input)),
     }),
     defineTool({
       name: "set_agent_access",
-      description: `Asks the owner to turn internet, the shared browser and/or the terminal on or off for ONE agent (never more than the workspace policy allows). ${NEEDS_OK}`,
+      description: `Turns internet, the shared browser and/or the terminal on or off for ONE agent (never more than the workspace policy allows). ${NEEDS_OK}`,
       input: z.object({ workspace: workspaceField, agent: z.string().trim().min(1).max(64), internet: z.boolean().optional(), browser: z.boolean().optional(), terminal: z.boolean().optional(), reason: reasonField }),
       call: (input) => guarded(() => deps.confirm.setAgentAccess(input)),
     }),
     defineTool({
       name: "set_workspace_access",
-      description: `Asks the owner to change the access POLICY of a workspace (internet, browser, terminal, local network, allowed/blocked domains), which caps every agent in it. Pass only what changes. ${NEEDS_OK}`,
+      description: `Changes the access POLICY of a workspace (internet, browser, terminal, local network, allowed/blocked domains), which caps every agent in it. Pass only what changes. ${NEEDS_OK}`,
       input: z.object({
         workspace: workspaceField,
         internet: z.boolean().optional(),
@@ -223,7 +223,7 @@ export function cynoStructureTools(deps: StructureHostDeps, options?: { platform
     }),
     defineTool({
       name: "run_host_command",
-      description: `The ONLY way for you to run something on the owner's machine (you have no shell). Give the program and its arguments separately: it runs directly with no shell (pipes, &&, redirects, globs and ~ do not work; to use them pass ${shellExample}, which the owner will see exactly). It runs in the platform work folder by default (or the absolute \`cwd\` you pass, shown on the card), with a time limit (default ${HOST_COMMAND_LIMITS.timeoutDefaultSec}s, max ${HOST_COMMAND_LIMITS.timeoutMaxSec}s) and the output cut at ${HOST_COMMAND_LIMITS.outputChars} characters. NEVER with sudo or any privilege elevation: it is refused; show the exact command to the owner in a code block so they run it themselves. ${NEEDS_OK} When the owner approves, the result (output) arrives as a message: show the useful part to the owner.`,
+      description: `The ONLY way for you to run something on the owner's machine (you have no shell). Give the program and its arguments separately: it runs directly with no shell (pipes, &&, redirects, globs and ~ do not work; to use them pass ${shellExample}). It runs in the platform work folder by default (or the absolute \`cwd\` you pass), with a time limit (default ${HOST_COMMAND_LIMITS.timeoutDefaultSec}s, max ${HOST_COMMAND_LIMITS.timeoutMaxSec}s) and the output cut at ${HOST_COMMAND_LIMITS.outputChars} characters. NEVER with sudo or any privilege elevation: it is refused; show the exact command to the owner in a code block so they run it themselves. ${NEEDS_OK} Show the useful part of the output to the owner.`,
       input: z.object({
         command: z.string().trim().min(1).max(300).describe('The program, e.g. "ls" or "git"'),
         args: z.array(z.string().max(HOST_COMMAND_LIMITS.argLength)).max(HOST_COMMAND_LIMITS.args).optional().describe("The arguments, one per item"),

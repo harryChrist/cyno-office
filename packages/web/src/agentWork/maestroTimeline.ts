@@ -2,7 +2,7 @@ import { findMaestroAgent, isActiveTaskStatus, isMaestroAgent, subtasksOf, type 
 import type { TaskProgressMap } from "../store/taskProgress";
 import { MAESTRO_ACTIVITY_LABELS, type ActivityEntry, type ActivityKind } from "../ui/activity";
 import { agentStatusLabel, truncate, type StatusTone } from "../ui/format";
-import type { RequestItem, RequestStage, StepItem, StepState } from "./timeline";
+import type { RequestItem, RequestStage, StepItem, StepState } from "./timelineLogic";
 
 /** Quantos pedidos o painel do Maestro mostra (os mais recentes); o resto fica na página Trabalho. */
 export const MAESTRO_HISTORY_LIMIT = 30;

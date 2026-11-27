@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, counterLabel, counterParts, isGroupOpen, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, PARA_VOCE_BUTTONS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections } from "./navItems";
+import { foldersSummary, activeChild, APP_WIDE_SECTIONS, childSub, counterLabel, counterParts, isGroupOpen, menuPages, NAV_SECTIONS, nonEmptySections, PAGE_HINTS, PARA_VOCE_BUTTONS, railGroupSub, visibleChildren, visibleParaVoce, visibleSections } from "./navItemsLogic";
 
 describe("menu de páginas", () => {
   it("grupos na ordem: Trabalho, Agentes ao vivo e, depois do traço, Gestão e Biblioteca", () => {

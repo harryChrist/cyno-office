@@ -1,7 +1,7 @@
 import { maestroSessionName, type AgentTerminalInfo, type Workspace } from "@cyno/shared";
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api, describeError } from "../api/client";
-import { sessionNameError } from "../ui/workspaceForm";
+import { sessionNameError } from "../ui/workspaceFormLogic";
 import { copyText } from "./MaestroTerminal";
 import { remoteSessionView } from "./remoteControl";
 

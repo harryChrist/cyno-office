@@ -245,6 +245,8 @@ export type AppDeps = {
   activity?: ActivityLog;
   /** Ociosidade do Cyno em ms antes de dormir (testes e `CYNO_IDLE_MS`); ausente = 10 min. */
   cynoIdleMs?: number;
+  /** As ações perigosas do Cyno pedem OK num cartão? Ausente = sim (os testes); o servidor em produção passa `CYNO_REQUIRE_APPROVAL`. */
+  cynoRequireApproval?: boolean;
   /** Senha de acesso (DATA_DIR/auth.json): pausa após erro e relógio; os testes ajustam. */
   auth?: AuthOptions;
   /** Clone de repositórios git: opções internas de teste (nunca expostas na API). */
@@ -558,6 +560,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     mural,
     simulated,
     ...(deps.cynoIdleMs ? { idleMs: deps.cynoIdleMs } : {}),
+    ...(deps.cynoRequireApproval !== undefined ? { requireApproval: deps.cynoRequireApproval } : {}),
     log: app.log,
     now,
   });

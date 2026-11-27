@@ -119,7 +119,34 @@ export type AuthOptions = {
   blocksFile?: string | null;
   /** Mostra o código de configuração de forma bem visível (o index.ts escreve um quadro no terminal). */
   announce?: (lines: string[]) => void;
+  /**
+   * Aplicativo desktop (servidor só em loopback): a senha se cria direto na tela, sem código de configuração.
+   * Em troca, o pedido precisa vir de um endereço de loopback (Host e Origin), o que barra páginas de
+   * outros sites (DNS rebinding) tentando criar a senha antes do dono.
+   */
+  setupWithoutCode?: boolean;
 };
+
+const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+function hostnameOfHostHeader(value: string): string {
+  const host = value.trim().toLowerCase();
+  return host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : (host.split(":")[0] ?? "");
+}
+
+/** O pedido de criar a senha veio de um endereço de loopback (e de uma página de loopback, quando há Origin)? */
+function fromLoopback(request: FastifyRequest): boolean {
+  const forwarded = request.headers["x-forwarded-host"];
+  const hostHeader = (Array.isArray(forwarded) ? forwarded[0] : forwarded) || request.headers.host;
+  if (!hostHeader || !LOOPBACK_HOSTNAMES.has(hostnameOfHostHeader(hostHeader))) return false;
+  const origin = request.headers.origin;
+  if (origin === undefined) return true; // clientes que não são navegador (curl, o próprio app nativo) não mandam Origin
+  try {
+    return LOOPBACK_HOSTNAMES.has(new URL(origin).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Senha única de acesso. Com `DATA_DIR/auth.json` presente, um hook onRequest barra TUDO (rotas
@@ -136,6 +163,8 @@ export function registerAuth(app: FastifyInstance, auth: AuthStore, dataDir: str
   );
   const failDelayMs = options.failDelayMs ?? 400;
   const open = options.open ?? false;
+  /** Desktop: a senha se cria sem código (só vale com o app fechado, isto é, fora de CYNO_AUTH=off). */
+  const codeless = (options.setupWithoutCode ?? false) && !open;
 
   let setupCode: string | null = null;
   let setupDone = false;
@@ -143,6 +172,10 @@ export function registerAuth(app: FastifyInstance, auth: AuthStore, dataDir: str
   const forgetSetupCodeFile = () => rm(setupCodeFile, { force: true }).catch(() => undefined);
   /** Gera (uma vez por subida sem senha) o código de configuração e o escreve no log. */
   const ensureSetupCode = async (): Promise<void> => {
+    if (codeless) {
+      await forgetSetupCodeFile(); // sobra de uma versão anterior, que ainda gerava o código
+      return;
+    }
     if (open || setupCode || setupDone) return;
     if (await auth.enabled()) {
       await forgetSetupCodeFile();
@@ -210,7 +243,7 @@ export function registerAuth(app: FastifyInstance, auth: AuthStore, dataDir: str
     const enabled = await auth.enabled();
     if (!enabled && !open) {
       await ensureSetupCode();
-      return { enabled: false, authenticated: false, setupRequired: true };
+      return { enabled: false, authenticated: false, setupRequired: true, ...(codeless ? { setupCodeRequired: false } : {}) };
     }
     return { enabled, authenticated: enabled ? await authenticated(request) : true };
   });
@@ -227,16 +260,28 @@ export function registerAuth(app: FastifyInstance, auth: AuthStore, dataDir: str
     await ensureSetupCode();
     // Outra requisição acabou de usar o código enquanto esta esperava.
     if (setupDone) return reply.code(409).send({ error: "A senha já foi criada" });
-    const expected = Buffer.from(setupCode ?? "");
-    const given = Buffer.from(normalizeSetupCode(body.code).replace(/(.{4})(?=.)/g, "$1-"));
-    if (!setupCode || given.length !== expected.length || !timingSafeEqual(given, expected)) {
-      return failed(ip, "configuracao", reply, 403, "Código de configuração incorreto");
+    if (codeless) {
+      if (!fromLoopback(request)) return failed(ip, "configuracao", reply, 403, "A senha só pode ser criada pelo próprio aplicativo");
+      // Vale uma vez: fecha antes de qualquer espera, para duas requisições juntas não criarem duas senhas.
+      setupDone = true;
+      try {
+        await auth.setPassword(body.password);
+      } catch (error) {
+        setupDone = false; // não gravou: o dono ainda pode tentar de novo
+        throw error;
+      }
+    } else {
+      const expected = Buffer.from(setupCode ?? "");
+      const given = Buffer.from(normalizeSetupCode(body.code ?? "").replace(/(.{4})(?=.)/g, "$1-"));
+      if (!setupCode || given.length !== expected.length || !timingSafeEqual(given, expected)) {
+        return failed(ip, "configuracao", reply, 403, "Código de configuração incorreto");
+      }
+      // O código vale uma vez: invalida antes de qualquer espera, para duas requisições juntas não criarem duas senhas.
+      setupCode = null;
+      setupDone = true;
+      await forgetSetupCodeFile();
+      await auth.setPassword(body.password);
     }
-    // O código vale uma vez: invalida antes de qualquer espera, para duas requisições juntas não criarem duas senhas.
-    setupCode = null;
-    setupDone = true;
-    await forgetSetupCodeFile();
-    await auth.setPassword(body.password);
     guard.success(ip);
     app.log.warn({ ip }, "senha de acesso criada pela configuração inicial");
     return startSession(request, reply);

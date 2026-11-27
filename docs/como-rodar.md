@@ -21,7 +21,7 @@ npm run dev
    Abra o Cyno e use o código  K7QM-4TXH-R9NB  para criar a senha.
    ```
    Para ver só o código: `npm run auth:code` (no Docker: `docker compose exec cyno npm run auth:code`). Ele também aparece no terminal do `npm run dev`, em `pm2 logs maestri-server` e em `docker compose logs cyno`.
-2. Abra o Cyno no navegador: aparece **Criar a senha**. Digite o código, a senha (mínimo 8 caracteres) e a confirmação. O código vale uma vez e muda se o server reiniciar antes de você usá-lo (olhe o log de novo). Errar o código conta no bloqueio por IP.
+2. Abra o Cyno no navegador: aparece **Criar a senha**. Digite o código, a senha e a confirmação. O código vale uma vez e muda se o server reiniciar antes de você usá-lo (olhe o log de novo). Errar o código conta no bloqueio por IP.
 3. Pronto: a senha fica em `DATA_DIR/auth.json` (0600) e você já entra. Alternativa sem a tela: `npm run auth:set-password -w @cyno/server` (no Docker: `docker compose exec cyno npm run auth:set-password -w @cyno/server`).
 - **Bloqueio por IP:** 5 senhas ou códigos errados bloqueiam o IP por 15 min; cada novo bloqueio em 24 h dobra o tempo (até 24 h). Sobrevive a reiniciar. Em Configurações > Acesso você vê os IPs bloqueados e as últimas tentativas, e pode desbloquear.
 - **Verificação em duas etapas (opcional):** Configurações > Acesso > "Ativar verificação em duas etapas" (QR para um app autenticador, mais 10 códigos de recuperação). Perdeu o celular e os códigos? No servidor: `npm run auth:reset-2fa -w @cyno/server` (Docker: `docker compose exec cyno npm run auth:reset-2fa -w @cyno/server`).
@@ -214,6 +214,7 @@ Todas são opcionais. Copie o `.env.example` para `.env` na raiz (`cp .env.examp
 | `MAESTRO_ROTATE_TOKENS` | 0 | renova a conversa do Maestro de CLI acima desse total de tokens (`0` = nunca) |
 | `ANTIGRAVITY_USAGE_POLL_MS` | 300000 (5 min) | intervalo da consulta da cota Google no Antigravity (`0` = desliga) |
 | `CONNECTORS_STDIO` | 0 | `1` libera conectores que rodam um comando local. É o **padrão**: o dono pode ligar ou desligar em Configurações > Conectores locais (grava em `data/platform/settings/connectors.json` e passa a valer sobre o `.env`; "Voltar ao padrão do servidor" apaga a escolha) |
+| `CYNO_REQUIRE_APPROVAL` | 0 | `1` faz as ações perigosas do Cyno (apagar, acesso, conectores, comando na máquina) e `propose_workspace` pedirem OK num cartão no chat; padrão `0`: executam na hora com registro na Atividade |
 | `CYNO_IDLE_MS` | (vazio) | **só para teste**: ociosidade do Cyno em ms antes de dormir; vazio = o que está em Configurações > Cyno (padrão 10 min) |
 | `CYNO_UPDATE_CHECK` | on | `off` ou `0` desliga a verificação automática de atualização (1 min depois da subida e a cada 6 h); o botão **Verificar agora** continua. Veja "Versão e atualizações" |
 | `CYNO_UPDATE_BRANCH` | main | ramo do `origin` com que a instalação é comparada |

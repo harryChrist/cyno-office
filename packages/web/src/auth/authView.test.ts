@@ -22,9 +22,15 @@ describe("authView", () => {
     expect(formatSetupCode("abcd efgh-jkmn zz")).toBe("ABCD-EFGH-JKMN");
     expect(formatSetupCode("ab")).toBe("AB");
     expect(validateSetup("ABCD-EF", "senha-longa", "senha-longa")).toMatch(/código completo/);
-    expect(validateSetup("ABCD-EFGH-JKMN", "curta", "curta")).toMatch(/8 caracteres/);
+    expect(validateSetup("ABCD-EFGH-JKMN", "", "")).toMatch(/Digite uma senha/);
+    expect(validateSetup("ABCD-EFGH-JKMN", "123", "123")).toBeNull(); // sem tamanho mínimo
     expect(validateSetup("ABCD-EFGH-JKMN", "senha-longa", "outra-coisa")).toMatch(/iguais/);
     expect(validateSetup("ABCD-EFGH-JKMN", "senha-longa", "senha-longa")).toBeNull();
+    // No desktop não há código: só a senha e a confirmação contam.
+    expect(validateSetup("", "senha-longa", "senha-longa", false)).toBeNull();
+    expect(validateSetup("", "curta", "curta", false)).toBeNull();
+    expect(validateSetup("", "", "", false)).toMatch(/Digite uma senha/);
+    expect(validateSetup("", "senha-longa", "outra-coisa", false)).toMatch(/iguais/);
     expect(setupErrorMessage(403, "x")).toMatch(/log do servidor/);
     expect(setupErrorMessage(400, "Dados inválidos")).toBe("Dados inválidos");
   });
@@ -38,7 +44,8 @@ describe("authView", () => {
 
   it("troca de senha: validação e erros", () => {
     expect(validateNewPassword("", "novasenha1", "novasenha1")).toMatch(/atual/);
-    expect(validateNewPassword("velha", "curta", "curta")).toMatch(/8 caracteres/);
+    expect(validateNewPassword("velha", "", "")).toMatch(/Digite a nova senha/);
+    expect(validateNewPassword("velha", "curta", "curta")).toBeNull(); // sem tamanho mínimo
     expect(validateNewPassword("velha", "novasenha1", "novasenha2")).toMatch(/iguais/);
     expect(validateNewPassword("velhasenha", "velhasenha", "velhasenha")).toMatch(/diferente/);
     expect(validateNewPassword("velha", "novasenha1", "novasenha1")).toBeNull();

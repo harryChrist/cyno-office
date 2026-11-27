@@ -41,7 +41,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
     }
     // Layout antigo (um escritório só em DATA_DIR) vira o workspace "Principal"; depois, o seed de pastas novas.
     const { migrated } = await migrateLegacyLayout(config.dataDir);
-    const { created } = await seedDataDir(config.dataDir);
+    // Aplicativo desktop: instalação limpa (sem o Principal de exemplo); o usuário cria o que quiser.
+    const { created } = await seedDataDir(config.dataDir, { empty: config.desktop });
     // Primeiro boot com a Atividade: converte o diário antigo, preenche o histórico e apaga o resto (uma vez só).
     if (system) {
       const activity = await migrateActivity({ dataDir: config.dataDir }).catch((error: unknown) => {
@@ -58,6 +59,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       approvalParkMs: config.approvalParkMs,
       wsHeartbeatMs: config.wsHeartbeatMs,
       ...(config.terminals.cynoIdleMs > 0 ? { cynoIdleMs: config.terminals.cynoIdleMs } : {}),
+      // O Cyno faz o que o dono pede sem cartão de OK; o que passar do pedido ele pergunta no chat (regra das instruções dele).
+      cynoRequireApproval: config.cynoRequireApproval,
       terminals: {
         mcpUrl: config.terminals.mcpUrl,
         idleMs: config.terminals.idleMs,
@@ -83,7 +86,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
       browser: config.browser,
       routineTickMs: config.routineTickMs,
       // Sem senha o app fica fechado até a configuração inicial; CYNO_AUTH=off (só dev/testes) abre como antes.
-      auth: { open: config.authOff, announce: (lines) => console.log(lines.join("\n")) },
+      // No aplicativo desktop (servidor só em loopback) a senha se cria direto na tela, sem o código.
+      auth: {
+        open: config.authOff,
+        announce: (lines) => console.log(lines.join("\n")),
+        setupWithoutCode: config.desktop && ["127.0.0.1", "localhost", "::1"].includes(config.host),
+      },
       // Workspaces (e as CLIs dos agentes) só retomam com a porta aberta: o MCP já aceita a conexão delas.
       bootOn: "listen",
       // Uso da conta Claude (endpoint não documentado, com o login do Claude Code); 0 = desligado.

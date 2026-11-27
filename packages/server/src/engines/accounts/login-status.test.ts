@@ -3,9 +3,17 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_ACCOUNT_ID } from "@cyno/shared";
-import type { EngineProbe } from "../terminals/engines";
+import type { EngineBinary, EngineProbe } from "../terminals/engines";
 import { EngineAccountStore } from "./account-store";
-import { AccountLoginChecker, LOGIN_CACHE_TTL_MS, agyTokenFile } from "./login-status";
+import {
+  AGY_PROBE_CACHE_MS,
+  AGY_PROBE_TIMEOUT_MS,
+  AccountLoginChecker,
+  LOGIN_CACHE_TTL_MS,
+  agyTokenFile,
+  agyUsageSucceeded,
+  type AccountLoginCheckerOptions,
+} from "./login-status";
 
 describe("AccountLoginChecker (estado de login por conta + cache curto)", () => {
   const dirs: string[] = [];
@@ -35,6 +43,7 @@ describe("AccountLoginChecker (estado de login por conta + cache curto)", () => 
       realHomeDir: fakeRealHome,
       probe,
       now: () => clock,
+      platform: "linux",
     });
 
     // Sem arquivo: falso para padrão e conta extra.
@@ -95,6 +104,7 @@ describe("AccountLoginChecker (estado de login por conta + cache curto)", () => 
       realHomeDir: fakeRealHome,
       probe,
       now: () => clock,
+      platform: "linux",
     });
 
     const list1 = await checker.listWithStatus();
@@ -136,5 +146,150 @@ describe("AccountLoginChecker (estado de login por conta + cache curto)", () => 
       probe: async () => ({ ok: false, stdout: "" }),
     });
     expect(await checker.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(true);
+  });
+});
+
+describe("Antigravity no Windows (login pelo Gerenciador de Credenciais)", () => {
+  const dirs: string[] = [];
+  afterEach(async () => {
+    for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 60 });
+  });
+
+  const makeChecker = async (options: {
+    platform?: NodeJS.Platform;
+    probe?: EngineProbe;
+    now?: () => number;
+    geminiBinary?: EngineBinary;
+    cacheTtlMs?: number;
+  } = {}) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "cyno-login-agy-win-"));
+    dirs.push(root);
+    const realHomeDir = path.join(root, "real-home");
+    const extraHomeDir = path.join(root, "extra-home");
+    await mkdir(realHomeDir, { recursive: true });
+    await mkdir(extraHomeDir, { recursive: true });
+
+    const store: AccountLoginCheckerOptions["store"] = {
+      list: () => [],
+      get: () => undefined,
+      profileEnv: () => ({ USERPROFILE: extraHomeDir, HOME: extraHomeDir }),
+    };
+
+    const probe = options.probe ?? vi.fn<EngineProbe>(async () => ({ ok: false, stdout: "" }));
+    const checker = new AccountLoginChecker({
+      store,
+      resolveBinary: (engine) => (engine === "gemini" ? (options.geminiBinary ?? { command: "agy" }) : { command: "claude" }),
+      realHomeDir,
+      probe,
+      ...(options.now ? { now: options.now } : {}),
+      ...(options.cacheTtlMs !== undefined ? { cacheTtlMs: options.cacheTtlMs } : {}),
+      platform: options.platform ?? "win32",
+    });
+
+    return { checker, realHomeDir, extraHomeDir };
+  };
+
+  it("agyUsageSucceeded reconhece SUCCESS na última linha JSON e rejeita demais saídas", () => {
+    expect(agyUsageSucceeded('Aviso: inicializando...\r\nOutra linha de log\r\n{"status":"SUCCESS","quota":{}}\r\n')).toBe(true);
+    expect(agyUsageSucceeded('{"status":"PENDING"}\n{"status":"SUCCESS"}')).toBe(true);
+    expect(agyUsageSucceeded('{"status":"UNAUTHENTICATED"}')).toBe(false);
+    expect(agyUsageSucceeded('{"status":"ERROR"}')).toBe(false);
+    expect(agyUsageSucceeded("Usuário não autenticado\nFaça login primeiro")).toBe(false);
+    expect(agyUsageSucceeded("{json-invalido")).toBe(false);
+    expect(agyUsageSucceeded('{"status":"SUCCESS"}\n{json quebrado')).toBe(false);
+    expect(agyUsageSucceeded("")).toBe(false);
+    expect(agyUsageSucceeded("   \r\n  ")).toBe(false);
+  });
+
+  it("win32 sem arquivo de token na conta padrão: loggedIn true quando o probe devolve ok e status SUCCESS", async () => {
+    const probe = vi.fn<EngineProbe>(async () => ({
+      ok: true,
+      stdout: 'Aviso de inicialização\n{"status":"SUCCESS"}',
+    }));
+    const { checker } = await makeChecker({
+      platform: "win32",
+      probe,
+      geminiBinary: { command: "agy", prefixArgs: ["--no-color"] },
+    });
+
+    const loggedIn = await checker.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true });
+
+    expect(loggedIn).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(probe).toHaveBeenCalledWith("agy", ["--no-color", "-p", "/usage", "--output-format", "json"], AGY_PROBE_TIMEOUT_MS);
+  });
+
+  it("win32 sem arquivo de token na conta padrão: loggedIn false quando status != SUCCESS ou ok false", async () => {
+    const probeOutroStatus = vi.fn<EngineProbe>(async () => ({
+      ok: true,
+      stdout: JSON.stringify({ status: "UNAUTHENTICATED" }),
+    }));
+    const { checker: checkerOutroStatus } = await makeChecker({ platform: "win32", probe: probeOutroStatus });
+
+    expect(await checkerOutroStatus.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(false);
+    expect(probeOutroStatus).toHaveBeenCalledTimes(1);
+
+    const probeFalha = vi.fn<EngineProbe>(async () => ({
+      ok: false,
+      stdout: JSON.stringify({ status: "SUCCESS" }),
+    }));
+    const { checker: checkerFalha } = await makeChecker({ platform: "win32", probe: probeFalha });
+
+    expect(await checkerFalha.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(false);
+    expect(probeFalha).toHaveBeenCalledTimes(1);
+  });
+
+  it("win32 mantém o resultado do probe em cache por AGY_PROBE_CACHE_MS e consulta de novo após expirar", async () => {
+    let clock = 2_000_000;
+    const probe = vi.fn<EngineProbe>(async () => ({ ok: true, stdout: JSON.stringify({ status: "UNAUTHENTICATED" }) }));
+    probe.mockResolvedValueOnce({ ok: true, stdout: JSON.stringify({ status: "SUCCESS" }) });
+    const { checker } = await makeChecker({
+      platform: "win32",
+      probe,
+      now: () => clock,
+    });
+    const target = { engine: "gemini" as const, accountId: DEFAULT_ACCOUNT_ID, isDefault: true };
+
+    // Primeira consulta dispara o probe.
+    expect(await checker.checkFresh(target)).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // Dentro de AGY_PROBE_CACHE_MS (mesmo ignorando o cache curto de 10 s via checkFresh): reaproveita o cache do probe.
+    clock += AGY_PROBE_CACHE_MS - 1;
+    expect(await checker.checkFresh(target)).toBe(true);
+    expect(probe).toHaveBeenCalledTimes(1);
+
+    // Ao atingir AGY_PROBE_CACHE_MS: dispara o probe novamente e atualiza o estado.
+    clock += 1;
+    expect(await checker.checkFresh(target)).toBe(false);
+    expect(probe).toHaveBeenCalledTimes(2);
+  });
+
+  it("linux sem arquivo de token: devolve false e NÃO chama o probe", async () => {
+    const probe = vi.fn<EngineProbe>(async () => ({ ok: true, stdout: JSON.stringify({ status: "SUCCESS" }) }));
+    const { checker } = await makeChecker({ platform: "linux", probe });
+
+    expect(await checker.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("win32 com conta extra (não padrão) sem arquivo de token: devolve false e NÃO chama o probe", async () => {
+    const probe = vi.fn<EngineProbe>(async () => ({ ok: true, stdout: JSON.stringify({ status: "SUCCESS" }) }));
+    const { checker } = await makeChecker({ platform: "win32", probe });
+
+    expect(await checker.check({ engine: "gemini", accountId: "google-trabalho", isDefault: false })).toBe(false);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("win32 com o arquivo de token presente na conta padrão: devolve true sem chamar o probe", async () => {
+    const probe = vi.fn<EngineProbe>(async () => ({ ok: false, stdout: "" }));
+    const { checker, realHomeDir } = await makeChecker({ platform: "win32", probe });
+
+    const tokenFile = agyTokenFile(realHomeDir);
+    await mkdir(path.dirname(tokenFile), { recursive: true });
+    await writeFile(tokenFile, "TOKEN-FAKE", { mode: 0o600 });
+
+    expect(await checker.check({ engine: "gemini", accountId: DEFAULT_ACCOUNT_ID, isDefault: true })).toBe(true);
+    expect(probe).not.toHaveBeenCalled();
   });
 });

@@ -9,7 +9,7 @@ import {
   pathBreadcrumbs,
   visiblePickerItems,
   type FolderPickerItem,
-} from "./folderPicker";
+} from "./folderPickerLogic";
 import { Modal } from "./widgets";
 import "./folderPicker.css";
 

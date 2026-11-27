@@ -31,15 +31,22 @@ export async function exists(file: string): Promise<boolean> {
  * Cria os dados iniciais em `dataDir` se workspaces.json ainda não existir: o workspace
  * "Principal" (data/workspaces/principal/) com o escritório e as notas de exemplo.
  * Com `force`, apaga workspaces.json e workspaces/ (e o layout antigo, se sobrou) e recria tudo.
+ * Com `empty` (aplicativo desktop), a instalação nasce limpa: só um workspaces.json vazio, sem o "Principal"
+ * nem escritório de exemplo; o app abre na tela "Crie o seu primeiro workspace". `force` vence `empty`.
  */
 export async function seedDataDir(
   dataDir: string,
-  { force = false, now = () => new Date() }: { force?: boolean; now?: () => Date } = {},
+  { force = false, empty = false, now = () => new Date() }: { force?: boolean; empty?: boolean; now?: () => Date } = {},
 ): Promise<{ created: boolean }> {
   const paths = rootPaths(dataDir);
   // Nunca semeia por cima do layout antigo: ele vira o workspace "Principal" primeiro.
   if (!force) await migrateLegacyLayout(dataDir, { now });
   if (!force && (await exists(paths.workspacesFile))) return { created: false };
+  if (empty && !force) {
+    // Lista vazia gravada uma vez: sem ela o próximo boot semearia o Principal; com ela, excluir tudo continua valendo.
+    await writeWorkspaceList(paths.workspacesFile, []);
+    return { created: true };
+  }
 
   if (force) {
     await rm(paths.workspacesFile, { force: true });

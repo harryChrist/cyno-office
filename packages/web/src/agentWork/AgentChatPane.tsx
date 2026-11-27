@@ -6,7 +6,7 @@ import { useChatStatusStore } from "../store/chatStatusStore";
 import { useTerminalsStore } from "../store/terminalsStore";
 import type { AgentChatItem } from "./agentChat";
 import { canRetry, canSend, counterText, enterSends, getDraft, MESSAGE_MAX, messageText, nextCheckIn, sendStatusText, setDraft, viewSend, type SendState } from "./composerModel";
-import { clockLabel } from "./timeline";
+import { clockLabel } from "./timelineLogic";
 import "./maestroPanel.css";
 
 const STICK_PX = 64;

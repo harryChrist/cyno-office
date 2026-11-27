@@ -1,4 +1,4 @@
-import { readFile, rm, stat } from "node:fs/promises";
+import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { AUTH_2FA_DISABLE_PATH, AUTH_2FA_ENABLE_PATH, AUTH_2FA_SETUP_PATH, AUTH_COOKIE, AUTH_LOGIN_2FA_PATH, AUTH_SECURITY_PATH, AUTH_SETUP_PATH, AUTH_UNBLOCK_PATH, OFFICE_MCP_PATH, type AuthStatus, type LoginResult, type SecurityState, type TwoFactorEnabled, type TwoFactorSetup } from "@cyno/shared";
@@ -237,6 +237,92 @@ async function freshInstall(extra: { now?: () => Date } = {}) {
   const code = () => lines.join("\n").match(CODE_PATTERN)?.[0];
   return { ...test, code, lines };
 }
+
+/** App fechado, sem senha, como o aplicativo desktop: a senha se cria direto, sem código. */
+async function desktopInstall() {
+  const lines: string[] = [];
+  const test = await setupApp({ auth: { open: false, setupWithoutCode: true, announce: (banner) => lines.push(...banner) } });
+  return { ...test, lines };
+}
+
+describe("desktop: criar a senha sem código de configuração", () => {
+  it("o status avisa que não há código, nenhum código é gerado e o app continua fechado", async () => {
+    const { app, lines, dataDir } = await desktopInstall();
+    await app.ready();
+    expect((await app.inject({ url: "/api/auth/status" })).json<AuthStatus>()).toEqual({ enabled: false, authenticated: false, setupRequired: true, setupCodeRequired: false });
+    expect(lines).toEqual([]);
+    await expect(stat(path.join(dataDir, SETUP_CODE_FILE))).rejects.toThrow();
+    expect((await app.inject({ url: "/api/workspaces" })).statusCode).toBe(401);
+  });
+
+  it("apaga o arquivo de código que uma versão anterior deixou", async () => {
+    const { app, dataDir } = await desktopInstall(); // o app já subiu (ready) quando o arquivo aparece
+    await writeFile(path.join(dataDir, SETUP_CODE_FILE), "ABCD-EFGH-JKMN\n");
+    await app.inject({ url: "/api/auth/status" });
+    await expect(stat(path.join(dataDir, SETUP_CODE_FILE))).rejects.toThrow();
+  });
+
+  it("só a senha cria o auth.json (0600), já abre a sessão e vale uma vez", async () => {
+    const { app, dataDir } = await desktopInstall();
+    await app.ready();
+    const done = await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: PASSWORD } });
+    expect(done.statusCode).toBe(200);
+    expect(done.json()).toEqual({ enabled: true, authenticated: true });
+    if (process.platform !== "win32") expect((await stat(path.join(dataDir, "auth.json"))).mode & 0o777).toBe(0o600); // o Windows não tem modo de arquivo
+    expect((await app.inject({ url: "/api/workspaces", headers: { cookie: cookieOf(done) } })).statusCode).toBe(200);
+    expect((await login(app, PASSWORD)).statusCode).toBe(200);
+    const again = await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: "outra-senha-99" } });
+    expect(again.statusCode).toBe(409);
+    expect((await login(app, "outra-senha-99")).statusCode).toBe(401);
+  });
+
+  it("não exige tamanho mínimo, só que a senha não seja vazia", async () => {
+    const { app } = await desktopInstall();
+    await app.ready();
+    expect((await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: "" } })).statusCode).toBeGreaterThanOrEqual(400);
+    expect((await app.inject({ url: "/api/auth/status" })).json<AuthStatus>().setupRequired).toBe(true);
+    expect((await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: "123" } })).statusCode).toBe(200);
+    expect((await login(app, "123")).statusCode).toBe(200);
+  });
+
+  it("aceita a página do próprio app (Origin e host em loopback, também pelo gateway)", async () => {
+    const { app } = await desktopInstall();
+    await app.ready();
+    const done = await app.inject({
+      method: "POST",
+      url: AUTH_SETUP_PATH,
+      payload: { password: PASSWORD },
+      headers: { origin: "http://localhost:3067", "x-forwarded-host": "localhost:3067", host: "127.0.0.1:3068" },
+    });
+    expect(done.statusCode).toBe(200);
+  });
+
+  it("recusa páginas de outros sites (DNS rebinding): Origin ou host fora do loopback", async () => {
+    const { app } = await desktopInstall();
+    await app.ready();
+    const attempts: Record<string, string>[] = [
+      { origin: "http://evil.example:3067", "x-forwarded-host": "localhost:3067" },
+      { origin: "null" },
+      { origin: "http://localhost:3067", "x-forwarded-host": "evil.example:3067" },
+      { origin: "http://localhost:3067", host: "evil.example:3067" },
+    ];
+    for (const headers of attempts) {
+      const response = await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: PASSWORD }, headers: { ...headers, "x-forwarded-for": "198.51.100.7" } });
+      expect(response.statusCode, JSON.stringify(headers)).toBe(403);
+    }
+    // Nada foi criado: o dono ainda consegue.
+    expect((await app.inject({ url: "/api/auth/status" })).json<AuthStatus>().setupRequired).toBe(true);
+    expect((await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: PASSWORD }, headers: { origin: "http://127.0.0.1:3067" } })).statusCode).toBe(200);
+  });
+
+  it("fora do desktop o código continua obrigatório (um pedido sem código é recusado)", async () => {
+    const { app, code } = await freshInstall();
+    await app.ready();
+    expect((await app.inject({ url: "/api/auth/status" })).json<AuthStatus>()).toEqual({ enabled: false, authenticated: false, setupRequired: true });
+    expect((await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { password: PASSWORD } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: AUTH_SETUP_PATH, payload: { code: code(), password: PASSWORD } })).statusCode).toBe(200);
+  });
+});
 
 describe("seguro desde a instalação (sem auth.json)", () => {
   it("o app não fica aberto: tudo responde 401 menos status, configuração inicial e health", async () => {

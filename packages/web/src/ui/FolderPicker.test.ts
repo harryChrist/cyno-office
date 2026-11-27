@@ -12,7 +12,7 @@ import {
   resolveFolderPick,
   suggestedFolderName,
   visiblePickerItems,
-} from "./folderPicker";
+} from "./folderPickerLogic";
 
 const linuxData: FsBrowseResponse = {
   path: "/home/voce/projetos",

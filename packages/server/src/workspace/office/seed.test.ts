@@ -120,6 +120,24 @@ describe("seedDataDir", () => {
     expect(JSON.parse(await readFile(path.join(dataDir, "workspaces.json"), "utf8"))[0].id).toBe("principal");
   });
 
+  it("com empty (desktop) a instalação nasce limpa: workspaces.json vazio, sem Principal nem escritório de exemplo", async () => {
+    const dataDir = await tempDir();
+    expect(await seedDataDir(dataDir, { empty: true })).toEqual({ created: true });
+    expect(JSON.parse(await readFile(path.join(dataDir, "workspaces.json"), "utf8"))).toEqual([]);
+    expect(await readdir(dataDir)).toEqual(["workspaces.json"]);
+    // O próximo boot respeita a lista vazia (excluir tudo continua valendo) em vez de semear o Principal.
+    expect(await seedDataDir(dataDir, { empty: true })).toEqual({ created: false });
+    expect(await seedDataDir(dataDir)).toEqual({ created: false });
+    expect(JSON.parse(await readFile(path.join(dataDir, "workspaces.json"), "utf8"))).toEqual([]);
+  });
+
+  it("force vence empty: recria o Principal com o escritório de exemplo", async () => {
+    const dataDir = await tempDir();
+    await seedDataDir(dataDir, { empty: true });
+    expect(await seedDataDir(dataDir, { force: true, empty: true })).toEqual({ created: true });
+    expect(await readdir(path.join(dataDir, "workspaces"))).toEqual(["principal"]);
+  });
+
   it("recria tudo com force (inclusive apagando workspaces extras)", async () => {
     const dataDir = await tempDir();
     await seedDataDir(dataDir);

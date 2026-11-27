@@ -2,7 +2,7 @@ import type { OfficeState } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
 import { makeAgent, makeLogEntry, makeOffice, makeRoom, makeTask } from "../test-fixtures";
 import { applyTerminalEvent } from "../store/terminalsStore";
-import { entryToActivity, maestroActivityGroups, toolLabel } from "./maestroActivity";
+import { entryToActivity, maestroActivityGroups, toolLabel } from "./maestroActivityLogic";
 
 function withMaestro(): OfficeState {
   const office = makeOffice();

@@ -43,7 +43,7 @@ export function changePasswordErrorMessage(status: number, serverMessage: string
 /** Valida o formulário de troca antes de enviar; devolve o erro ou null. */
 export function validateNewPassword(current: string, next: string, repeat: string): string | null {
   if (!current) return "Digite a senha atual";
-  if (next.length < 8) return "A nova senha precisa ter pelo menos 8 caracteres";
+  if (next.length < 1) return "Digite a nova senha";
   if (next !== repeat) return "As duas senhas novas não são iguais";
   if (next === current) return "A nova senha precisa ser diferente da atual";
   return null;
@@ -57,10 +57,10 @@ export function codeErrorMessage(status: number): string {
   return "Não foi possível entrar";
 }
 
-/** Valida a tela "Criar a senha": código, senha e confirmação. */
-export function validateSetup(code: string, password: string, repeat: string): string | null {
-  if (code.replace(/[^A-Za-z0-9]/g, "").length < 12) return "Digite o código completo que aparece no log do servidor";
-  if (password.length < 8) return "A senha precisa ter pelo menos 8 caracteres";
+/** Valida a tela "Criar a senha": código (só quando o servidor exige), senha e confirmação. */
+export function validateSetup(code: string, password: string, repeat: string, codeRequired = true): string | null {
+  if (codeRequired && code.replace(/[^A-Za-z0-9]/g, "").length < 12) return "Digite o código completo que aparece no log do servidor";
+  if (password.length < 1) return "Digite uma senha";
   if (password !== repeat) return "As duas senhas não são iguais";
   return null;
 }

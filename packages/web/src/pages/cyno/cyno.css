@@ -10,6 +10,16 @@
   padding: 16px var(--cyno-pad);
 }
 
+/* Tela de primeiro uso: ocupa toda a área principal de ponta a ponta, sem margens extras. */
+.page.cyno.cyno--first-use {
+  min-height: 100%;
+  padding: 0;
+}
+
+.page.cyno.cyno--loading {
+  justify-content: center;
+}
+
 /* A conversa é a coluna principal; o painel lateral (Resumo, Workspaces, Agenda, Mural) fica ao lado. */
 .cyno-layout {
   display: grid;

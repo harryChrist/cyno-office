@@ -2,6 +2,7 @@ import { AUTH_STATUS_PATH, workspaceAccess, type AuthStatus, type EngineInfo, ty
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { escapeReturnsToMap } from "../../cena/escape";
 import { useConnectorsStore } from "../../store/connectorsStore";
+import { useFirstUseReviewStore } from "../../store/firstUseReviewStore";
 import { useForYouTypesSheet } from "../../store/forYouTypesSheet";
 import { useNavStore } from "../../store/navStore";
 import { useWorkspaceStore } from "../../store/workspaceStore";
@@ -131,6 +132,31 @@ function ApprovalTypesSettings() {
         <div>
           <button type="button" className="ui-button ui-button--secondary ui-button--small" onClick={() => useForYouTypesSheet.getState().show()} data-testid="settings-approvals-open">
             Abrir tipos de aprovação
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Atalho em Sistema para rever a tela de primeiro uso sem apagar nada. */
+function FirstUseReviewSettings() {
+  return (
+    <div className="settings__groups" data-testid="settings-first-use">
+      <section className="settings__card">
+        <OptionHead
+          title="Tela de primeiro uso"
+          seal="plataforma"
+          line="Mostra de novo a tela que quem instala vê, sem apagar nada."
+        />
+        <div>
+          <button
+            type="button"
+            className="ui-button ui-button--secondary ui-button--small"
+            onClick={() => useFirstUseReviewStore.getState().start()}
+            data-testid="settings-first-use-review"
+          >
+            Rever tela de primeiro uso
           </button>
         </div>
       </section>
@@ -445,6 +471,9 @@ export function SettingsPage() {
             </SectionBlock>
             <SectionBlock id="conectores-locais" mode={mode("conectores-locais")}>
               <LocalConnectorsSettings />
+            </SectionBlock>
+            <SectionBlock id="primeiro-uso" mode={mode("primeiro-uso")}>
+              <FirstUseReviewSettings />
             </SectionBlock>
             <SectionBlock id="escritorio" mode={mode("escritorio")}>
               <OfficeSettings />

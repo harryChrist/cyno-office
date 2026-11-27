@@ -11,6 +11,8 @@ import "./login.css";
  */
 export function SetupScreen() {
   const loggedIn = useAuthStore((state) => state.loggedIn);
+  // No aplicativo desktop o servidor só atende neste computador: a senha se cria direto, sem o código.
+  const codeRequired = useAuthStore((state) => state.setupCodeRequired);
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
@@ -22,7 +24,7 @@ export function SetupScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy || waiting > 0) return;
-    const invalid = validateSetup(code, password, repeat);
+    const invalid = validateSetup(code, password, repeat, codeRequired);
     setError(invalid);
     if (invalid) return;
     setBusy(true);
@@ -30,7 +32,7 @@ export function SetupScreen() {
       const response = await fetch(AUTH_SETUP_PATH, {
         method: "POST",
         headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ code, password }),
+        body: JSON.stringify(codeRequired ? { code, password } : { password }),
       });
       if (response.ok) return loggedIn();
       if (response.status === 429) {
@@ -56,25 +58,33 @@ export function SetupScreen() {
         <h1 id="setup-title" className="login__title">
           Criar a senha
         </h1>
-        <p className="login__hint">Primeiro acesso a este Cyno. No servidor, rode o comando abaixo para ver o código de configuração.</p>
-        <code className="login__log-hint">npm run auth:code · no Docker: docker compose exec cyno npm run auth:code</code>
-        <label className="login__label" htmlFor="setup-code">
-          Código de configuração
-        </label>
-        <input
-          id="setup-code"
-          className="ui-input login__input login__input--code"
-          value={code}
-          onChange={(event) => setCode(formatSetupCode(event.currentTarget.value))}
-          placeholder="XXXX-XXXX-XXXX"
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          autoFocus
-          data-testid="setup-code"
-        />
+        {codeRequired ? (
+          <>
+            <p className="login__hint">Primeiro acesso a este Cyno. No servidor, rode o comando abaixo para ver o código de configuração.</p>
+            <code className="login__log-hint">npm run auth:code · no Docker: docker compose exec cyno npm run auth:code</code>
+            <label className="login__label" htmlFor="setup-code">
+              Código de configuração
+            </label>
+            <input
+              id="setup-code"
+              className="ui-input login__input login__input--code"
+              value={code}
+              onChange={(event) => setCode(formatSetupCode(event.currentTarget.value))}
+              placeholder="XXXX-XXXX-XXXX"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              autoFocus
+              data-testid="setup-code"
+            />
+          </>
+        ) : (
+          <p className="login__hint" data-testid="setup-intro">
+            Bem-vindo! Escolha a senha do seu Cyno Office. Você vai usá-la para entrar sempre que abrir o app.
+          </p>
+        )}
         <label className="login__label" htmlFor="setup-password">
-          Senha (mínimo 8 caracteres)
+          Senha
         </label>
         <div className="login__field">
           <input
@@ -84,6 +94,7 @@ export function SetupScreen() {
             value={password}
             onChange={(event) => setPassword(event.currentTarget.value)}
             autoComplete="new-password"
+            autoFocus={!codeRequired}
             data-testid="setup-password"
           />
           <button type="button" className="login__toggle" onClick={() => setVisible((value) => !value)} aria-pressed={visible}>
@@ -107,7 +118,7 @@ export function SetupScreen() {
             {shown}
           </p>
         )}
-        <button type="submit" className="ui-button login__submit" disabled={busy || waiting > 0 || !code || !password || !repeat} data-testid="setup-submit">
+        <button type="submit" className="ui-button login__submit" disabled={busy || waiting > 0 || (codeRequired && !code) || !password || !repeat} data-testid="setup-submit">
           {busy ? "Criando…" : "Criar a senha e entrar"}
         </button>
       </form>

@@ -4,7 +4,7 @@ import { useWorkspaceStore } from "../../store/workspaceStore";
 import { FoldersSettings } from "../../pages/settings/FoldersSettings";
 import { Modal } from "../../ui/widgets";
 import { NavIcon } from "../navIcons";
-import { foldersSummary } from "./navItems";
+import { foldersSummary } from "./navItemsLogic";
 
 /** O painel de pastas fica num estado à parte: a gaveta do celular fecha ao abrir, mas o painel precisa continuar. */
 const useFoldersPanelStore = create<{ open: boolean; setOpen: (open: boolean) => void }>()((set) => ({ open: false, setOpen: (open) => set({ open }) }));

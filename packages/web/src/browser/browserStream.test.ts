@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { officeToolDoneWith, officeToolShort } from "../agentWork/officeTools";
-import { toolLabel } from "../agentWork/maestroActivity";
+import { toolLabel } from "../agentWork/maestroActivityLogic";
 import { keyMessage } from "./browserStream";
 
 const key = (value: string, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }> = {}) =>

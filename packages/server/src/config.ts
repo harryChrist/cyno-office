@@ -85,6 +85,8 @@ const envSchema = z.object({
    * então ficam DESLIGADOS por padrão: "1" libera (só faça isso numa rede em que confia).
    */
   CONNECTORS_STDIO: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).default("0")),
+  /** "1" faz as ações perigosas do Cyno (apagar, acesso, conectores, comando na máquina) pedirem OK num cartão; padrão "0": executam direto. */
+  CYNO_REQUIRE_APPROVAL: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).default("0")),
   /** Pasta de dados do Antigravity (logs, conversas); padrão ~/.gemini/antigravity-cli. Só a medição e a limpeza opcional dos logs a leem. */
   ANTIGRAVITY_HOME: z.preprocess(emptyToUndefined, z.string().optional()),
   /** Limpeza automática do histórico (boot + uma vez por dia): "0" desliga. */
@@ -106,6 +108,8 @@ const envSchema = z.object({
    * Sem ela (padrão), sem senha o app fica fechado até a configuração inicial pelo código do log.
    */
   CYNO_AUTH: z.preprocess(emptyToUndefined, z.enum(["on", "off"]).default("on")),
+  /** "1" quando o servidor roda como sidecar do aplicativo desktop (a casca Tauri define). */
+  CYNO_DESKTOP: z.preprocess(emptyToUndefined, z.string().optional()),
   /** Atividade do servidor (DATA_DIR/activity: boot, batimento, alertas): "0" desliga. */
   SYSTEM_LOG: z.preprocess(emptyToUndefined, z.enum(["0", "1"]).default("1")),
   /** Intervalo da amostra de memória e do batimento (ms); 0 desliga a amostra. */
@@ -165,6 +169,8 @@ export type AppConfig = {
   retention: { claudeProjectsDir: string; autoRun: boolean };
   /** Armazenamento dos motores: onde o Antigravity e o Freebuff guardam logs e chats (medição e limpeza opcional). */
   engineStorage: { antigravityHome: string; freebuffHome: string };
+  /** As ações perigosas do Cyno pedem OK num cartão? Padrão: não (CYNO_REQUIRE_APPROVAL=1 liga). */
+  cynoRequireApproval: boolean;
   /** Conectores stdio (comando local) liberados? Padrão: não (CONNECTORS_STDIO=1 libera). */
   connectorsStdio: boolean;
   /** Navegador compartilhado: ligado, ociosidade e domínios sempre bloqueados. */
@@ -173,6 +179,8 @@ export type AppConfig = {
   routineTickMs: number;
   /** CYNO_AUTH=off: sem senha o app fica aberto (só desenvolvimento e testes). */
   authOff: boolean;
+  /** Roda como sidecar do aplicativo desktop (CYNO_DESKTOP=1). */
+  desktop: boolean;
   /** Atividade do servidor: ligada e intervalo da amostra de recursos (a retenção é a da limpeza do histórico). */
   systemLog: { enabled: boolean; sampleMs: number };
 };
@@ -217,6 +225,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, platform: NodeJ
       antigravityHome: path.resolve(parsed.ANTIGRAVITY_HOME ?? path.join(homeDir, ".gemini", "antigravity-cli")),
       freebuffHome: manicodeDirOf(env, platform),
     },
+    cynoRequireApproval: parsed.CYNO_REQUIRE_APPROVAL === "1",
     connectorsStdio: parsed.CONNECTORS_STDIO === "1",
     browser: {
       enabled: parsed.BROWSER === "1",
@@ -225,6 +234,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, platform: NodeJ
     },
     routineTickMs: parsed.ROUTINE_TICK_MS,
     authOff: parsed.CYNO_AUTH === "off",
+    desktop: parsed.CYNO_DESKTOP === "1",
     systemLog: { enabled: parsed.SYSTEM_LOG === "1", sampleMs: parsed.SYSTEM_LOG_SAMPLE_MS },
   };
 }

@@ -8,7 +8,7 @@ import { useNavStore } from "../../store/navStore";
 import { enterWorkspace } from "../../pages/cyno/WorkspaceCards";
 import { useTelaCheia } from "../../ui/useTelaCheia";
 import { CidadeCartao } from "./CidadeCartao";
-import { escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixa";
+import { escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixaLogic";
 import { guardarLotes, lerLotes, type Lotes } from "./lotes";
 import { montarCidade } from "./montarCidade";
 import { metaDaSemana, pracaDaCidade } from "./meta";
@@ -78,11 +78,13 @@ function MetaEditor({ feitas, alvo, onChange }: { feitas: number | null; alvo: n
   );
 }
 
-export function CidadeFaixa() {
+/** `sempreAberta`: a cidade dentro de um painel que a abre sob demanda (não há o que recolher nem o que lembrar). */
+export function CidadeFaixa({ sempreAberta = false }: { sempreAberta?: boolean } = {}) {
   const cards = useCynoStore((estado) => estado.cards);
   const carregadas = useCynoStore((estado) => estado.cardsLoaded);
   const atual = useNavStore((estado) => estado.workspaceId);
-  const [aberta, setAberta] = useState(() => lerFaixaAberta(typeof window === "undefined" ? 1440 : window.innerWidth));
+  const [abertaSalva, setAberta] = useState(() => lerFaixaAberta(typeof window === "undefined" ? 1440 : window.innerWidth));
+  const aberta = sempreAberta || abertaSalva;
   const [escolhidoBruto, setEscolhido] = useState<string | null>(null);
   const [espiando, setEspiando] = useState<string | null>(null);
   const visivel = usePaginaVisivel();
@@ -105,6 +107,7 @@ export function CidadeFaixa() {
   const escolhido = escolhidoBruto && cards.some((card) => card.workspace === escolhidoBruto) ? escolhidoBruto : null;
 
   const alternar = () => {
+    if (sempreAberta) return;
     const proxima = !aberta;
     setAberta(proxima);
     guardarFaixaAberta(proxima);
@@ -137,9 +140,11 @@ export function CidadeFaixa() {
           </span>
         )}
         {aberta && cards.length > 0 && <MetaEditor feitas={meta.feitas} alvo={meta.alvo} onChange={meta.definirAlvo} />}
-        <button type="button" className="ui-button ui-button--ghost cidade__ver" onClick={alternar} data-testid="cidade-ver">
-          {aberta ? "Recolher" : "Ver a cidade"}
-        </button>
+        {!sempreAberta && (
+          <button type="button" className="ui-button ui-button--ghost cidade__ver" onClick={alternar} data-testid="cidade-ver">
+            {aberta ? "Recolher" : "Ver a cidade"}
+          </button>
+        )}
       </header>
       {aberta && (
         <div id="cidade-corpo" className={`cidade__corpo${cheia.ativa ? " cidade__corpo--cheia" : ""}`} data-testid="cidade-corpo" data-tela-cheia={cheia.ativa ? "true" : undefined}>

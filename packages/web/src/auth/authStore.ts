@@ -7,6 +7,8 @@ type AuthState = {
   gate: GateState;
   /** Há senha definida no servidor? (as Configurações mostram o estado.) */
   enabled: boolean;
+  /** A criação da senha pede o código de configuração? (false no aplicativo desktop.) */
+  setupCodeRequired: boolean;
   /** A sessão caiu com o app aberto (a tela de login avisa e recarrega depois de entrar). */
   expired: boolean;
   /** Consulta /api/auth/status; sem resposta (servidor fora), deixa o app abrir como antes. */
@@ -20,13 +22,14 @@ type AuthState = {
 export const useAuthStore = create<AuthState>((set, get) => ({
   gate: "checking",
   enabled: false,
+  setupCodeRequired: true,
   expired: false,
   boot: async () => {
     try {
       const response = await fetch(AUTH_STATUS_PATH, { cache: "no-store", headers: { accept: "application/json" } });
       if (!response.ok) return set({ gate: "ready" });
       const status = (await response.json()) as AuthStatus;
-      set({ gate: gateFromStatus(status), enabled: status.enabled });
+      set({ gate: gateFromStatus(status), enabled: status.enabled, setupCodeRequired: status.setupCodeRequired !== false });
     } catch {
       set({ gate: "ready" });
     }

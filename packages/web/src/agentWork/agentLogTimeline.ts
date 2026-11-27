@@ -1,6 +1,6 @@
 import { ENGINE_LABELS, type AgentLogEntry, type AgentLogStatus, type AgentProvider } from "@cyno/shared";
 import { phraseOfTool } from "../store/agentLog";
-import type { StepItem, StepState } from "./timeline";
+import type { StepItem, StepState } from "./timelineLogic";
 
 /** Rótulo de cada provedor (de qual CLI veio o trabalho; o mesmo de ENGINE_LABELS: "gemini" é o Antigravity). */
 export const PROVIDER_LABELS: Record<AgentProvider, string> = ENGINE_LABELS;

@@ -30,7 +30,7 @@ const ENGINES: EngineInfo[] = [
 ];
 
 /** O Cyno estruturado com um relógio que o teste move e espiões no lugar do chat, dos eventos e do "acordar o Cyno". */
-async function setup(options: { now?: { t: Date } } = {}) {
+async function setup(options: { now?: { t: Date }; requireApproval?: boolean } = {}) {
   const clock = options.now ?? { t: new Date("2026-11-11T12:00:00.000Z") };
   const test = await setupApp({ now: () => clock.t });
   const dir = await tempDir();
@@ -49,6 +49,7 @@ async function setup(options: { now?: { t: Date } } = {}) {
       paths,
       now: () => clock.t,
       log: test.app.log,
+      ...(options.requireApproval !== undefined ? { requireApproval: options.requireApproval } : {}),
       chat: (body) => chat.push(body),
       emit: (event) => emitted.push(event),
       wake: (tag, build) => woken.push({ tag, text: build() }),
@@ -537,9 +538,9 @@ describe("Cyno: ferramentas de estrutura com `workspace` (adaptador)", () => {
     expect(unknown.isError).toBe(true);
     expect(unknown.text).toMatch(/No workspace "Nada"/);
     const scopedNames = t.tools.filter((tool) => ["delete_room", "delete_team", "delete_agent", "set_agent_access", "set_agent_connectors"].includes(tool.name));
-    // Cada uma só existe uma vez e é a versão do Cyno (que registra o OK).
+    // Cada uma só existe uma vez e é a versão do Cyno (não a do Maestro).
     expect(scopedNames.map((tool) => tool.name).sort()).toEqual(["delete_agent", "delete_room", "delete_team", "set_agent_access", "set_agent_connectors"]);
-    for (const tool of scopedNames) expect(tool.description).toMatch(/NEEDS THE OWNER'S OK/);
+    for (const tool of scopedNames) expect(tool.description).toMatch(/RUNS RIGHT AWAY.*PENDING_CONFIRMATION/);
     const names = t.tools.map((tool) => tool.name);
     expect(new Set(names).size).toBe(names.length);
   });
@@ -593,5 +594,110 @@ describe("Cyno: as rotas do dono", () => {
     expect(test.workspaces.list().map((workspace) => workspace.id)).not.toContain("lixo");
     expect((await test.app.inject({ method: "POST", url: "/api/cyno/confirmations/C-0002/approve" })).statusCode).toBe(409);
     expect((await test.app.inject({ method: "POST", url: "/api/cyno/confirmations/C-9999/approve" })).statusCode).toBe(404);
+  });
+});
+
+describe("sem cartão de OK (requireApproval: false)", () => {
+  const validPlan = (): ProposalInput => ({
+    name: "Padaria",
+    summary: "Posts e atendimento da padaria.",
+    rooms: [
+      {
+        name: "Conteúdo",
+        purpose: "content",
+        teams: [
+          {
+            name: "Posts",
+            focus: "Posts semanais",
+            agents: [
+              { name: "Bia", role: "Redatora", focus: "Escreve legendas curtas." },
+              { name: "Lia", role: "Designer", engine: "gemini", focus: "Cria imagens." },
+            ],
+          },
+        ],
+      },
+    ],
+    sites: [{ domain: "instagram.com", why: "Perfil da padaria" }],
+  });
+
+  it("ação perigosa executa na hora, devolve DONE, não grava cartão nem acorda o Cyno e registra na Atividade", async () => {
+    const t = await setup({ requireApproval: false });
+    await t.seedDesign();
+    const result = await t.call("delete_agent", { workspace: "Design", agent: "Lume", reason: "O dono pediu para tirar a revisora" });
+    expect(result.isError).toBeUndefined();
+    expect(result.text).toMatch(/^DONE: Apagar o agente "Lume" do workspace Design/);
+    expect(result.text).toMatch(/Agente "Lume" apagado/);
+    expect(t.test.workspaces.get("design").store.snapshot().agents.map((agent) => agent.name)).not.toContain("Lume");
+    expect(t.structure.listConfirmations()).toEqual([]);
+    expect(t.chat.map((body) => (body.kind === "status" ? parseConfirmationMarker(body.message) : undefined)).filter(Boolean)).toEqual([]);
+    expect(t.woken).toEqual([]);
+    expect(t.records.map((record) => record.action)).toEqual(expect.arrayContaining(["acao_direta", "acao_executada"]));
+  });
+
+  it("falha na validação antes da execução ou durante a execução (FAILED:) sem deixar cartão pendente", async () => {
+    const t = await setup({ requireApproval: false });
+    await t.seedDesign();
+    // Erro de validação antes da execução (prepareDeleteAgent / runtimeOf): nada entra na fila nem na Atividade.
+    const missingAgent = await t.call("delete_agent", { workspace: "Design", agent: "Fantasma" });
+    expect(missingAgent.isError).toBe(true);
+    expect(missingAgent.text).toMatch(/Agent "Fantasma" not found/);
+    const missingWorkspace = await t.call("delete_agent", { workspace: "Nada", agent: "Eco" });
+    expect(missingWorkspace.isError).toBe(true);
+    expect(missingWorkspace.text).toMatch(/No workspace "Nada"/);
+    expect(t.structure.listConfirmations()).toEqual([]);
+    expect(t.records.map((record) => record.action)).not.toContain("acao_direta");
+
+    // Erro durante a execução (runNow): lança Error começando com "FAILED:", registra acao_falhou e nada fica pendente.
+    await expect(t.structure.toolDeps().confirm.runHostCommand({ command: "programa-que-nao-existe-xyz" })).rejects.toThrow(/^FAILED: Rodar na máquina: programa-que-nao-existe-xyz/);
+    const failedTool = await t.call("run_host_command", { command: "programa-que-nao-existe-xyz" });
+    expect(failedTool.isError).toBe(true);
+    expect(failedTool.text).toMatch(/^FAILED: Rodar na máquina: programa-que-nao-existe-xyz/);
+    expect(t.structure.listConfirmations()).toEqual([]);
+    expect(t.woken).toEqual([]);
+    expect(t.records.map((record) => record.action)).toEqual(expect.arrayContaining(["acao_direta", "acao_falhou"]));
+  });
+
+  it("propose_workspace cria o workspace na hora, devolve DONE e deixa a proposta como criada (e desfaz se falhar)", async () => {
+    const t = await setup({ requireApproval: false });
+    const created = await t.call("propose_workspace", validPlan());
+    expect(created.isError).toBeUndefined();
+    expect(created.text).toMatch(/^DONE: the server created the whole workspace "Padaria"/);
+    expect(t.workspaceIds()).toContain("padaria");
+    expect(t.structure.listProposals()[0]).toMatchObject({ id: "P-0001", status: "criada", workspaceId: "padaria" });
+    expect(t.test.workspaces.get("padaria").store.snapshot().agents.map((agent) => agent.name)).toEqual(expect.arrayContaining(["Bia", "Lia"]));
+    expect(t.woken).toEqual([]);
+    expect(t.records.map((record) => record.action)).toEqual(expect.arrayContaining(["workspace_proposto", "workspace_criado"]));
+
+    // Falha no meio da criação: devolve FAILED, proposta fica "falhou" e tudo é desfeito.
+    const original = t.test.workspaces.find.bind(t.test.workspaces);
+    vi.spyOn(t.test.workspaces, "find").mockImplementation((id: string) => {
+      const runtime = original(id);
+      if (runtime && id === "padaria-2") {
+        runtime.services.agents.create = async () => {
+          throw new Error("falha forçada no agente");
+        };
+      }
+      return runtime;
+    });
+    let failed: Awaited<ReturnType<typeof t.call>>;
+    try {
+      failed = await t.call("propose_workspace", { ...validPlan(), name: "Padaria 2" });
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(failed.isError).toBe(true);
+    expect(failed.text).toMatch(/^FAILED to create the workspace "Padaria 2"/);
+    expect(t.structure.listProposals().find((proposal) => proposal.id === "P-0002")?.status).toBe("falhou");
+    expect(t.workspaceIds()).not.toContain("padaria-2");
+  });
+
+  it("com requireApproval omitido (padrão), continua devolvendo PENDING_CONFIRMATION sem executar", async () => {
+    const t = await setup();
+    await t.seedDesign();
+    const result = await t.call("delete_agent", { workspace: "Design", agent: "Lume" });
+    expect(result.isError).toBeUndefined();
+    expect(result.text).toMatch(/^PENDING_CONFIRMATION C-0001\./);
+    expect(t.test.workspaces.get("design").store.snapshot().agents.map((agent) => agent.name)).toContain("Lume");
+    expect(t.structure.listConfirmations()).toHaveLength(1);
   });
 });

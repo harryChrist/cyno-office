@@ -5,7 +5,7 @@ import { behindCount, useRoutinesStore } from "../../store/routinesStore";
 import { useNavStore, type PageId } from "../../store/navStore";
 import { useOfficeStore } from "../../store/officeStore";
 import { useAwaiting } from "../../pages/work/useWork";
-import type { Badge } from "./navItems";
+import type { Badge } from "./navItemsLogic";
 
 /** Contadores das páginas: o que espera você em Projetos e tarefas (a mesma conta da página e do painel), os atrasados da Gestão e os pendentes de Aprovações. */
 export function useNavBadges(): Partial<Record<PageId, Badge>> {

@@ -89,9 +89,14 @@ pub fn start_server(app: &AppHandle, state: &AppState) -> Result<(), String> {
 
     let mut cmd = app
         .shell()
-        .sidecar("binaries/node")
-        .map_err(|e| format!("sidecar binaries/node indisponível: {e}"))?
-        .args([entry.to_string_lossy().as_ref()])
+        // O bundler copia `binaries/node-<triple>` para `node(.exe)` ao lado do executável, e o plugin
+        // resolve `<pasta do exe>/<nome>`: por isso o nome aqui é só `node`, sem o prefixo `binaries/`.
+        .sidecar("node")
+        .map_err(|e| format!("sidecar node indisponível: {e}"))?
+        // `--use-system-ca`: o Node leva os certificados dele; em redes e antivírus que reassinam o HTTPS (comum em
+        // empresas) toda chamada para fora falha com UNABLE_TO_VERIFY_LEAF_SIGNATURE (uso do plano, OpenRouter, sites...).
+        // Com o flag ele também confia no repositório de certificados do Windows. (A variável NODE_USE_SYSTEM_CA não vale no 22.15.)
+        .args(["--use-system-ca", entry.to_string_lossy().as_ref()])
         .env("DATA_DIR", state.data_dir.to_string_lossy().as_ref())
         .env("PORT", state.api_port.to_string())
         .env("WEB_PORT", state.web_port.to_string())

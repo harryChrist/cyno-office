@@ -55,8 +55,8 @@ async function exists(file: string): Promise<boolean> {
 }
 
 async function setPassword(dataDir: string): Promise<void> {
-  const first = await promptHidden("Nova senha (mínimo 8 caracteres): ");
-  if (first.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
+  const first = await promptHidden("Nova senha: ");
+  if (first.length < 1) throw new Error("Digite uma senha.");
   const second = await promptHidden("Repita a senha: ");
   if (first !== second) throw new Error("As senhas não conferem.");
   await writeAuthFile(dataDir, first);

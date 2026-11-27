@@ -1,6 +1,6 @@
 import { cardSummarySchema, type AgendaEvent, type Card, type SentRequestView, type WaitingItem } from "@cyno/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { agendaTodayCount, clampSideWidth, loadSideWidth, saveSideWidth, loadSideCollapsed, loadSideTab, openRequests, oldestWaiting, saveSideCollapsed, saveSideTab, sideCounts, workspaceLine } from "./cynoSide";
+import { agendaTodayCount, clampSideWidth, loadSideWidth, saveSideWidth, loadSideCollapsed, loadSideTab, openRequests, oldestWaiting, saveSideCollapsed, saveSideTab, sideCounts, workspaceLine } from "./cynoSideLogic";
 
 const NOW = new Date("2026-11-11T15:00:00Z"); // 12h em São Paulo
 

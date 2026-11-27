@@ -7,7 +7,7 @@ import {
   type EngineAccount,
   type EngineAccountView,
 } from "@cyno/shared";
-import { userHomeDir } from "../../platform/os";
+import { isWindows, userHomeDir } from "../../platform/os";
 import { defaultProbe, type EngineBinary, type EngineProbe } from "../terminals/engines";
 import { parseLoggedIn } from "../terminals/engine-status";
 import type { EngineAccountStore } from "./account-store";
@@ -17,6 +17,24 @@ export const LOGIN_CACHE_TTL_MS = 10_000;
 
 /** Tempo máximo para `claude auth status` responder. */
 export const CLAUDE_AUTH_TIMEOUT_MS = 5_000;
+
+/** Tempo máximo do `agy -p /usage` usado para saber se a conta padrão do Antigravity está logada (Windows). */
+export const AGY_PROBE_TIMEOUT_MS = 20_000;
+
+/** Validade da resposta desse `agy -p /usage` (ele é um processo inteiro, então o cache é mais longo que o de 10 s). */
+export const AGY_PROBE_CACHE_MS = 60_000;
+
+/** A saída do `agy -p /usage --output-format json` tem `status: "SUCCESS"` na última linha JSON? */
+export function agyUsageSucceeded(stdout: string): boolean {
+  const lines = stdout.split(/\r?\n/).map((line) => line.trim());
+  const json = [...lines].reverse().find((line) => line.startsWith("{"));
+  if (!json) return false;
+  try {
+    return (JSON.parse(json) as { status?: unknown }).status === "SUCCESS";
+  } catch {
+    return false;
+  }
+}
 
 /** Rótulo exibido para a conta padrão sintética (a do HOME real do servidor). */
 export const DEFAULT_ACCOUNT_LABEL = "Padrão";
@@ -72,6 +90,7 @@ export class AccountLoginChecker {
   private readonly realHomeDir: string;
   private readonly cache = new Map<string, CacheEntry>();
   private readonly inflight = new Map<string, Promise<boolean>>();
+  private agyWindows: { loggedIn: boolean; at: number } | undefined;
 
   constructor(private readonly options: AccountLoginCheckerOptions) {
     this.probe = options.probe ?? defaultProbe;
@@ -145,11 +164,29 @@ export class AccountLoginChecker {
     return { ...account, loggedIn };
   }
 
+  /**
+   * `agy -p /usage --output-format json` (sem turno de modelo, sem gastar cota): `status: SUCCESS` = logado.
+   * É um processo de alguns segundos, por isso o resultado fica em cache por mais tempo que o dos outros.
+   */
+  private async agyAnswers(): Promise<boolean> {
+    const at = this.now();
+    if (this.agyWindows && at - this.agyWindows.at < AGY_PROBE_CACHE_MS) return this.agyWindows.loggedIn;
+    const bin = this.options.resolveBinary("gemini");
+    const result = await this.probe(bin.command, [...(bin.prefixArgs ?? []), "-p", "/usage", "--output-format", "json"], AGY_PROBE_TIMEOUT_MS);
+    const loggedIn = result.ok && agyUsageSucceeded(result.stdout);
+    this.agyWindows = { loggedIn, at };
+    return loggedIn;
+  }
+
   private async compute(target: LoginTarget): Promise<boolean> {
     if (target.engine === "gemini") {
       const profile = target.isDefault ? undefined : this.options.store.profileEnv({ id: target.accountId, engine: "gemini" });
       const homeDir = target.isDefault ? this.realHomeDir : (profile?.USERPROFILE ?? profile?.HOME)!;
-      return fileExists(agyTokenFile(homeDir));
+      if (await fileExists(agyTokenFile(homeDir))) return true;
+      // No Windows o agy guarda o login no Gerenciador de Credenciais, não no arquivo acima. Só a conta PADRÃO (a do
+      // usuário do Windows) dá para confirmar perguntando ao próprio agy; as extras seguem pelo arquivo, porque não se
+      // sabe se o login de um perfil isolado fica separado do da conta padrão (um `/usage` mentiria "conectada").
+      return target.isDefault && isWindows(this.options.platform) ? this.agyAnswers() : false;
     }
 
     const bin = this.options.resolveBinary("claude");

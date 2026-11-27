@@ -41,6 +41,12 @@ export type CynoStructureHost = {
   wake: (tag: string, build: () => string) => void;
   /** Atividade da plataforma (quem pediu, o quê, decisão, resultado). */
   record: (input: ActivityInput) => void;
+  /**
+   * As ações perigosas pedem o OK do dono num cartão (duas fases)? Padrão: sim. Com `false` (o servidor em
+   * produção, `CYNO_REQUIRE_APPROVAL=0`) elas executam na hora, ficam só na Atividade, e o limite passa a ser
+   * a regra das instruções do Cyno: só faz o que o dono pediu e pergunta no chat sobre o que passar disso.
+   */
+  requireApproval?: boolean;
 };
 
 /**
@@ -115,6 +121,27 @@ export class CynoStructure {
       : `PENDING_CONFIRMATION ${confirmation.id}. The owner was asked in the chat (a card with the summary: "${confirmation.summary}"). Nothing has been done yet. Do not retry and do not try another way; you will get a message with the result. Tell the owner, in Brazilian Portuguese and without technical ids, what you asked approval for and that you are waiting.`;
   }
 
+  /**
+   * Sem cartão de OK (`requireApproval: false`): executa na hora o que a ferramenta preparou (os mesmos
+   * parâmetros já validados e resolvidos), deixa o rastro na Atividade e devolve o resultado real ao modelo.
+   * Não grava confirmação, não põe cartão no chat e não acorda o Cyno (ele já recebe o resultado na chamada).
+   */
+  private async runNow(prepared: ConfirmationRequest, reason: string | undefined): Promise<string> {
+    const label = DANGEROUS_ACTION_LABELS[prepared.action];
+    const data = { tipo: label, ...(prepared.workspace ? { workspace: prepared.workspace } : {}), ...(reason ? { motivo: shorten(reason, 300) } : {}) };
+    this.record("acao_direta", "cyno", `O Cyno executou: ${shorten(prepared.summary, 200)}`, undefined, data);
+    try {
+      const result = await this.actions.execute(prepared.action, prepared.params);
+      this.record("acao_executada", "cyno", `Executado: ${shorten(prepared.summary, 160)}`, undefined, { ...data, result: shorten(result, 300) });
+      return `DONE: ${prepared.summary}\nResult:\n${result || "(no output)"}\nTell the owner the outcome briefly, in Brazilian Portuguese and without technical ids.`;
+    } catch (error) {
+      const text = errorMessage(error);
+      this.record("acao_falhou", "cyno", `Falhou: ${shorten(prepared.summary, 120)} (${shorten(text, 120)})`, undefined, data);
+      if (!(error instanceof HostCommandFailed)) this.host.log.warn({ err: error }, "ação direta do Cyno falhou");
+      throw new Error(`FAILED: ${prepared.summary}\n${text}`);
+    }
+  }
+
   // ---------- Fase 2: o dono decide (rotas HTTP) ----------
 
   /** O dono clicou "Confirmar": executa os parâmetros gravados, uma vez. Devolve a confirmação já com o resultado. */
@@ -149,7 +176,8 @@ export class CynoStructure {
 
   // ---------- Propostas de workspace ----------
 
-  async propose(input: ProposalInput & { replaces?: string }): Promise<string> {
+  /** Valida, grava a proposta e mostra o cartão no chat (nada é criado). */
+  private async registerProposal(input: ProposalInput & { replaces?: string }): Promise<{ proposal: WorkspaceProposal; warnings: string[] }> {
     const { replaces, ...plan } = input;
     const { plan: normalized, warnings } = validateProposal(plan, {
       engines: await this.host.engines(),
@@ -161,11 +189,30 @@ export class CynoStructure {
     this.host.chat({ kind: "status", status: "waiting", message: proposalMarker(proposal.id) });
     this.record("workspace_proposto", "cyno", `O Cyno propôs o workspace "${proposal.plan.name}"`, undefined, { proposal: proposal.id });
     this.emitProposals();
+    return { proposal, warnings };
+  }
+
+  /** Sem OK (`requireApproval: false`): registra e já cria tudo (a mesma criação do botão, numa transação); o cartão fica como registro. */
+  private async proposeAndCreate(input: ProposalInput & { replaces?: string }): Promise<string> {
+    const { proposal, warnings } = await this.registerProposal(input);
+    const outcome = await this.runProposal(proposal.id, "cyno");
+    const warn = warnings.length > 0 ? `\nWarnings: ${warnings.join(" ")}` : "";
+    if (outcome.error !== undefined) {
+      throw new Error(`FAILED to create the workspace "${proposal.plan.name}" (everything was undone): ${outcome.error}${warn}\nExplain briefly to the owner in Brazilian Portuguese what failed and fix it (a new propose_workspace with replaces: "${proposal.id}").`);
+    }
+    return `DONE: the server created the whole workspace "${proposal.plan.name}". ${outcome.summary} Workspace id: ${outcome.workspaceId}.${outcome.logins}${outcome.pending}${warn}\nTell the owner it is ready (Brazilian Portuguese, no technical ids) and what is left for them (logins, routines waiting in "Para você", pending connectors).`;
+  }
+
+  async propose(input: ProposalInput & { replaces?: string }): Promise<string> {
+    const { proposal, warnings } = await this.registerProposal(input);
     return `Proposal ${proposal.id} (version ${proposal.version}) is now shown to the owner as a card with the whole package and a "Criar workspace" button. NOTHING was created. Do not create anything yourself: the server creates everything when the owner approves, and you will get a message with the result. If the owner asks for changes, call propose_workspace again with replaces: "${proposal.id}".${warnings.length > 0 ? `\nWarnings: ${warnings.join(" ")}` : ""}\nTell the owner in one or two sentences (Brazilian Portuguese, no technical ids) that the proposal is ready for their review.`;
   }
 
-  /** O dono clicou "Criar workspace": cria tudo por código, numa transação (falhou = desfaz). */
-  async approveProposal(id: string): Promise<WorkspaceProposal> {
+  /** Cria tudo por código, numa transação (falhou = desfaz). `by` diz quem mandou criar (o dono no botão; o Cyno sem OK). */
+  private async runProposal(
+    id: string,
+    by: "usuario" | "cyno",
+  ): Promise<{ proposal: WorkspaceProposal; error?: string; summary: string; workspaceId: string; logins: string; pending: string }> {
     const found = this.proposals.get(id);
     if (!found) throw new HttpError(404, "Proposta não encontrada");
     if (found.status !== "proposta" && found.status !== "falhou") throw new HttpError(409, `Esta proposta já foi decidida (${found.status}).`);
@@ -173,7 +220,7 @@ export class CynoStructure {
     this.creating.add(id);
     this.proposals.update(id, { status: "criando", progress: [], error: undefined });
     this.emitProposals();
-    this.record("workspace_aprovado", "usuario", `O dono aprovou criar o workspace "${found.plan.name}"`, undefined, { proposal: id });
+    if (by === "usuario") this.record("workspace_aprovado", "usuario", `O dono aprovou criar o workspace "${found.plan.name}"`, undefined, { proposal: id });
     try {
       const result = await executeProposal(this.proposals.get(id)!, {
         workspaces: this.host.workspaces,
@@ -186,19 +233,29 @@ export class CynoStructure {
       this.record("workspace_criado", "cyno", result.summary, undefined, { proposal: id, workspace: result.workspaceId });
       this.emitProposals();
       const logins = result.logins.length > 0 ? `\nSites that need the owner to log in manually (tell them): ${result.logins.join(", ")}.` : "";
-      const pending = result.pendingConnectors.length > 0 ? `\nConnectors NOT created (they were not registered anywhere): ${result.pendingConnectors.join(", ")}. Register them with add_connector (needs the owner's OK) and then give them to the agents with set_agent_connectors (also needs OK).` : "";
-      this.tell(`proposal:${id}`, () => `[Proposal ${id}] The owner APPROVED and the server created everything. ${result.summary} Workspace id: ${result.workspaceId}.${logins}${pending}\nTell the owner it is ready (Brazilian Portuguese, no technical ids) and what is left for them (logins, routines waiting in "Para você", pending connectors).`);
-      return done;
+      const connectorsNote = this.host.requireApproval === false ? "" : " (needs the owner's OK)";
+      const pending = result.pendingConnectors.length > 0 ? `\nConnectors NOT created (they were not registered anywhere): ${result.pendingConnectors.join(", ")}. Register them with add_connector${connectorsNote} and then give them to the agents with set_agent_connectors${connectorsNote}.` : "";
+      return { proposal: done, summary: result.summary, workspaceId: result.workspaceId, logins, pending };
     } catch (error) {
       const message = errorMessage(error);
       const failed = this.proposals.update(id, { status: "falhou", error: message, ...(error instanceof ProposalFailed ? { progress: error.steps } : {}) });
       this.record("workspace_falhou", "cyno", `Falhou criar o workspace "${found.plan.name}": ${shorten(message, 200)}`, undefined, { proposal: id });
       this.emitProposals();
-      this.tell(`proposal:${id}`, () => `[Proposal ${id}] The owner approved but the creation FAILED and was undone: ${message}\nExplain briefly to the owner in Brazilian Portuguese what failed and propose a fix (a new propose_workspace with replaces: "${id}").`);
-      return failed;
+      return { proposal: failed, error: message, summary: "", workspaceId: "", logins: "", pending: "" };
     } finally {
       this.creating.delete(id);
     }
+  }
+
+  /** O dono clicou "Criar workspace": cria tudo por código, numa transação (falhou = desfaz) e avisa o Cyno. */
+  async approveProposal(id: string): Promise<WorkspaceProposal> {
+    const outcome = await this.runProposal(id, "usuario");
+    if (outcome.error !== undefined) {
+      this.tell(`proposal:${id}`, () => `[Proposal ${id}] The owner approved but the creation FAILED and was undone: ${outcome.error}\nExplain briefly to the owner in Brazilian Portuguese what failed and propose a fix (a new propose_workspace with replaces: "${id}").`);
+    } else {
+      this.tell(`proposal:${id}`, () => `[Proposal ${id}] The owner APPROVED and the server created everything. ${outcome.summary} Workspace id: ${outcome.workspaceId}.${outcome.logins}${outcome.pending}\nTell the owner it is ready (Brazilian Portuguese, no technical ids) and what is left for them (logins, routines waiting in "Para você", pending connectors).`);
+    }
+    return outcome.proposal;
   }
 
   rejectProposal(id: string): WorkspaceProposal {
@@ -216,7 +273,10 @@ export class CynoStructure {
 
   /** As dependências das ferramentas MCP de estrutura do Cyno. */
   toolDeps(): StructureHostDeps {
-    const run = async (prepare: () => Promise<ConfirmationRequest> | ConfirmationRequest, reason: string | undefined): Promise<string> => this.request(await prepare(), reason);
+    const run = async (prepare: () => Promise<ConfirmationRequest> | ConfirmationRequest, reason: string | undefined): Promise<string> => {
+      const prepared = await prepare();
+      return this.host.requireApproval === false ? this.runNow(prepared, reason) : this.request(prepared, reason);
+    };
     return {
       workspaceOf: (ref) => this.actions.workspaceOf(ref),
       catalog: async () => catalogText({ engines: await this.host.engines(), simulated: this.host.simulated, workspaces: this.host.workspaces }),
@@ -236,7 +296,7 @@ export class CynoStructure {
         const next = { ...current, ...(models.maestro ? { maestro: modelChoiceSchema.parse(models.maestro) } : {}), ...(models.agents ? { agentes: modelChoiceSchema.parse(models.agents) } : {}) };
         return this.host.workspaces.update(workspace.id, { models: next });
       },
-      propose: (input) => this.propose(input),
+      propose: (input) => (this.host.requireApproval === false ? this.proposeAndCreate(input) : this.propose(input)),
       confirm: {
         deleteWorkspace: (input) => run(() => this.actions.prepareDeleteWorkspace(input), input.reason),
         deleteRoom: (input) => run(() => this.actions.prepareDeleteRoom(input), input.reason),

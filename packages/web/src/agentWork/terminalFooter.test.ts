@@ -1,6 +1,6 @@
 import type { AgentLogEntry } from "@cyno/shared";
 import { describe, expect, it } from "vitest";
-import { sinceLabel, terminalFooter } from "./terminalFooter";
+import { sinceLabel, terminalFooter } from "./terminalFooterLogic";
 
 const AT = "2026-11-12T12:00:00.000Z";
 let seq = 0;

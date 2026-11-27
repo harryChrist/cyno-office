@@ -1,20 +1,26 @@
 import { CYNO_STATUS_LABELS, engineBlockLabel, type CynoState, type WorkspaceProposal } from "@cyno/shared";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { cynoChatItems, cynoThinking, type CynoChatItem, type CynoWorkStep } from "../../agentWork/cynoChat";
-import { clockLabel } from "../../agentWork/timeline";
+import { clockLabel } from "../../agentWork/timelineLogic";
 import { useCynoStore } from "../../store/cynoStore";
+import { useFirstUseReviewStore } from "../../store/firstUseReviewStore";
+import { useWorkspaceStore } from "../../store/workspaceStore";
 import { Markdown } from "../../ui/markdown/Markdown";
 import { CynoPet } from "./CynoPet";
 import { CynoModelPicker } from "./CynoModelPicker";
 import { ConfirmationCard, PendingDecisions, ProposalCard } from "./DecisionCards";
 import { RequestCard } from "./RequestsPanel";
 import { CynoChips, CynoRail, CynoSide, useSideCounts } from "./CynoSide";
-import { clampSideWidth, loadSideCollapsed, loadSideTab, loadSideWidth, saveSideCollapsed, saveSideTab, saveSideWidth, SIDE_WIDTH_DEFAULT, SIDE_WIDTH_MAX, SIDE_WIDTH_MIN, SIDE_WIDTH_STEP, type SideTabId } from "./cynoSide";
+import { clampSideWidth, loadSideCollapsed, loadSideTab, loadSideWidth, saveSideCollapsed, saveSideTab, saveSideWidth, SIDE_WIDTH_DEFAULT, SIDE_WIDTH_MAX, SIDE_WIDTH_MIN, SIDE_WIDTH_STEP, type SideTabId } from "./cynoSideLogic";
+import { FirstUseScreen } from "./firstUse/FirstUseScreen";
+import { cynoScreenMode } from "./onboardingView";
 import { JointCard } from "../joint/JointCard";
-import { CidadeFaixa } from "../../cena/cidade/CidadeFaixa";
+import { CityDialog } from "./CityDialog";
+import { withViewTransition } from "./viewTransition";
 import "./cynoRequests.css";
 import "../../agentWork/maestroPanel.css";
 import "./cyno.css";
+import "./cynoSkin.css";
 
 const STICK_PX = 64;
 const noWiki = () => null;
@@ -208,10 +214,10 @@ function Composer({ text, setText, inputRef, blocked, waking }: { text: string; 
           ref={inputRef}
           id={inputId}
           className="cyno-compose__input"
-          rows={2}
+          rows={1}
           value={text}
           maxLength={MAX_CHARS}
-          placeholder="Diga o que você quer: o Cyno escolhe o workspace e manda o pedido ao Maestro…"
+          placeholder="Mensagem para o Cyno…"
           onChange={(event) => {
             if (error) clearError();
             setText(event.currentTarget.value);
@@ -329,6 +335,10 @@ export function CynoPage() {
   const newConversation = useCynoStore((store) => store.newConversation);
   const now = useNow();
   const loadCards = useCynoStore((store) => store.loadCards);
+  const workspaces = useWorkspaceStore((store) => store.workspaces);
+  const reviewMode = useFirstUseReviewStore((store) => store.active);
+  const chatOpen = useFirstUseReviewStore((store) => store.chatOpen);
+  const closeChat = useFirstUseReviewStore((store) => store.closeChat);
   const noWorkspaces = useCynoStore((store) => store.cardsLoaded && store.cards.length === 0);
   const counts = useSideCounts(now);
   const [tab, setTab] = useState<SideTabId>(loadSideTab);
@@ -342,6 +352,12 @@ export function CynoPage() {
   const [sheet, setSheet] = useState(false);
   const picked = useRef(false);
   const [confirming, setConfirming] = useState(false);
+  const [cityOpen, setCityOpen] = useState(false);
+  const cityButton = useRef<HTMLButtonElement>(null);
+  const closeCity = useCallback(() => {
+    setCityOpen(false);
+    cityButton.current?.focus();
+  }, []);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // As sugestões do estado vazio escrevem no campo (enviar continua sendo do dono).
@@ -353,7 +369,26 @@ export function CynoPage() {
   // "Ajustar" na proposta: o ajuste é conversa (o Cyno gera uma versão nova).
   const adjust = (proposal: WorkspaceProposal) => pick(`Ajuste na proposta do workspace ${proposal.plan.name}: `);
 
+  const working = state?.status === "working";
+  const waking = state?.status === "waking";
+  const items = useMemo(() => cynoChatItems(entries, working || waking), [entries, working, waking]);
+  const thinking = cynoThinking(items, working, waking);
+  const conversationEmpty = items.length === 0 || Boolean(state?.newConversation);
+  const workspaceCount = workspaces?.length ?? 0;
+  const screenMode = cynoScreenMode({
+    workspacesLoaded: workspaces !== null,
+    workspaceCount,
+    conversationLoaded: loaded,
+    conversationEmpty,
+    chatOpen,
+    reviewMode,
+  });
+
   useEffect(() => connect(), [connect]);
+  // Passou a existir um workspace: o chat deixa de ficar aberto à força (se todos forem apagados depois, a boas-vindas volta).
+  useEffect(() => {
+    if (workspaceCount > 0) closeChat();
+  }, [workspaceCount, closeChat]);
   useEffect(() => {
     void loadCards();
   }, [loadCards]);
@@ -370,7 +405,7 @@ export function CynoPage() {
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [screenMode]);
   const effectiveWidth = clampSideWidth(sideWidth, available);
   const chooseTab = (next: SideTabId) => {
     picked.current = true;
@@ -387,11 +422,6 @@ export function CynoPage() {
     setSheet(true);
   };
 
-  const working = state?.status === "working";
-  const waking = state?.status === "waking";
-  const items = useMemo(() => cynoChatItems(entries, working || waking), [entries, working, waking]);
-  const thinking = cynoThinking(items, working, waking);
-
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useLayoutEffect(() => {
@@ -406,7 +436,27 @@ export function CynoPage() {
   const startNew = async () => {
     setConfirming(false);
     await newConversation();
+    // Sem workspace, "Nova conversa" volta para a tela de boas-vindas (com a caixa subindo para o centro).
+    withViewTransition(() => closeChat());
   };
+
+  if (screenMode === "first-use") {
+    return (
+      <section className="page page--fill cyno cyno--first-use" aria-label="Cyno" data-testid="cyno-page">
+        <FirstUseScreen state={state} now={now} />
+      </section>
+    );
+  }
+
+  if (screenMode === "loading") {
+    return (
+      <section className="page page--fill cyno cyno--loading" aria-label="Cyno" data-testid="cyno-page">
+        <p className="cyno-loading" role="status">
+          {socket === "reconnecting" ? "Reconectando…" : "Carregando…"}
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section className="page page--fill cyno" aria-labelledby="cyno-title" data-side={collapsed ? "closed" : "open"} data-resizing={resizing ? "true" : undefined} data-testid="cyno-page">
@@ -422,6 +472,12 @@ export function CynoPage() {
             </div>
             <div className="cyno-head__tools">
               {state && <CynoModelPicker choice={state.choice} />}
+              <button ref={cityButton} type="button" className="ui-button ui-button--ghost cyno-new cyno-city-btn" onClick={() => setCityOpen(true)} aria-haspopup="dialog" data-testid="cyno-city-open">
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M4 21V9l6-4v16M10 21V3l10 5v13M3 21h18M14 11h2M14 15h2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Cidade
+              </button>
               {confirming ? (
                 <span className="cyno-confirm" role="group" aria-label="Confirmar nova conversa">
                   <span className="cyno-confirm__text">O Cyno esquece esta conversa?</span>
@@ -441,8 +497,6 @@ export function CynoPage() {
           </header>
 
           <CynoChips counts={counts} noWorkspaces={noWorkspaces} onOpen={openPanel} />
-
-          <CidadeFaixa />
 
           <div className="cyno-chat" data-testid="cyno-chat">
             <PendingDecisions onAdjust={adjust} />
@@ -483,6 +537,7 @@ export function CynoPage() {
         {collapsed && <CynoRail counts={counts} onOpen={openPanel} />}
         <CynoSide now={now} tab={tab} onTab={chooseTab} counts={counts} onCollapse={() => setSideCollapsed(true)} sheet={sheet} onClose={() => setSheet(false)} />
       </div>
+      {cityOpen && <CityDialog onClose={closeCity} />}
     </section>
   );
 }

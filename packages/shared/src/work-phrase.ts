@@ -326,6 +326,8 @@ export const OFFICE_TOOL_PHRASES: Readonly<Record<string, OfficeToolPhrase>> = {
   list_sent_requests: row("📨", "pedidos enviados", "Olhando os pedidos enviados", "Listou os pedidos enviados"),
   get_request_status: row("🔎", "ver pedido", "Conferindo um pedido", "Conferiu um pedido"),
   send_request: row("📨", "enviar pedido", "Mandando um pedido a um workspace", "Mandou um pedido a um workspace"),
+  workspace_tools: row("🧰", "ver ferramentas do Maestro", "Vendo o que o Maestro do workspace faz", "Consultou o que o Maestro do workspace faz"),
+  use_workspace_tool: row("🧩", "usar ferramenta do Maestro", "Usando uma ferramenta do Maestro", "Usou uma ferramenta do Maestro"),
   answer_maestro: row("💬", "responder ao Maestro", "Respondendo ao Maestro", "Respondeu ao Maestro"),
   ask_cyno: row("🧭", "falar com o Cyno", "Perguntando ao Cyno", "Perguntou ao Cyno"),
   send_joint_request: row("🤝", "pedido conjunto", "Mandando um pedido conjunto", "Mandou um pedido conjunto"),

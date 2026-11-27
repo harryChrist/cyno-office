@@ -81,7 +81,7 @@ import { renderDayStats, renderPlatformDayStats } from "../../workspace/day-stat
 import { renderPlatformToday, renderToday } from "../../workspace/today/today-text";
 import { activity } from "../../workspace/activity/log";
 import { cynoStructureTools } from "../../mcp/cyno/structure-tools";
-import { scopedGetTeam, scopedStructureTools } from "../../mcp/cyno/scoped";
+import { maestroToolBridge, scopedGetTeam, scopedStructureTools } from "../../mcp/cyno/scoped";
 import { CynoStructure } from "./cyno-structure";
 import { CYNO_ACCESS, cynoPrompt } from "./cyno-prompt";
 import { CynoRequests } from "./cyno-requests";
@@ -111,6 +111,8 @@ export type CynoServiceDeps = {
   simulated?: boolean;
   /** Variáveis de ambiente do `run_host_command` (testes); ausente = as do processo, já sem chaves de API. */
   hostEnv?: NodeJS.ProcessEnv;
+  /** As ações perigosas do Cyno pedem OK num cartão? Padrão: sim (ver `CynoStructureHost.requireApproval`). */
+  requireApproval?: boolean;
   /** "Sua agenda": as ferramentas `agenda_*` do Cyno e os eventos ao vivo dela pelo websocket do Cyno. */
   agenda?: AgendaService;
   /** O mural da plataforma: as ferramentas `mural_*` do Cyno, os avisos passivos e os eventos ao vivo. */
@@ -284,6 +286,7 @@ export class CynoService {
         now: deps.now,
         log: service.log,
         ...(deps.hostEnv ? { env: deps.hostEnv } : {}),
+        ...(deps.requireApproval !== undefined ? { requireApproval: deps.requireApproval } : {}),
         chat: (body) => service.chat(body),
         emit: (event) => service.emit(event),
         wake: (tag, build) => service.wakeFor(tag, build),
@@ -531,7 +534,7 @@ export class CynoService {
   private structureToolList(): McpTool[] {
     const host = { workspaces: this.deps.workspaces, simulated: this.deps.simulated === true };
     const scoped = scopedStructureTools(host);
-    return [...scoped.tools, scoped.roomOptions, scopedGetTeam(host), ...cynoStructureTools(this.structure.toolDeps())];
+    return [...scoped.tools, scoped.roomOptions, scopedGetTeam(host), ...maestroToolBridge(host), ...cynoStructureTools(this.structure.toolDeps())];
   }
 
   // ---------- Confirmações e propostas (rotas do dono) ----------
