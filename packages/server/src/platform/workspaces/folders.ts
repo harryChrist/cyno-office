@@ -64,8 +64,9 @@ export async function checkWorkFolderPath(
   if (!info.isDirectory()) throw new HttpError(400, FOLDER_ERRORS.notDirectory);
   if (real === path.parse(real).root) throw new HttpError(400, FOLDER_ERRORS.root);
   const data = await realpath(options.dataDir).catch(() => path.resolve(options.dataDir));
-  // Igual, dentro ou por cima do DATA_DIR (a pasta que contém o DATA_DIR daria acesso a tudo dele).
-  if (isInside(real, data) || isInside(data, real)) throw new HttpError(400, FOLDER_ERRORS.dataDir);
+  const inClonedRepos = isPathInside(real, path.join(data, "repos"), { strict: true });
+  // Igual, dentro ou por cima do DATA_DIR (exceto repositórios clonados dentro de DATA_DIR/repos/).
+  if ((!inClonedRepos && isInside(real, data)) || isInside(data, real)) throw new HttpError(400, FOLDER_ERRORS.dataDir);
   const same = options.existing.find((folder) => samePath(folder.path, real));
   if (same) throw new HttpError(400, FOLDER_ERRORS.duplicate(same.name));
   return real;

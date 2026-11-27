@@ -46,6 +46,9 @@ import { pauseAppliesTo } from "./platform/usage-guard/rules";
 import { registerUsageGuardRoutes } from "./routes/usage-guard";
 import { registerEngineRoutes, type EngineRoutesDeps } from "./routes/engines";
 import { registerEngineAccountRoutes } from "./routes/engine-accounts";
+import { registerGitRoutes } from "./routes/git";
+import { GitCloneService } from "./platform/git/clone";
+import { GitCredentialStore } from "./platform/git/credentials";
 import { registerEngineLoginRoutes } from "./routes/engine-login";
 import { EngineSettingsStore } from "./platform/models/engine-settings";
 import { registerSettingsRoutes } from "./routes/settings";
@@ -244,6 +247,8 @@ export type AppDeps = {
   cynoIdleMs?: number;
   /** Senha de acesso (DATA_DIR/auth.json): pausa após erro e relógio; os testes ajustam. */
   auth?: AuthOptions;
+  /** Clone de repositórios git: opções internas de teste (nunca expostas na API). */
+  git?: { allowLocalPaths?: boolean; timeoutMs?: number };
 };
 
 /** Monta a aplicação Fastify (sem dar listen) — testável com app.inject(). */
@@ -938,6 +943,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   registerSpendSettingsRoutes(app, spendSettings, now);
   registerBudgetRoutes(app, spendSettings, budget, now);
   registerAwayRoutes(app, owner, away, now);
+  const gitCredentials = await GitCredentialStore.open(deps.dataDir, { now });
+  const gitClone = new GitCloneService({
+    dataDir: deps.dataDir,
+    credentials: gitCredentials,
+    addFolder: (workspaceId, body) => manager.addFolder(workspaceId, body),
+    now,
+    ...(deps.git?.allowLocalPaths ? { allowLocalPaths: true } : {}),
+    ...(deps.git?.timeoutMs !== undefined ? { timeoutMs: deps.git.timeoutMs } : {}),
+  });
+  registerGitRoutes(app, { credentials: gitCredentials, clone: gitClone, record });
 
   let booted: Promise<void> | undefined;
   const bootWorkspaces = () => (booted ??= manager.start().then(async () => {
@@ -997,6 +1012,8 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     await usagePersistence.flush();
     await spendSettings.flush();
     await owner.flush();
+    await gitClone.close();
+    await gitCredentials.flush();
     await authStore.flush();
   });
   return app;

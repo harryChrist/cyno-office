@@ -138,6 +138,8 @@ export type TestAppOptions = {
   engineLogin?: AppDeps["engineLogin"];
   /** Receita falsa de instalação para testes de `claude`/`gemini`/`openclaw`/`hermes`. */
   installRecipe?: AppDeps["installRecipe"];
+  /** Opções internas de teste para clone de repositórios git. */
+  git?: AppDeps["git"];
 };
 
 /** Padrões dos testes: Maestro e agentes simulados (workspace novo não cria agente de CLI de verdade). */
@@ -199,6 +201,7 @@ export function useTestApp(): (options?: TestAppOptions) => Promise<TestApp> {
       engineAccounts: options.engineAccounts ?? { realHomeDir: path.join(dataDir, "fake-home") },
       ...(options.engineLogin ? { engineLogin: options.engineLogin } : {}),
       ...(options.installRecipe ? { installRecipe: options.installRecipe } : {}),
+      ...(options.git ? { git: options.git } : {}),
       freebuff: { command: "/nao-existe/freebuff-nunca-nos-testes", manicodeDir: path.join(dataDir, "fake-manicode"), ...options.freebuff },
       terminals: {
         // Os testes nunca sobem o OpenClaw nem o Hermes de verdade (o OpenClaw está instalado na máquina do dono).
