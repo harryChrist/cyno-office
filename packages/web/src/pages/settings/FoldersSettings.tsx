@@ -4,6 +4,8 @@ import { api } from "../../api/client";
 import { useAsyncAction } from "../../ui/useAsyncAction";
 import { ErrorText } from "../../ui/widgets";
 import { StorageCard } from "./StorageCard";
+import { CloneRepoDialog } from "./CloneRepoDialog";
+import { GitCredentialsPanel } from "./GitCredentialsPanel";
 import { storageLabel, storageTitle } from "./storageView";
 import { useStorage } from "./useStorage";
 import "./foldersSettings.css";
@@ -43,10 +45,16 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
   const storage = useStorage(workspace.id, folders.map((folder) => folder.id).join(","));
   const full = folders.length >= WORK_FOLDER_LIMITS.max;
   const [adding, setAdding] = useState(false);
+  const [cloning, setCloning] = useState(false);
   const addButton = (
-    <button type="button" className="ui-button ui-button--small folders__add-btn" aria-expanded={adding} aria-controls="folders-add-form" onClick={() => setAdding((open) => !open)} data-testid="settings-folder-add-toggle">
-      <span aria-hidden="true">{adding ? "−" : "+"}</span> {adding ? "Fechar" : "Adicionar pasta"}
-    </button>
+    <div className="folders__git-actions">
+      <button type="button" className="ui-button ui-button--ghost ui-button--small folders__add-btn" onClick={() => setCloning(true)} data-testid="settings-folder-clone-open">
+        Clonar repositório…
+      </button>
+      <button type="button" className="ui-button ui-button--small folders__add-btn" aria-expanded={adding} aria-controls="folders-add-form" onClick={() => setAdding((open) => !open)} data-testid="settings-folder-add-toggle">
+        <span aria-hidden="true">{adding ? "−" : "+"}</span> {adding ? "Fechar" : "Adicionar pasta"}
+      </button>
+    </div>
   );
   return (
     <div className={`settings__groups${panel ? " folders--panel" : ""}`} data-testid="settings-folders">
@@ -82,7 +90,9 @@ export function FoldersSettings({ workspace, panel = false }: { workspace: Works
         )}
         {full && <p className="settings__card-hint">O limite é de {WORK_FOLDER_LIMITS.max} pastas por workspace. Tire alguma para cadastrar outra.</p>}
         {!full && adding && <AddFolderForm id="folders-add-form" workspaceId={workspace.id} onDone={() => setAdding(false)} onCancel={() => setAdding(false)} />}
+        {!full && cloning && <CloneRepoDialog workspaceId={workspace.id} onClose={() => setCloning(false)} />}
       </section>
+      {!panel && <GitCredentialsPanel />}
       {!panel && <StorageCard workspace={workspace} data={storage.data} failed={storage.failed} onRefresh={storage.refresh} />}
     </div>
   );
