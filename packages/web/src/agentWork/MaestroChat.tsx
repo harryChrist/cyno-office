@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "../ui/markdown/Markdown";
-import type { ChatItem } from "./maestroChat";
-import { clockLabel } from "./timeline";
+import type { ChatItem } from "./maestroChatView";
+import { clockLabel } from "./timelineView";
 
 const STICK_PX = 64;
 const noWiki = () => null;

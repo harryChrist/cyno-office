@@ -17,7 +17,7 @@ import {
 } from "./brainView";
 import { RulesEditor } from "./RulesEditor";
 import { Markdown } from "../../ui/markdown/Markdown";
-import { headingOutline, parseMarkdown } from "../../ui/markdown/markdown";
+import { headingOutline, parseMarkdown } from "../../ui/markdown/markdownTree";
 
 /** Quantos títulos a nota precisa ter para ganhar sumário. */
 const TOC_MIN_HEADINGS = 3;

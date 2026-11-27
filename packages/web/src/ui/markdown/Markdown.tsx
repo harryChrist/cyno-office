@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from "react";
-import { headingId, parseMarkdown, type Block, type Inline } from "./markdown";
+import { headingId, parseMarkdown, type Block, type Inline } from "./markdownTree";
 
 /** Endereço (hash) da nota de um wiki link, ou null se ela não existe no workspace. */
 export type WikiResolver = (target: string) => string | null;

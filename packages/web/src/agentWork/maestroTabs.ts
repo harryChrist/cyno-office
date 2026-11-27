@@ -1,4 +1,4 @@
-import type { RequestItem } from "./timeline";
+import type { RequestItem } from "./timelineView";
 import type { MaestroTab } from "./workPanelStore";
 
 /** Como o Maestro conversa: Claude Code interativo (terminal), CLI sem terminal (chat) ou simulado. */

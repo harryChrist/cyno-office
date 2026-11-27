@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { headingId, headingOutline, inlineText, isSafeHref, parseInline, parseMarkdown, plainText, wikiTarget } from "./markdown";
+import { headingId, headingOutline, inlineText, isSafeHref, parseInline, parseMarkdown, plainText, wikiTarget } from "./markdownTree";
 
 const text = (value: string) => ({ type: "text", text: value });
 

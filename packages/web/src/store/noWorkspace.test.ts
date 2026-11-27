@@ -1,7 +1,7 @@
 import { MAESTRO, type Workspace } from "@cyno/shared";
 import { beforeEach, describe, expect, it } from "vitest";
 import { settingsHash, settingsSectionFromHash } from "../pages/settings/settingsView";
-import { createWorkspaceBody, newWorkspaceValues, validateNewWorkspace } from "../ui/workspaceForm";
+import { createWorkspaceBody, newWorkspaceValues, validateNewWorkspace } from "../ui/workspaceFormView";
 import { hashFor, parseHash, useNavStore } from "./navStore";
 import { useWorkspaceStore, workspaceView } from "./workspaceStore";
 

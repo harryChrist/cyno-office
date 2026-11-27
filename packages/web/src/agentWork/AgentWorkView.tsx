@@ -9,7 +9,7 @@ import { percent } from "../ui/format";
 import { ProgressBar } from "../ui/widgets";
 import { agentWorkStatus } from "./maestroTimeline";
 import { TerminalStatusBadge } from "./TerminalStatusBadge";
-import type { TimelineItem } from "./timeline";
+import type { TimelineItem } from "./timelineView";
 import { Timeline, type TimelineActions, type TimelineMode } from "./Timeline";
 import { useWorkPanelStore } from "./workPanelStore";
 import { WorkSplit } from "./WorkSplit";

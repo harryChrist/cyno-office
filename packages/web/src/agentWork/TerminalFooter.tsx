@@ -1,6 +1,6 @@
 import type { AgentLogEntry } from "@cyno/shared";
 import { useEffect, useMemo, useState } from "react";
-import { sinceLabel, terminalFooter } from "./terminalFooter";
+import { sinceLabel, terminalFooter } from "./terminalFooterView";
 
 /** Rodapé de estado do terminal: o que o agente está fazendo agora e há quanto tempo (relógio da própria tela). */
 export function TerminalFooter({ entries, live }: { entries: readonly AgentLogEntry[]; live: boolean }) {

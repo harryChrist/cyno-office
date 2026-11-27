@@ -8,7 +8,7 @@ import { useNavStore } from "../../store/navStore";
 import { enterWorkspace } from "../../pages/cyno/WorkspaceCards";
 import { useTelaCheia } from "../../ui/useTelaCheia";
 import { CidadeCartao } from "./CidadeCartao";
-import { escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixa";
+import { escolherPredio, guardarFaixaAberta, lerFaixaAberta, resumoDaFaixa } from "./cidadeFaixaView";
 import { guardarLotes, lerLotes, type Lotes } from "./lotes";
 import { montarCidade } from "./montarCidade";
 import { metaDaSemana, pracaDaCidade } from "./meta";

@@ -5,13 +5,13 @@ import { connectorForTool } from "../connectors/connectorView";
 import { Markdown } from "../ui/markdown/Markdown";
 import { useConnectorsStore } from "../store/connectorsStore";
 import { useScriptsStore } from "../store/scriptsStore";
-import { plainText } from "../ui/markdown/markdown";
+import { plainText } from "../ui/markdown/markdownTree";
 import { percent } from "../ui/format";
 import { ProgressBar } from "../ui/widgets";
 import { formatDuration } from "./agentLogTimeline";
 import { isBrowserTool, officeToolDoneWith, officeToolName } from "./officeTools";
 import { scriptLaunchedBy } from "./scriptTool";
-import { clockLabel, type RequestItem, type StepItem, type TimelineItem } from "./timeline";
+import { clockLabel, type RequestItem, type StepItem, type TimelineItem } from "./timelineView";
 
 /** O que os itens podem abrir (cada tela decide para onde levar). */
 export type TimelineActions = {

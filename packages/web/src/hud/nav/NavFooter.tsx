@@ -4,7 +4,7 @@ import { NavIcon } from "../navIcons";
 import { SocketIndicator } from "../SocketIndicator";
 import { AgentsItem, PageItem } from "./NavItems";
 import { NavUsage } from "./NavUsage";
-import { SETTINGS_ITEM } from "./navItems";
+import { SETTINGS_ITEM } from "./navItemsView";
 
 /** Rodapé: conexão (só aparece fora do ar), uso do plano, agentes, Configurações e o botão de recolher. */
 export function NavFooter({ onNavigate, onBeforeOpen, showCollapse }: { onNavigate?: () => void; onBeforeOpen?: () => void; showCollapse: boolean }) {

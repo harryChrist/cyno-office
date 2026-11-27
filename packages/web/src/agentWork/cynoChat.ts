@@ -1,6 +1,6 @@
 import { isConversationLogId, parseJointMarker, parseAskMarker, parseConfirmationMarker, parseProposalMarker, parseRequestMarker, type AgentLogEntry } from "@cyno/shared";
 import { type StatusTone } from "../ui/format";
-import { entryToActivity } from "./maestroActivity";
+import { entryToActivity } from "./maestroActivityView";
 
 /**
  * A conversa com o Cyno como um chat: as falas do dono, as respostas do Cyno, os avisos (motor sem

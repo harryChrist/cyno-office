@@ -1,5 +1,5 @@
 import { Fragment, useMemo } from "react";
-import { splitLinks } from "./linkify";
+import { splitLinks } from "./linkifyParts";
 
 /**
  * Texto com as URLs (http/https) clicáveis, abrindo em outra aba. Todo o resto continua texto

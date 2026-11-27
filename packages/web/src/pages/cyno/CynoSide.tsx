@@ -10,7 +10,7 @@ import { RequestRow, SentRequestsSection } from "./RequestsPanel";
 import { AgendaNext, openWaiting, useAgendaLoad } from "./HomeStrip";
 import { WorkspaceCards, enterWorkspace } from "./WorkspaceCards";
 import { GestaoBlock } from "./GestaoBlock";
-import { agendaTodayCount, openRequests, oldestWaiting, SIDE_TABS, sideCounts, workspaceLine, type SideCounts, type SideTabId } from "./cynoSide";
+import { agendaTodayCount, openRequests, oldestWaiting, SIDE_TABS, sideCounts, workspaceLine, type SideCounts, type SideTabId } from "./cynoSideView";
 import { isOpenRequest } from "./cynoRequests";
 import { WaitedLine } from "../gestao/painel/WaitedLine";
 import "./cynoSide.css";

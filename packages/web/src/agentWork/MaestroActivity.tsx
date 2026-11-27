@@ -2,8 +2,8 @@ import type { OfficeState } from "@cyno/shared";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ProjectLink } from "../pages/work/ProjectLink";
 import { AvatarSprite } from "../ui/AvatarSprite";
-import type { ActivityGroup, ActivityStep, ActivityStepKind } from "./maestroActivity";
-import { clockLabel } from "./timeline";
+import type { ActivityGroup, ActivityStep, ActivityStepKind } from "./maestroActivityView";
+import { clockLabel } from "./timelineView";
 import type { TimelineActions } from "./Timeline";
 
 /** Ícone curto de cada tipo de passo (texto, para ficar nítido em qualquer tela). */

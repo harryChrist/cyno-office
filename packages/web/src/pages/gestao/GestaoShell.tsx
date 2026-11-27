@@ -1,5 +1,5 @@
 import { useNavStore } from "../../store/navStore";
-import { PAGE_HINTS } from "../../hud/nav/navItems";
+import { PAGE_HINTS } from "../../hud/nav/navItemsView";
 import { ActivityPage } from "../activity/ActivityPage";
 import { PageTabs } from "../PageTabs";
 import { SpendPage } from "../spend/SpendPage";
